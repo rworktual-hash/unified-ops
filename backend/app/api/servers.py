@@ -8,44 +8,48 @@ from app.models.server_metric import ServerMetric
 from app.monitoring.ssh_test import test_ssh_connection
 from app.schemas.connection import ConnectionTestResponse
 from app.schemas.metrics import GpuMetricRead, ServerMetricRead, ServerMetricsBundle
-from app.schemas.server import ServerCreate, ServerRead, ServerUpdate
+from app.schemas.server import ServerCreate, ServerRead, ServerUpdate, server_to_read
 from app.services.metrics_collect import collect_and_store_metrics
+from app.services.server_ssh import ssh_kwargs_from_server
 
 router = APIRouter(prefix="/servers", tags=["servers"])
 
 
 @router.post("", response_model=ServerRead, status_code=status.HTTP_201_CREATED)
-def create_server(payload: ServerCreate, db: Session = Depends(get_db)) -> Server:
+def create_server(payload: ServerCreate, db: Session = Depends(get_db)) -> ServerRead:
     server = Server(**payload.model_dump())
     db.add(server)
     db.commit()
     db.refresh(server)
-    return server
+    return server_to_read(server)
 
 
 @router.get("", response_model=list[ServerRead])
-def list_servers(db: Session = Depends(get_db)) -> list[Server]:
-    return db.query(Server).order_by(Server.id).all()
+def list_servers(db: Session = Depends(get_db)) -> list[ServerRead]:
+    rows = db.query(Server).order_by(Server.id).all()
+    return [server_to_read(r) for r in rows]
 
 
 @router.get("/{server_id}", response_model=ServerRead)
-def get_server(server_id: int, db: Session = Depends(get_db)) -> Server:
+def get_server(server_id: int, db: Session = Depends(get_db)) -> ServerRead:
     server = db.get(Server, server_id)
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
-    return server
+    return server_to_read(server)
 
 
 @router.patch("/{server_id}", response_model=ServerRead)
-def update_server(server_id: int, payload: ServerUpdate, db: Session = Depends(get_db)) -> Server:
+def update_server(server_id: int, payload: ServerUpdate, db: Session = Depends(get_db)) -> ServerRead:
     server = db.get(Server, server_id)
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(server, key, value)
+    if server.ssh_password and server.ip_address in {"173.234.75.165", "173.234.75.166"}:
+        server.is_active = True
     db.commit()
     db.refresh(server)
-    return server
+    return server_to_read(server)
 
 
 @router.get("/{server_id}/metrics", response_model=ServerMetricsBundle)
@@ -106,12 +110,7 @@ def test_connection(server_id: int, db: Session = Depends(get_db)) -> Connection
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     if not server.is_active:
         return ConnectionTestResponse(success=False, message="Server is marked inactive.")
-    result = test_ssh_connection(
-        host=server.ip_address,
-        port=server.ssh_port,
-        username=server.ssh_username,
-        credential_ref=server.credential_ref,
-    )
+    result = test_ssh_connection(**ssh_kwargs_from_server(server))
     return ConnectionTestResponse(
         success=result.success,
         message=result.message,

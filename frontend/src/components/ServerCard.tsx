@@ -38,10 +38,11 @@ export function ServerCard({
           <h3>{server.server_name}</h3>
           <p className="server-card-meta">
             {server.ip_address}:{server.ssh_port} · {server.ssh_username}
+            {server.ssh_auth_mode !== 'key' ? ` · auth ${server.ssh_auth_mode}` : ''}
           </p>
         </div>
         <span className={`status-pill ${server.is_active ? 'live' : 'off'}`}>
-          {server.is_active ? 'Connected' : 'Pending key'}
+          {server.is_active ? 'Active' : 'Inactive'}
         </span>
       </div>
 
@@ -108,7 +109,11 @@ export function ServerCard({
           </div>
         </>
       ) : (
-        <p className="muted-block">SSH key not installed yet. Server team must add your public key.</p>
+        <p className="muted-block">
+          {server.ssh_auth_mode === 'auto' && !server.has_ssh_password
+            ? 'Waiting for SSH password (GPU hosts 165/166) or key access.'
+            : 'SSH not configured yet — add key access or set password via API.'}
+        </p>
       )}
     </article>
   )

@@ -112,11 +112,18 @@ def collect_host_metrics(
     port: int,
     username: str,
     credential_ref: str | None,
+    ssh_password: str | None = None,
+    ssh_auth_mode: str = "auto",
 ) -> HostMetricsSnapshot:
     now = datetime.now(timezone.utc)
     try:
         with ssh_session(
-            host=host, port=port, username=username, credential_ref=credential_ref
+            host=host,
+            port=port,
+            username=username,
+            credential_ref=credential_ref,
+            ssh_password=ssh_password,
+            ssh_auth_mode=ssh_auth_mode,
         ) as client:
             errors: list[str] = []
             load = mem = disk = uptime = (None, None, None)
@@ -181,11 +188,18 @@ def collect_gpu_metrics(
     port: int,
     username: str,
     credential_ref: str | None,
+    ssh_password: str | None = None,
+    ssh_auth_mode: str = "auto",
 ) -> list[GpuMetricsSnapshot]:
     now = datetime.now(timezone.utc)
     try:
         with ssh_session(
-            host=host, port=port, username=username, credential_ref=credential_ref
+            host=host,
+            port=port,
+            username=username,
+            credential_ref=credential_ref,
+            ssh_password=ssh_password,
+            ssh_auth_mode=ssh_auth_mode,
         ) as client:
             code, out, err = _run_command(client, CMD_GPU)
             if code != 0:

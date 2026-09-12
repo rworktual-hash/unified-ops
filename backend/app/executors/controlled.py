@@ -7,6 +7,7 @@ from app.models.server import Server
 from app.monitoring.ssh_test import test_ssh_connection
 from app.policies.executor_actions import is_action_allowed
 from app.services.metrics_collect import collect_and_store_metrics
+from app.services.server_ssh import ssh_kwargs_from_server
 
 
 @dataclass
@@ -45,12 +46,7 @@ def execute_approved_action(
         )
 
     if action_key == "ssh_verify":
-        result = test_ssh_connection(
-            host=server.ip_address,
-            port=server.ssh_port,
-            username=server.ssh_username,
-            credential_ref=server.credential_ref,
-        )
+        result = test_ssh_connection(**ssh_kwargs_from_server(server))
         return ExecutionResult(
             success=result.success,
             message=result.message,
@@ -63,12 +59,7 @@ def execute_approved_action(
 
         cmd = f"sudo systemctl restart {service}"
         try:
-            with ssh_session(
-                host=server.ip_address,
-                port=server.ssh_port,
-                username=server.ssh_username,
-                credential_ref=server.credential_ref,
-            ) as client:
+            with ssh_session(**ssh_kwargs_from_server(server)) as client:
                 _stdin, stdout, stderr = client.exec_command(cmd, timeout=60)
                 code = stdout.channel.recv_exit_status()
                 out = stdout.read().decode("utf-8", errors="replace")[:500]

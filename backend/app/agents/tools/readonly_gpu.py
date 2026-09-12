@@ -8,6 +8,8 @@ def tool_check_host_snapshot(server: Server) -> dict:
         port=server.ssh_port,
         username=server.ssh_username,
         credential_ref=server.credential_ref,
+        ssh_password=server.ssh_password,
+        ssh_auth_mode=server.ssh_auth_mode or "auto",
     )
     return {
         "tool": "check_host_snapshot",
@@ -25,6 +27,8 @@ def tool_check_gpu(server: Server) -> dict:
         port=server.ssh_port,
         username=server.ssh_username,
         credential_ref=server.credential_ref,
+        ssh_password=server.ssh_password,
+        ssh_auth_mode=server.ssh_auth_mode or "auto",
     )
     return {
         "tool": "check_gpu",

@@ -27,6 +27,12 @@ AI_GPU_SERVERS: tuple[SeedServer, ...] = (
 KEY_READY_IPS = frozenset({"81.17.61.148", "81.17.61.149"})
 
 
+def _gpu_username(ip: str, default: str) -> str:
+    if ip in {"173.234.75.165", "173.234.75.166"}:
+        return "krishna"
+    return default
+
+
 def seed_ai_gpu_servers(db: Session, *, ssh_username: str = "linuxteam") -> tuple[int, int]:
     """Insert AI/GPU servers if IP not already present. Returns (created, skipped)."""
     created = 0
@@ -36,13 +42,15 @@ def seed_ai_gpu_servers(db: Session, *, ssh_username: str = "linuxteam") -> tupl
         if exists:
             skipped += 1
             continue
+        user = _gpu_username(row.ip_address, ssh_username)
         db.add(
             Server(
                 server_name=row.server_name,
                 ip_address=row.ip_address,
                 ssh_port=row.ssh_port,
-                ssh_username=ssh_username,
+                ssh_username=user,
                 credential_ref="gpu_key_1",
+                ssh_auth_mode="key" if row.ip_address in KEY_READY_IPS else "auto",
                 server_type=row.server_type,
                 project=row.project,
                 is_active=row.ip_address in KEY_READY_IPS,

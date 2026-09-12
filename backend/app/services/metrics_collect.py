@@ -13,6 +13,8 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
         port=server.ssh_port,
         username=server.ssh_username,
         credential_ref=server.credential_ref,
+        ssh_password=server.ssh_password,
+        ssh_auth_mode=server.ssh_auth_mode or "auto",
     )
     row = ServerMetric(
         server_id=server.id,
@@ -38,6 +40,8 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
             port=server.ssh_port,
             username=server.ssh_username,
             credential_ref=server.credential_ref,
+            ssh_password=server.ssh_password,
+            ssh_auth_mode=server.ssh_auth_mode or "auto",
         ):
             gm = GpuMetric(
                 server_id=server.id,

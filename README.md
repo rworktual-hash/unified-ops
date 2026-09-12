@@ -181,11 +181,30 @@ Update `ssh_username` in the UI or re-seed after server team confirms the monito
 
 4. Restart backend, open UI, click **Test SSH** per server (or `POST /servers/{id}/test-connection`).
 
-**Current AI/GPU access (local dev):** DR **148/149** use user **`linuxteam`** + `~/.ssh/id_rsa` via `CREDENTIAL_GPU_KEY_1_PATH`. **165/166** stay **inactive** until server team adds the same key. Sync DB:
+**Current AI/GPU access:** **148/149** — `linuxteam`, auth **`key`**. **165/166** — `krishna`, auth **`auto`** (key then password); stay **inactive** until `ssh_password` is set in DB. Sync GPU rows:
 
 ```bash
 python scripts/sync-ai-gpu-ssh-access.py
 ```
+
+**Full inventory** (VoiceMG, infra, email, backupvault, GPU — upsert by IP):
+
+```bash
+python scripts/seed-all-servers.py
+```
+
+**SSH auth modes** (`servers.ssh_auth_mode`): `key` | `password` | `auto` (try key, then password). Passwords are stored in MariaDB only; API returns `has_ssh_password`, never the secret.
+
+After upgrading an existing DB:
+
+```bash
+python scripts/migrate-server-ssh-auth.py
+python scripts/seed-all-servers.py
+# On production only — set GPU password from env, not Git:
+# SSH_GPU_PASSWORD='...' python scripts/set-gpu-ssh-password.py
+```
+
+**Production (nlp-sm / observability.worktual.tech):** `git pull` in `/opt/unified-ops`, run migration + seed, set `CREDENTIAL_GPU_KEY_1_PATH=/root/.ssh/id_rsa`, `SSH_STRICT_HOST_KEYS=false`, set GPU passwords, restart `uvicorn`.
 
 ## Status
 

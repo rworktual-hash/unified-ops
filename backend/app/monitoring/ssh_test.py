@@ -1,10 +1,10 @@
-import socket
 import time
 from dataclasses import dataclass
 
 import paramiko
 
 from app.config import settings
+from app.monitoring.ssh_connect import connect_ssh_client
 from app.services.credentials import CredentialError, resolve_private_key_path
 
 
@@ -21,31 +21,26 @@ def test_ssh_connection(
     port: int,
     username: str,
     credential_ref: str | None,
+    ssh_password: str | None = None,
+    ssh_auth_mode: str = "auto",
 ) -> SshTestResult:
     try:
-        key_path = resolve_private_key_path(credential_ref)
+        if ssh_auth_mode == "key" or (ssh_auth_mode == "auto" and not ssh_password):
+            resolve_private_key_path(credential_ref)
     except CredentialError as exc:
         return SshTestResult(success=False, message=str(exc))
 
     client = paramiko.SSHClient()
-    if settings.ssh_strict_host_keys:
-        client.load_system_host_keys()
-        client.set_missing_host_key_policy(paramiko.RejectPolicy())
-    else:
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
     start = time.monotonic()
     try:
-        client.connect(
-            hostname=host,
+        connect_ssh_client(
+            client,
+            host=host,
             port=port,
             username=username,
-            key_filename=key_path,
-            timeout=settings.ssh_connect_timeout,
-            banner_timeout=settings.ssh_connect_timeout,
-            auth_timeout=settings.ssh_connect_timeout,
-            allow_agent=False,
-            look_for_keys=False,
+            credential_ref=credential_ref,
+            ssh_password=ssh_password,
+            ssh_auth_mode=ssh_auth_mode,
         )
         _stdin, stdout, _stderr = client.exec_command("echo unified_ops_ok", timeout=settings.ssh_command_timeout)
         output = stdout.read().decode("utf-8", errors="replace").strip()
@@ -58,9 +53,7 @@ def test_ssh_connection(
                 latency_ms=latency_ms,
             )
         return SshTestResult(success=True, message="SSH connection and test command OK.", latency_ms=latency_ms)
-    except paramiko.AuthenticationException:
-        return SshTestResult(success=False, message="Authentication failed (user or key not accepted on server).")
-    except (paramiko.SSHException, socket.timeout, OSError) as exc:
-        return SshTestResult(success=False, message=f"Connection failed: {exc}")
+    except CredentialError as exc:
+        return SshTestResult(success=False, message=str(exc))
     finally:
         client.close()

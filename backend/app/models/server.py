@@ -13,6 +13,8 @@ class Server(Base):
     ssh_port: Mapped[int] = mapped_column(Integer, nullable=False, default=22)
     ssh_username: Mapped[str] = mapped_column(String(128), nullable=False)
     credential_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ssh_password: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ssh_auth_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="auto")
     server_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     project: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

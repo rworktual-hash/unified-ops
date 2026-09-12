@@ -4,6 +4,8 @@ export type ConnectionTestResult = {
   latency_ms: number | null
 }
 
+export type SshAuthMode = 'auto' | 'key' | 'password'
+
 export type Server = {
   id: number
   server_name: string
@@ -11,12 +13,16 @@ export type Server = {
   ssh_port: number
   ssh_username: string
   credential_ref: string | null
+  ssh_auth_mode: SshAuthMode
+  has_ssh_password: boolean
   server_type: string | null
   project: string | null
   is_active: boolean
 }
 
-export type ServerCreate = Omit<Server, 'id'>
+export type ServerCreate = Omit<Server, 'id' | 'has_ssh_password'> & {
+  ssh_password?: string | null
+}
 
 export type ServerMetric = {
   id: number
