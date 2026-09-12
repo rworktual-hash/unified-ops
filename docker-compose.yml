@@ -1,0 +1,15 @@
+services:
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root_dev_only
+      MARIADB_DATABASE: unified_ops
+      MARIADB_USER: unified_ops
+      MARIADB_PASSWORD: unified_ops_dev
+    ports:
+      - "3307:3306"
+    volumes:
+      - unified_ops_mariadb:/var/lib/mysql
+
+volumes:
+  unified_ops_mariadb:

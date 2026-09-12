@@ -1,0 +1,98 @@
+export type ConnectionTestResult = {
+  success: boolean
+  message: string
+  latency_ms: number | null
+}
+
+export type Server = {
+  id: number
+  server_name: string
+  ip_address: string
+  ssh_port: number
+  ssh_username: string
+  credential_ref: string | null
+  server_type: string | null
+  project: string | null
+  is_active: boolean
+}
+
+export type ServerCreate = Omit<Server, 'id'>
+
+export type ServerMetric = {
+  id: number
+  server_id: number
+  collected_at: string
+  load_1m: number | null
+  mem_used_pct: number | null
+  disk_root_pct: number | null
+  collect_error: string | null
+}
+
+export type GpuMetric = {
+  id: number
+  server_id: number
+  collected_at: string
+  gpu_index: number
+  utilization_pct: number | null
+  temperature_c: number | null
+  status: string
+  collect_error: string | null
+}
+
+export type MetricsBundle = {
+  host: ServerMetric[]
+  gpu: GpuMetric[]
+}
+
+export type AgentAction = {
+  id: number
+  server_id: number
+  alert_id: number | null
+  action_type: string
+  status: string
+  summary: string
+  diagnosis: string
+  recommendation: string
+  tool_trace: string | null
+  created_at: string
+}
+
+export type Approval = {
+  id: number
+  server_id: number
+  alert_id: number | null
+  action_key: string
+  action_params: string | null
+  status: string
+  request_notes: string | null
+  requested_by: string
+  decided_by: string | null
+  execution_result: string | null
+  created_at: string
+  decided_at: string | null
+  executed_at: string | null
+  server_name: string
+  ip_address: string
+}
+
+export type InvestigationResult = {
+  agent_action_id: number
+  summary: string
+  diagnosis: string
+  recommendation: string
+}
+
+export type Alert = {
+  id: number
+  server_id: number
+  alert_type: string
+  severity: string
+  status: string
+  title: string
+  message: string
+  first_seen_at: string
+  last_seen_at: string
+  resolved_at: string | null
+  server_name: string
+  ip_address: string
+}
