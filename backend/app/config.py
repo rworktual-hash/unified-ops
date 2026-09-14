@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     llm_api_key: str = "dummy"
     llm_timeout_seconds: float = 120.0
 
+    auth_enabled: bool = True
+    jwt_secret: str = "change-me-in-production"
+    jwt_expire_minutes: int = 60 * 24 * 7
+    bootstrap_admin_email: str | None = None
+    bootstrap_admin_password: str | None = None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

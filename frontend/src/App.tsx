@@ -4,6 +4,7 @@ import {
   collectServerMetrics,
   createApproval,
   fetchHealth,
+  fetchMe,
   fetchServerMetrics,
   investigateAlert,
   investigateServer,
@@ -14,15 +15,21 @@ import {
   rejectApproval,
   resolveAlert,
   testServerConnection,
+  UnauthorizedError,
+  type AppUser,
 } from './api'
+import { clearStoredToken } from './authStorage'
 import { ChatPanel } from './components/ChatPanel'
+import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
+import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
 import './App.css'
 
-type NavId = 'servers' | 'chat' | 'alerts' | 'approvals' | 'activity'
+type NavId = 'servers' | 'chat' | 'alerts' | 'approvals' | 'activity' | 'users'
 
 function App() {
+  const [session, setSession] = useState<AppUser | null | 'pending'>('pending')
   const [nav, setNav] = useState<NavId>('servers')
   const [apiStatus, setApiStatus] = useState<'loading' | 'ok' | 'error'>('loading')
   const [servers, setServers] = useState<Server[]>([])
@@ -68,15 +75,31 @@ function App() {
       setAlerts(await listAlerts(showResolved ? undefined : 'open'))
       setAgentActions(await listAgentActions(15))
       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
-    } catch {
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        clearStoredToken()
+        setSession(null)
+        return
+      }
       setApiStatus('error')
       setError('Cannot reach API. Start the backend on port 8000.')
     }
   }, [showResolved, showAllApprovals])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void fetchMe()
+      .then((u) => {
+        setSession(u)
+      })
+      .catch(() => {
+        clearStoredToken()
+        setSession(null)
+      })
+  }, [])
+
+  useEffect(() => {
+    if (session && session !== 'pending') void load()
+  }, [session, load])
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
@@ -84,7 +107,30 @@ function App() {
     { id: 'alerts', label: 'Alerts' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'activity', label: 'Agent log' },
+    ...(session && session !== 'pending' && session.role === 'admin'
+      ? [{ id: 'users' as const, label: 'Users' }]
+      : []),
   ]
+
+  if (session === 'pending') {
+    return (
+      <div className="login-shell">
+        <p className="muted">Loading…</p>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <LoginPage
+        onLoggedIn={() => {
+          void fetchMe().then((u) => {
+            setSession(u)
+          })
+        }}
+      />
+    )
+  }
 
   return (
     <div className="app-shell">
@@ -109,7 +155,20 @@ function App() {
           <span className={`api-dot ${apiStatus === 'ok' ? 'ok' : 'err'}`} />
           API {apiStatus === 'ok' ? 'connected' : apiStatus === 'loading' ? '…' : 'offline'}
           <br />
-          {activeServers.length} connected
+          {session.email}
+          <br />
+          {activeServers.length} servers
+          <br />
+          <button
+            type="button"
+            className="btn ghost sidebar-signout"
+            onClick={() => {
+              clearStoredToken()
+              setSession(null)
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </aside>
 
@@ -375,6 +434,8 @@ function App() {
             </section>
           </>
         )}
+
+        {nav === 'users' && session.role === 'admin' && <UsersPanel />}
 
         {nav === 'activity' && (
           <>

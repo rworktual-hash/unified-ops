@@ -74,7 +74,22 @@ DATABASE_URL=mysql+pymysql://unified_ops:...@127.0.0.1:3306/unified_ops
 CREDENTIAL_GPU_KEY_1_PATH=/root/.ssh/id_rsa
 SSH_STRICT_HOST_KEYS=false
 CORS_ORIGINS=https://observability.worktual.tech
+AUTH_ENABLED=true
+JWT_SECRET=<long-random-string>
 ```
+
+**First admin login** (on nlp-sm, never commit the password):
+
+```bash
+cd /opt/unified-ops
+source backend/.venv/bin/activate
+pip install -r backend/requirements.txt
+ADMIN_EMAIL='your@gmail.com' ADMIN_PASSWORD='your-secure-password' python scripts/create-admin-user.py
+```
+
+Sign in at the UI, open **Users**, and add each teammate’s Gmail + password. Only accounts you create can use the dashboard.
+
+Local dev without login: `AUTH_ENABLED=false` in `.env`.
 
 ---
 
