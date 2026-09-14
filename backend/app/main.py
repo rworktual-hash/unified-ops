@@ -40,6 +40,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Unified Ops API", lifespan=lifespan)
+app.router.redirect_slashes = False
 
 app.add_middleware(
     CORSMiddleware,
