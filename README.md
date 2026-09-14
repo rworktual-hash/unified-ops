@@ -187,6 +187,8 @@ Update `ssh_username` in the UI or re-seed after server team confirms the monito
 python scripts/sync-ai-gpu-ssh-access.py
 ```
 
+**SSH ports:** Many public infra/email hosts use **4204** (not 22); DBs/Grafana/backupvault-130 stay on **22**. After KT changes, run `python scripts/apply-ssh-port-4204.py` or re-seed.
+
 **Full inventory** (VoiceMG, infra, email, backupvault, GPU — upsert by IP):
 
 ```bash

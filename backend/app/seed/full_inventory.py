@@ -42,15 +42,16 @@ VOICEMG_SERVERS: tuple[InventoryServer, ...] = (
     InventoryServer("QA-NewAIVMG", "10.180.1.230", 4204, "root", "app", "voicemg"),
 )
 
+# Public infra on 82.113.92.* and server-management use SSH port 4204 (not 22).
 INFRA_SERVERS: tuple[InventoryServer, ...] = (
-    InventoryServer("server-management", "82.113.72.52", 22, "root", "infra", "infrastructure"),
-    InventoryServer("DevOps-Nginx-1", "82.113.92.115", 22, "root", "nginx", "infrastructure"),
-    InventoryServer("DevOps-Nginx-2", "82.113.92.118", 22, "root", "nginx", "infrastructure"),
-    InventoryServer("DevOps-Nginx-3", "82.113.92.117", 22, "root", "nginx", "infrastructure"),
-    InventoryServer("DevOps-Nginx-4", "82.113.92.116", 22, "root", "nginx", "infrastructure"),
-    InventoryServer("DevOps-Nginx-5", "82.113.92.119", 22, "root", "nginx", "infrastructure"),
-    InventoryServer("AI-KongAPIGW", "82.113.92.106", 22, "root", "kong", "infrastructure"),
-    InventoryServer("CCaaS-Kong-APIGW", "82.113.92.111", 22, "root", "kong", "infrastructure"),
+    InventoryServer("server-management", "82.113.72.52", 4204, "root", "infra", "infrastructure"),
+    InventoryServer("DevOps-Nginx-1", "82.113.92.115", 4204, "root", "nginx", "infrastructure"),
+    InventoryServer("DevOps-Nginx-2", "82.113.92.118", 4204, "root", "nginx", "infrastructure"),
+    InventoryServer("DevOps-Nginx-3", "82.113.92.117", 4204, "root", "nginx", "infrastructure"),
+    InventoryServer("DevOps-Nginx-4", "82.113.92.116", 4204, "root", "nginx", "infrastructure"),
+    InventoryServer("DevOps-Nginx-5", "82.113.92.119", 4204, "root", "nginx", "infrastructure"),
+    InventoryServer("AI-KongAPIGW", "82.113.92.106", 4204, "root", "kong", "infrastructure"),
+    InventoryServer("CCaaS-Kong-APIGW", "82.113.92.111", 4204, "root", "kong", "infrastructure"),
     InventoryServer("ur-db", "10.180.0.201", 22, "root", "database", "infrastructure"),
     InventoryServer("ai-ccaas-db", "10.180.0.202", 22, "root", "database", "infrastructure"),
     InventoryServer("campaign-db", "10.180.0.203", 22, "root", "database", "infrastructure"),
@@ -58,23 +59,23 @@ INFRA_SERVERS: tuple[InventoryServer, ...] = (
 )
 
 EMAIL_SERVERS: tuple[InventoryServer, ...] = (
-    InventoryServer("email-mgmt-1", "82.113.72.84", 22, "root", "app", "email"),
-    InventoryServer("email-mgmt-2", "82.113.72.80", 22, "root", "app", "email"),
-    InventoryServer("email-mgmt-private", "10.180.0.84", 22, "root", "app", "email"),
+    InventoryServer("email-mgmt-1", "82.113.72.84", 4204, "root", "app", "email"),
+    InventoryServer("email-mgmt-2", "82.113.72.80", 4204, "root", "app", "email"),
+    InventoryServer("email-mgmt-private", "10.180.0.84", 4204, "root", "app", "email"),
 )
 
 BACKUPVAULT_SERVERS: tuple[InventoryServer, ...] = (
-    InventoryServer("mysql-slave-119", "10.180.0.119", 22, "root", "database", "backupvault"),
-    InventoryServer("mysql-slave-211", "10.180.0.211", 22, "root", "database", "backupvault"),
-    InventoryServer("MySQL-Slave-01", "10.180.0.212", 22, "root", "database", "backupvault"),
-    InventoryServer("MySQL-Slave-02", "10.180.0.213", 22, "root", "database", "backupvault"),
-    InventoryServer("PostgreSQL-Slave-01", "10.180.0.215", 22, "root", "database", "backupvault"),
-    InventoryServer("backupvault-90", "10.180.0.90", 22, "root", "app", "backupvault"),
+    InventoryServer("mysql-slave-119", "10.180.0.119", 4204, "root", "database", "backupvault"),
+    InventoryServer("mysql-slave-211", "10.180.0.211", 4204, "root", "database", "backupvault"),
+    InventoryServer("MySQL-Slave-01", "10.180.0.212", 4204, "root", "database", "backupvault"),
+    InventoryServer("MySQL-Slave-02", "10.180.0.213", 4204, "root", "database", "backupvault"),
+    InventoryServer("PostgreSQL-Slave-01", "10.180.0.215", 4204, "root", "database", "backupvault"),
+    InventoryServer("backupvault-90", "10.180.0.90", 4204, "root", "app", "backupvault"),
     InventoryServer("backupvault-130", "10.180.0.130", 22, "root", "app", "backupvault"),
-    InventoryServer("backupvault-150", "10.180.0.150", 22, "root", "app", "backupvault"),
-    InventoryServer("backupvault-250", "10.180.0.250", 22, "root", "app", "backupvault"),
-    InventoryServer("backupvault-85", "10.180.0.85", 22, "root", "app", "backupvault"),
-    InventoryServer("backupvault-124", "10.180.0.124", 22, "root", "app", "backupvault"),
+    InventoryServer("backupvault-150", "10.180.0.150", 4204, "root", "app", "backupvault"),
+    InventoryServer("backupvault-250", "10.180.0.250", 4204, "root", "app", "backupvault"),
+    InventoryServer("backupvault-85", "10.180.0.85", 4204, "root", "app", "backupvault"),
+    InventoryServer("backupvault-124", "10.180.0.124", 4204, "root", "app", "backupvault"),
 )
 
 ALL_INVENTORY: tuple[InventoryServer, ...] = (
