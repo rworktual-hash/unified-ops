@@ -56,7 +56,6 @@ INFRA_SERVERS: tuple[InventoryServer, ...] = (
     InventoryServer("ai-ccaas-db", "10.180.0.202", 22, "root", "database", "infrastructure"),
     InventoryServer("campaign-db", "10.180.0.203", 22, "root", "database", "infrastructure"),
     InventoryServer("Grafana-Dashboard", "82.113.72.19", 22, "root", "monitoring", "infrastructure"),
-    InventoryServer("miniai", "82.113.92.40", 4204, "root", "cpu", "infrastructure", True, "key"),
     InventoryServer("Apache-Kafka", "82.113.92.124", 4204, "root", "nginx", "infrastructure", True, "key"),
     InventoryServer("CRM-DB", "10.180.0.204", 22, "root", "database", "infrastructure", True, "key"),
     InventoryServer("Ontology-Postgresql", "10.180.0.126", 22, "root", "database", "infrastructure", True, "key"),
