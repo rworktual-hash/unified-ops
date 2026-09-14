@@ -64,6 +64,12 @@ function App() {
     try {
       await fetchHealth()
       setApiStatus('ok')
+    } catch (err) {
+      setApiStatus('error')
+      setError(err instanceof Error ? err.message : 'Cannot reach API. Start the backend on port 8000.')
+      return
+    }
+    try {
       const list = await listServers()
       setServers(list)
       const metrics: Record<number, MetricsBundle | null> = {}
@@ -88,8 +94,7 @@ function App() {
         setSession(null)
         return
       }
-      setApiStatus('error')
-      setError('Cannot reach API. Start the backend on port 8000.')
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
     }
   }, [showResolved, showAllApprovals])
 

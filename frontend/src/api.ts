@@ -175,8 +175,14 @@ export async function syncEmailLogs(): Promise<{ ok: boolean; inserted?: number;
 
 export async function fetchHealth(): Promise<{ status: string }> {
   const res = await fetch('/health')
-  if (!res.ok) throw new Error('Health check failed')
-  return res.json()
+  if (!res.ok) throw new Error(`Health check failed (HTTP ${res.status})`)
+  const ct = res.headers.get('content-type') ?? ''
+  if (!ct.includes('application/json')) {
+    throw new Error('Health returned HTML — nginx is not proxying /health to the API')
+  }
+  const body = (await res.json()) as { status?: string }
+  if (body.status !== 'ok') throw new Error('Health response unexpected')
+  return body as { status: string }
 }
 
 export async function collectAllServerMetrics(sync = true): Promise<{
