@@ -140,7 +140,9 @@ sudo bash scripts/apply-nginx-unified-ops.sh
 
 Source file: [`deploy/nginx/unified-ops.conf`](../deploy/nginx/unified-ops.conf). Example/docs: [`nginx-unified-ops.conf.example`](./nginx-unified-ops.conf.example).
 
-If `/auth` is missing, the sign-in page shows “Invalid email or password” even when the admin user exists.
+The SPA calls the backend under **`/api/`** (e.g. `/api/health`, `/api/servers`) so nginx never treats API paths as static files. Nginx needs `location ^~ /api/ { proxy_pass ... }` — see [`deploy/nginx/unified-ops.conf`](../deploy/nginx/unified-ops.conf).
+
+If `/api/auth/login` is missing, sign-in fails even when the admin user exists.
 
 **Check from nlp-sm:**
 

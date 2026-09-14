@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agent_actions import router as agent_router
@@ -50,18 +50,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router)
+api = APIRouter(prefix="/api")
 _protected = [Depends(get_current_user)]
-app.include_router(servers_router, dependencies=_protected)
-app.include_router(alerts_router, dependencies=_protected)
-app.include_router(agent_router, dependencies=_protected)
-app.include_router(approvals_router, dependencies=_protected)
-app.include_router(chat_router, dependencies=_protected)
-app.include_router(users_router, dependencies=_protected)
-app.include_router(email_router, dependencies=_protected)
-app.include_router(fleet_router, dependencies=_protected)
+
+api.include_router(auth_router)
+api.include_router(servers_router, dependencies=_protected)
+api.include_router(alerts_router, dependencies=_protected)
+api.include_router(agent_router, dependencies=_protected)
+api.include_router(approvals_router, dependencies=_protected)
+api.include_router(chat_router, dependencies=_protected)
+api.include_router(users_router, dependencies=_protected)
+api.include_router(email_router, dependencies=_protected)
+api.include_router(fleet_router, dependencies=_protected)
+
+
+@api.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+app.include_router(api)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health_legacy() -> dict[str, str]:
     return {"status": "ok"}

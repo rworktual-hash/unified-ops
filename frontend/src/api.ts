@@ -1,3 +1,4 @@
+import { apiPath } from './apiBase'
 import { authHeaders, setStoredToken } from './authStorage'
 import type {
   AgentAction,
@@ -25,7 +26,8 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
   if (init?.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  const res = await fetch(input, { ...init, headers })
+  const url = typeof input === 'string' ? apiPath(input) : input
+  const res = await fetch(url, { ...init, headers })
   if (res.status === 401) throw new UnauthorizedError()
   return res
 }
@@ -38,7 +40,7 @@ export type AppUser = {
 }
 
 export async function login(email: string, password: string): Promise<AppUser> {
-  const res = await fetch('/auth/login', {
+  const res = await fetch(apiPath('/auth/login'), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({ email, password }),
@@ -174,7 +176,7 @@ export async function syncEmailLogs(): Promise<{ ok: boolean; inserted?: number;
 }
 
 export async function fetchHealth(): Promise<{ status: string }> {
-  const res = await fetch('/health')
+  const res = await fetch(apiPath('/health'))
   if (!res.ok) throw new Error(`Health check failed (HTTP ${res.status})`)
   const ct = res.headers.get('content-type') ?? ''
   if (!ct.includes('application/json')) {
