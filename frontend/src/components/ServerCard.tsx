@@ -1,4 +1,3 @@
-import { healthLabel, healthScoreFromHost } from '../lib/healthScore'
 import type { ConnectionTestResult, MetricsBundle, Server } from '../types'
 import { MetricBar } from './MetricBar'
 
@@ -28,32 +27,29 @@ export function ServerCard({
   onRequestRecollect,
 }: Props) {
   const host = metrics?.host[0]
-  const isGpu = server.server_type === 'gpu' || server.project === 'ai'
+  const isGpu = server.server_type === 'gpu'
   const gpus = metrics?.gpu.filter((g) => g.status === 'ok') ?? []
   const maxGpuUtil = gpus.length ? Math.max(...gpus.map((g) => g.utilization_pct ?? 0)) : null
-  const health = healthScoreFromHost(host)
-  const label = healthLabel(health)
+  const maxTemp = gpus.length ? Math.max(...gpus.map((g) => g.temperature_c ?? 0)) : null
 
   const loadDisplay = host?.load_1m != null ? host.load_1m.toFixed(2) : '—'
-  const loadPct =
-    host?.load_1m != null ? Math.min(100, (host.load_1m / 8) * 100) : null
+  const loadPct = host?.load_1m != null ? Math.min(100, (host.load_1m / 8) * 100) : null
 
   return (
     <article className="server-card">
-      <div className="server-card-top">
-        <div className="server-card-title-block">
-          <p className="server-card-type">
-            {(server.project ?? 'fleet').toUpperCase()} · {server.server_type ?? 'host'}
+      <div className="server-card-head">
+        <div>
+          <p className="server-card-label">
+            {server.project ?? 'ai'} · {server.server_type ?? 'host'}
           </p>
           <h3>{server.server_name}</h3>
           <p className="server-card-meta">
-            {server.ip_address}:{server.ssh_port}
+            {server.ip_address}:{server.ssh_port} · {server.ssh_username}
           </p>
         </div>
-        <div className={`health-badge ${label}`}>
-          <span className="health-score">{health ?? '—'}</span>
-          <span className="health-word">{label === 'unknown' ? 'no data' : label}</span>
-        </div>
+        <span className={`status-pill ${server.is_active ? 'live' : 'off'}`}>
+          {server.is_active ? 'Active' : 'Inactive'}
+        </span>
       </div>
 
       {server.is_active ? (
@@ -69,47 +65,65 @@ export function ServerCard({
             <MetricBar
               label="Memory"
               valuePct={host?.mem_used_pct ?? null}
-              display={host?.mem_used_pct != null ? `${host.mem_used_pct.toFixed(0)}%` : '—'}
+              display={host?.mem_used_pct != null ? `${host.mem_used_pct.toFixed(1)}%` : '—'}
             />
             <MetricBar
               label="Disk /"
               valuePct={host?.disk_root_pct ?? null}
-              display={host?.disk_root_pct != null ? `${host.disk_root_pct.toFixed(0)}%` : '—'}
+              display={host?.disk_root_pct != null ? `${host.disk_root_pct.toFixed(1)}%` : '—'}
             />
           </div>
 
           {isGpu && (
-            <div className="gpu-strip">
-              <span>GPU</span>
-              <strong>{maxGpuUtil != null ? `${maxGpuUtil.toFixed(0)}% util` : '—'}</strong>
-              <span className="muted-inline">{gpus.length ? `${gpus.length} device(s)` : ''}</span>
+            <div className="metric-grid gpu-metrics">
+              <div className="metric-tile">
+                <span className="metric-label">GPU max</span>
+                <span className="metric-value">
+                  {maxGpuUtil != null ? `${maxGpuUtil.toFixed(0)}%` : '—'}
+                </span>
+              </div>
+              <div className="metric-tile">
+                <span className="metric-label">GPU temp</span>
+                <span className="metric-value">
+                  {maxTemp != null ? `${maxTemp.toFixed(0)}°C` : '—'}
+                </span>
+              </div>
+              <div className="metric-tile">
+                <span className="metric-label">GPUs</span>
+                <span className="metric-value">{gpus.length || '—'}</span>
+              </div>
             </div>
           )}
 
-          {testResult && (
+          {testResult ? (
             <p className={`ssh-line ${testResult.success ? 'ok' : 'fail'}`}>
-              SSH {testResult.success ? 'OK' : 'failed'}
+              SSH {testResult.success ? 'OK' : 'Failed'}
               {testResult.latency_ms != null ? ` · ${testResult.latency_ms} ms` : ''}
+              {!testResult.success ? ` · ${testResult.message}` : ''}
             </p>
-          )}
+          ) : null}
 
-          <div className="server-actions compact">
-            <button type="button" className="btn primary sm" disabled={collecting} onClick={onCollect}>
-              {collecting ? 'Collecting…' : 'Collect'}
+          <div className="server-actions">
+            <button type="button" className="btn ghost" disabled={testing} onClick={onTest}>
+              {testing ? 'Testing…' : 'Test SSH'}
             </button>
-            <button type="button" className="btn ghost sm" disabled={testing} onClick={onTest}>
-              {testing ? '…' : 'Test SSH'}
+            <button type="button" className="btn primary" disabled={collecting} onClick={onCollect}>
+              {collecting ? 'Collecting…' : 'Collect metrics'}
             </button>
-            <button type="button" className="btn ghost sm" disabled={investigating} onClick={onInvestigate}>
-              Investigate
+            <button type="button" className="btn ghost" disabled={investigating} onClick={onInvestigate}>
+              {investigating ? 'Working…' : 'Investigate'}
             </button>
-            <button type="button" className="btn ghost sm" onClick={onRequestRecollect}>
-              Recollect
+            <button type="button" className="btn ghost" onClick={onRequestRecollect}>
+              Request recollect
             </button>
           </div>
         </>
       ) : (
-        <p className="muted-block">Inactive — configure SSH access to monitor this host.</p>
+        <p className="muted-block">
+          {server.ssh_auth_mode === 'auto' && !server.has_ssh_password
+            ? 'Waiting for SSH password (GPU 165/166) or key access.'
+            : 'SSH not configured yet — add key access or set password via API.'}
+        </p>
       )}
     </article>
   )
