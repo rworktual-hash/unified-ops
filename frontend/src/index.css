@@ -1,16 +1,18 @@
 :root {
-  --accent: #7c3aed;
-  --accent-hover: #6d28d9;
-  --accent-soft: #ede9fe;
-  --accent-muted: #a78bfa;
-  --text: #18181b;
-  --muted: #71717a;
-  --bg: #f4f4f5;
-  --surface: #ffffff;
-  --border: #e4e4e7;
-  --sidebar-bg: #ffffff;
-  --success: #059669;
-  --danger: #dc2626;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-soft: rgba(99, 102, 241, 0.15);
+  --accent-muted: #a5b4fc;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-elevated: #334155;
+  --border: #334155;
+  --sidebar-bg: #0c1222;
+  --success: #34d399;
+  --danger: #f87171;
+  --warn: #fbbf24;
   font-family:
     'Inter',
     system-ui,
