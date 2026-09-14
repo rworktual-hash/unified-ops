@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.gpu_metric import GpuMetric
 from app.models.server import Server
@@ -9,10 +11,16 @@ from app.monitoring.ssh_test import test_ssh_connection
 from app.schemas.connection import ConnectionTestResponse
 from app.schemas.metrics import GpuMetricRead, ServerMetricRead, ServerMetricsBundle
 from app.schemas.server import ServerCreate, ServerRead, ServerUpdate, server_to_read
-from app.services.metrics_collect import collect_and_store_metrics
+from app.services.metrics_collect import collect_all_active_servers, collect_and_store_metrics
 from app.services.server_ssh import ssh_kwargs_from_server
 
 router = APIRouter(prefix="/servers", tags=["servers"])
+
+
+class CollectAllResponse(BaseModel):
+    servers_collected: int
+    servers_failed: int
+    mode: str
 
 
 @router.post("", response_model=ServerRead, status_code=status.HTTP_201_CREATED)
@@ -28,6 +36,27 @@ def create_server(payload: ServerCreate, db: Session = Depends(get_db)) -> Serve
 def list_servers(db: Session = Depends(get_db)) -> list[ServerRead]:
     rows = db.query(Server).order_by(Server.id).all()
     return [server_to_read(r) for r in rows]
+
+
+@router.post("/collect-all", response_model=CollectAllResponse)
+def collect_all_server_metrics(
+    background: bool = Query(default=False, description="If true, queue Celery task (needs worker)"),
+    _admin=Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> CollectAllResponse:
+    if background:
+        try:
+            from app.tasks.metrics import collect_all_active_servers_task
+
+            collect_all_active_servers_task.delay()
+            return CollectAllResponse(servers_collected=0, servers_failed=0, mode="celery_queued")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Celery unavailable: {exc}. Use background=false or start worker.",
+            ) from exc
+    ok, failed = collect_all_active_servers(db)
+    return CollectAllResponse(servers_collected=ok, servers_failed=failed, mode="sync")
 
 
 @router.get("/{server_id}", response_model=ServerRead)

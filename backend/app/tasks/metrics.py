@@ -7,7 +7,7 @@ from app.services.metrics_collect import collect_all_active_servers
 def collect_all_active_servers_task() -> dict[str, int]:
     db = SessionLocal()
     try:
-        count = collect_all_active_servers(db)
+        ok, failed = collect_all_active_servers(db)
     finally:
         db.close()
-    return {"servers_collected": count}
+    return {"servers_collected": ok, "servers_failed": failed}

@@ -8,6 +8,8 @@ Full knowledge transfer: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./
 
 **Production SSH ports, deploy on nlp-sm, auth (key/password):** [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md)
 
+**Email metrics (SSH queue + email-management DB sync):** [`docs/EMAIL_METRICS.md`](./docs/EMAIL_METRICS.md)
+
 ## Architecture (simple)
 
 ```

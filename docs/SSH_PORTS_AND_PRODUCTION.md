@@ -120,6 +120,15 @@ nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-ap
 curl -s http://127.0.0.1:8000/health
 ```
 
+**Collect metrics for every active server** (SSH — no email-management DB):
+
+```bash
+source backend/.venv/bin/activate
+python scripts/collect-all-metrics.py
+```
+
+Or in the UI: **Servers → Collect all servers** (admin). Optional: run Celery worker + beat for automatic collection every 5 minutes (`METRICS_COLLECT_INTERVAL_SECONDS`).
+
 Nginx serves `frontend/dist` and proxies API. Reference vhost (includes **`auth`** and **`users`** for login): [`nginx-unified-ops.conf.example`](./nginx-unified-ops.conf.example).
 
 On the server, edit `/etc/nginx/sites-available/unified-ops` — the API `location ~` regex must include `auth|users` next to `health|servers|...`. Git does **not** update nginx automatically; copy from the example or edit in place, then `nginx -t && systemctl reload nginx`.

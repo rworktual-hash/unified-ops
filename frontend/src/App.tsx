@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   approveApproval,
+  collectAllServerMetrics,
   collectServerMetrics,
   createApproval,
   fetchHealth,
@@ -22,11 +23,12 @@ import { clearStoredToken } from './authStorage'
 import { ChatPanel } from './components/ChatPanel'
 import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
+import { EmailPanel } from './components/EmailPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
 import './App.css'
 
-type NavId = 'servers' | 'chat' | 'alerts' | 'approvals' | 'activity' | 'users'
+type NavId = 'servers' | 'email' | 'chat' | 'alerts' | 'approvals' | 'activity' | 'users'
 
 function App() {
   const [session, setSession] = useState<AppUser | null | 'pending'>('pending')
@@ -44,11 +46,16 @@ function App() {
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [showAllApprovals, setShowAllApprovals] = useState(false)
+  const [collectingAll, setCollectingAll] = useState(false)
 
   const activeServers = useMemo(() => servers.filter((s) => s.is_active), [servers])
   const pendingServers = useMemo(() => servers.filter((s) => !s.is_active), [servers])
   const monitoredServers = useMemo(
     () => activeServers.filter((s) => s.project !== 'voicemg'),
+    [activeServers],
+  )
+  const emailServers = useMemo(
+    () => activeServers.filter((s) => s.project === 'email'),
     [activeServers],
   )
 
@@ -103,6 +110,7 @@ function App() {
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
+    ...(emailServers.length > 0 ? [{ id: 'email' as const, label: 'Email' }] : []),
     { id: 'chat', label: 'Chat' },
     { id: 'alerts', label: 'Alerts' },
     { id: 'approvals', label: 'Approvals' },
@@ -178,11 +186,43 @@ function App() {
         {nav === 'servers' && (
           <>
             <header className="page-head">
-              <h1>Servers</h1>
-              <p>
-                Host metrics (CPU load, memory, disk) for {monitoredServers.length} active hosts. Voice
-                MG — coming soon.
-              </p>
+              <div>
+                <h1>Servers</h1>
+                <p>
+                  Host metrics (CPU load, memory, disk) for {monitoredServers.length} active hosts. Email
+                  gateway DB sync later — SSH collect includes email queue. Voice MG — coming soon.
+                </p>
+              </div>
+              {session.role === 'admin' && (
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={collectingAll}
+                  onClick={async () => {
+                    setCollectingAll(true)
+                    setError(null)
+                    try {
+                      const result = await collectAllServerMetrics(true)
+                      if (result.mode === 'celery_queued') {
+                        setError('Collect all queued in Celery — refresh in a few minutes.')
+                      } else {
+                        await load()
+                        if (result.servers_failed > 0) {
+                          setError(
+                            `Collected ${result.servers_collected} servers; ${result.servers_failed} failed (SSH/timeout).`,
+                          )
+                        }
+                      }
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Collect all failed')
+                    } finally {
+                      setCollectingAll(false)
+                    }
+                  }}
+                >
+                  {collectingAll ? 'Collecting all…' : 'Collect all servers'}
+                </button>
+              )}
             </header>
 
             <div className="server-grid">
@@ -263,6 +303,10 @@ function App() {
               </section>
             )}
           </>
+        )}
+
+        {nav === 'email' && session && emailServers.length > 0 && (
+          <EmailPanel emailServers={emailServers} session={session} />
         )}
 
         {nav === 'chat' && (

@@ -516,6 +516,41 @@
   color: var(--muted);
 }
 
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.stat-card {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.stat-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-value.accent {
+  color: var(--accent);
+}
+
+.stat-value.warn {
+  color: var(--warn);
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

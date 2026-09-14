@@ -1,0 +1,79 @@
+# Email metrics (SSH + email-management DB)
+
+**Status:** Gateway **DB sync** waits until you have the real email-management MariaDB URL. **SSH queue + host metrics** work with **Collect metrics** / fleet collect like any other server.
+
+Unified Ops combines:
+
+1. **SSH** (from nlp-sm) — host CPU/RAM/disk (same as other servers) + **Postfix queue** (`mailq`) and **postfix active** for inventory rows with `project=email`.
+2. **Read-only MariaDB** — sync parsed mail log rows from **email-management.worktual.tech** into Unified Ops `email_log_events`.
+
+## Inventory (SSH targets)
+
+| server_name           | ip_address    | ssh_port |
+|-----------------------|---------------|----------|
+| email-mgmt-1          | 82.113.72.84  | 4204     |
+| email-mgmt-2          | 82.113.72.80  | 4204     |
+| email-mgmt-private    | 10.180.0.84   | 4204     |
+
+SSH uses the same keys as other hosts from nlp-sm. **Collect metrics** on an email server stores queue snapshots in `email_queue_snapshots`.
+
+## Email-management database (not SSH)
+
+You need a **MariaDB connection URL** (host, port, database name, read-only user/password) — not the mail server SSH port.
+
+Example `.env` on nlp-sm (values from your email-management app config):
+
+```text
+EMAIL_MGMT_DATABASE_URL=mysql+pymysql://readonly:SECRET@127.0.0.1:3306/email_management
+```
+
+If the DB runs on `82.113.72.84` only, use that IP and ensure nlp-sm can reach it (firewall/VPN).
+
+### Discover schema
+
+```bash
+cd /opt/unified-ops && source backend/.venv/bin/activate
+python scripts/inspect-email-mgmt-db.py
+```
+
+Set table/column env vars to match (defaults may be wrong until you inspect):
+
+```text
+EMAIL_MGMT_EVENTS_TABLE=email_logs
+EMAIL_MGMT_COL_ID=id
+EMAIL_MGMT_COL_TIME=event_time
+EMAIL_MGMT_COL_EVENT=event
+EMAIL_MGMT_COL_DIRECTION=direction
+EMAIL_MGMT_COL_FROM=from_address
+EMAIL_MGMT_COL_TO=to_address
+EMAIL_MGMT_COL_SUBJECT=subject
+EMAIL_MGMT_COL_STATUS=status
+EMAIL_MGMT_COL_DSN=dsn
+EMAIL_MGMT_COL_QUEUE_ID=queue_id
+# Optional — map rows to inventory server by host/IP column:
+# EMAIL_MGMT_COL_HOST=hostname
+EMAIL_MGMT_HOST_SERVER_MAP=82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private
+EMAIL_MGMT_DEFAULT_SERVER_NAME=email-mgmt-1
+```
+
+### Sync
+
+- **Admin:** `POST /email/sync` or **Sync mail logs** in the Email UI.
+- Cursor stored in `email_sync_state` (incremental by remote `id`).
+
+### Nginx
+
+Add `email` to the API location regex (same as `/auth`, `/servers`):
+
+```nginx
+location ~ ^/(health|auth|users|email|servers|...) {
+```
+
+## API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/email/overview` | Totals from synced events (24h default) |
+| GET | `/email/events?server_id=&limit=` | Recent log rows |
+| GET | `/email/servers/{id}/queue` | Latest SSH mailq snapshot |
+| POST | `/email/sync` | Admin — pull from email-mgmt DB |

@@ -103,9 +103,93 @@ export async function updateUser(
   return res.json()
 }
 
+export type EmailOverview = {
+  period_hours: number
+  total: number
+  inbound: number
+  outbound: number
+  delivered: number
+  bounced: number
+  failed: number
+  sync_configured: boolean
+  last_source_id: number | null
+  last_synced_at: string | null
+  last_sync_error: string | null
+}
+
+export type EmailLogEvent = {
+  id: number
+  server_id: number | null
+  occurred_at: string
+  event_type: string | null
+  direction: string | null
+  from_addr: string | null
+  to_addr: string | null
+  subject: string | null
+  status: string | null
+  dsn: string | null
+  queue_id: string | null
+}
+
+export type EmailQueueSnapshot = {
+  id: number
+  server_id: number
+  collected_at: string
+  queue_messages: number | null
+  queue_size_kb: number | null
+  postfix_active: boolean | null
+  collect_error: string | null
+}
+
+export async function fetchEmailOverview(hours = 24): Promise<EmailOverview> {
+  const res = await apiFetch(`/email/overview?hours=${hours}`)
+  if (!res.ok) throw new Error('Failed to load email overview')
+  return res.json()
+}
+
+export async function fetchEmailEvents(serverId?: number, limit = 200): Promise<EmailLogEvent[]> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (serverId != null) params.set('server_id', String(serverId))
+  const res = await apiFetch(`/email/events?${params}`)
+  if (!res.ok) throw new Error('Failed to load email events')
+  return res.json()
+}
+
+export async function fetchEmailQueue(serverId: number): Promise<EmailQueueSnapshot | null> {
+  const res = await apiFetch(`/email/servers/${serverId}/queue`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error('Failed to load mail queue')
+  const text = await res.text()
+  if (!text) return null
+  return JSON.parse(text) as EmailQueueSnapshot
+}
+
+export async function syncEmailLogs(): Promise<{ ok: boolean; inserted?: number; error?: string }> {
+  const res = await apiFetch('/email/sync', { method: 'POST' })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || 'Sync failed')
+  }
+  return res.json()
+}
+
 export async function fetchHealth(): Promise<{ status: string }> {
   const res = await fetch('/health')
   if (!res.ok) throw new Error('Health check failed')
+  return res.json()
+}
+
+export async function collectAllServerMetrics(sync = true): Promise<{
+  servers_collected: number
+  servers_failed: number
+  mode: string
+}> {
+  const q = sync ? '' : '?background=true'
+  const res = await apiFetch(`/servers/collect-all${q}`, { method: 'POST' })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || 'Collect all failed')
+  }
   return res.json()
 }
 
