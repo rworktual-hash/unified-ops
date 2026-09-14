@@ -185,7 +185,7 @@ export async function collectAllServerMetrics(sync = true): Promise<{
   mode: string
 }> {
   const q = sync ? '' : '?background=true'
-  const res = await apiFetch(`/servers/collect-all${q}`, { method: 'POST' })
+  const res = await apiFetch(`/fleet/collect-metrics${q}`, { method: 'POST' })
   if (!res.ok) {
     const detail = await res.text()
     throw new Error(detail || 'Collect all failed')

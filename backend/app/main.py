@@ -10,6 +10,7 @@ from app.api.approvals import router as approvals_router
 from app.api.alerts import router as alerts_router
 from app.api.deps import get_current_user
 from app.api.email import router as email_router
+from app.api.fleet import router as fleet_router
 from app.api.servers import router as servers_router
 from app.api.users import router as users_router
 from app.config import settings
@@ -57,6 +58,7 @@ app.include_router(approvals_router, dependencies=_protected)
 app.include_router(chat_router, dependencies=_protected)
 app.include_router(users_router, dependencies=_protected)
 app.include_router(email_router, dependencies=_protected)
+app.include_router(fleet_router, dependencies=_protected)
 
 
 @app.get("/health")
