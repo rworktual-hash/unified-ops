@@ -4,7 +4,9 @@ Single operations platform to replace separate monitoring apps (AI Insights, Voi
 
 **Approach:** Build and validate everything **locally first**, then deploy the same codebase to the dedicated Unified Ops server.
 
-Full knowledge transfer and inventory details: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./Unified_Ops_Full_KT_and_Project_Start_Guide.docx) (no secrets in that doc or in this repo).
+Full knowledge transfer: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./Unified_Ops_Full_KT_and_Project_Start_Guide.docx) (no secrets in that doc or in this repo).
+
+**Production SSH ports, deploy on nlp-sm, auth (key/password):** [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md)
 
 ## Architecture (simple)
 
@@ -187,30 +189,44 @@ Update `ssh_username` in the UI or re-seed after server team confirms the monito
 python scripts/sync-ai-gpu-ssh-access.py
 ```
 
-**SSH ports:** Many public infra/email hosts use **4204** (not 22); DBs/Grafana/backupvault-130 stay on **22**. After KT changes, run `python scripts/apply-ssh-port-4204.py` or re-seed.
+**SSH ports (22 vs 4204):** Varies by host — public Nginx/Kong/email and many GPU/VoiceMG STT boxes use **4204**; internal DBs, Grafana, and most backupvault/mysql slaves use **22**; **backupvault-150** uses **4204**. Canonical list: `backend/app/seed/full_inventory.py` and [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md). After editing inventory, sync MariaDB:
 
-**Full inventory** (VoiceMG, infra, email, backupvault, GPU — upsert by IP):
+```bash
+python scripts/apply-ssh-port-4204.py   # syncs 22 or 4204 from seed
+# or: python scripts/seed-all-servers.py
+```
+
+**Full inventory** (~39 hosts — VoiceMG, infra, email, backupvault, GPU; upsert by IP):
 
 ```bash
 python scripts/seed-all-servers.py
 ```
 
-**SSH auth modes** (`servers.ssh_auth_mode`): `key` | `password` | `auto` (try key, then password). Passwords are stored in MariaDB only; API returns `has_ssh_password`, never the secret.
+**SSH auth modes** (`servers.ssh_auth_mode`): `key` | `password` | `auto`. Passwords live in MariaDB only; API exposes `has_ssh_password`, not the value.
 
-After upgrading an existing DB:
+New DB columns on an existing server:
 
 ```bash
 python scripts/migrate-server-ssh-auth.py
 python scripts/seed-all-servers.py
-# On production only — set GPU password from env, not Git:
-# SSH_GPU_PASSWORD='...' python scripts/set-gpu-ssh-password.py
 ```
 
-**Production (nlp-sm / observability.worktual.tech):** `git pull` in `/opt/unified-ops`, run migration + seed, set `CREDENTIAL_GPU_KEY_1_PATH=/root/.ssh/id_rsa`, `SSH_STRICT_HOST_KEYS=false`, set GPU passwords, restart `uvicorn`.
+GPU **165/166** password (nlp-sm only, never Git): `SSH_GPU_PASSWORD='...' python scripts/set-gpu-ssh-password.py`
+
+### Production (nlp-sm)
+
+| Item | Value |
+|------|--------|
+| URL | https://observability.worktual.tech |
+| Path | `/opt/unified-ops` |
+| SSH key | `CREDENTIAL_GPU_KEY_1_PATH=/root/.ssh/id_rsa` |
+| Host keys | `SSH_STRICT_HOST_KEYS=false` |
+
+Deploy: `git pull` → `migrate` / `seed-all-servers` / `apply-ssh-port-4204` as needed → `frontend/npm run build` → restart `uvicorn`. Step-by-step: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md).
 
 ## Status
 
-**Phase 6:** Approval queue + controlled executor (allowlisted actions). **Next:** Production hardening / new server deploy.
+**Phase 6** complete locally; **production** inventory and SSH (22/4204 + key auth) validated on observability.worktual.tech. **Pending:** GPU 165/166 passwords, optional UI grouping by project, systemd for API/worker/beat.
 
 ### Phase 3 — Metrics (Redis + Celery)
 

@@ -1,32 +1,25 @@
-# React + TypeScript + Vite
+# Unified Ops frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + Vite dashboard for **Unified Ops** (servers, metrics, alerts, chat, approvals).
 
-Currently, two official plugins are available:
+## Local dev
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+API default: http://localhost:8000 (override with `VITE_API_URL` in `.env`).
+
+## Production build (nlp-sm)
+
+```bash
+npm run build
+```
+
+Output in `dist/` — served by Nginx at https://observability.worktual.tech (see repo [`docs/SSH_PORTS_AND_PRODUCTION.md`](../docs/SSH_PORTS_AND_PRODUCTION.md)).
+
+## Notes
+
+- Server list comes from `GET /servers`; active hosts show metric cards, inactive as pending chips.
+- Types include `ssh_auth_mode` and `has_ssh_password` (password never sent to the browser).
