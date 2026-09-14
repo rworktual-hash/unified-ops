@@ -131,7 +131,14 @@ Or in the UI: **Servers → Collect all servers** (admin). Optional: run Celery 
 
 Nginx serves `frontend/dist` and proxies API. Reference vhost (includes **`auth`** and **`users`** for login): [`nginx-unified-ops.conf.example`](./nginx-unified-ops.conf.example).
 
-On the server, edit `/etc/nginx/sites-available/unified-ops` — the API `location ~` regex must include `auth|users` next to `health|servers|...`. Git does **not** update nginx automatically; copy from the example or edit in place, then `nginx -t && systemctl reload nginx`.
+On the server after `git pull`, install nginx from the repo (includes `auth`, `users`, `email`, `fleet`, and `/servers/` proxy):
+
+```bash
+cd /opt/unified-ops
+sudo bash scripts/apply-nginx-unified-ops.sh
+```
+
+Source file: [`deploy/nginx/unified-ops.conf`](../deploy/nginx/unified-ops.conf). Example/docs: [`nginx-unified-ops.conf.example`](./nginx-unified-ops.conf.example).
 
 If `/auth` is missing, the sign-in page shows “Invalid email or password” even when the admin user exists.
 
