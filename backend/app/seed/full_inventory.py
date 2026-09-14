@@ -64,18 +64,19 @@ EMAIL_SERVERS: tuple[InventoryServer, ...] = (
     InventoryServer("email-mgmt-private", "10.180.0.84", 4204, "root", "app", "email"),
 )
 
+# backupvault/mysql: SSH port varies by host (22 vs 4204); verify from nlp-sm before changing.
 BACKUPVAULT_SERVERS: tuple[InventoryServer, ...] = (
-    InventoryServer("mysql-slave-119", "10.180.0.119", 4204, "root", "database", "backupvault"),
-    InventoryServer("mysql-slave-211", "10.180.0.211", 4204, "root", "database", "backupvault"),
-    InventoryServer("MySQL-Slave-01", "10.180.0.212", 4204, "root", "database", "backupvault"),
-    InventoryServer("MySQL-Slave-02", "10.180.0.213", 4204, "root", "database", "backupvault"),
-    InventoryServer("PostgreSQL-Slave-01", "10.180.0.215", 4204, "root", "database", "backupvault"),
-    InventoryServer("backupvault-90", "10.180.0.90", 4204, "root", "app", "backupvault"),
+    InventoryServer("mysql-slave-119", "10.180.0.119", 22, "root", "database", "backupvault"),
+    InventoryServer("mysql-slave-211", "10.180.0.211", 22, "root", "database", "backupvault"),
+    InventoryServer("MySQL-Slave-01", "10.180.0.212", 22, "root", "database", "backupvault"),
+    InventoryServer("MySQL-Slave-02", "10.180.0.213", 22, "root", "database", "backupvault"),
+    InventoryServer("PostgreSQL-Slave-01", "10.180.0.215", 22, "root", "database", "backupvault"),
+    InventoryServer("backupvault-90", "10.180.0.90", 22, "root", "app", "backupvault"),
     InventoryServer("backupvault-130", "10.180.0.130", 22, "root", "app", "backupvault"),
     InventoryServer("backupvault-150", "10.180.0.150", 4204, "root", "app", "backupvault"),
-    InventoryServer("backupvault-250", "10.180.0.250", 4204, "root", "app", "backupvault"),
-    InventoryServer("backupvault-85", "10.180.0.85", 4204, "root", "app", "backupvault"),
-    InventoryServer("backupvault-124", "10.180.0.124", 4204, "root", "app", "backupvault"),
+    InventoryServer("backupvault-250", "10.180.0.250", 22, "root", "app", "backupvault"),
+    InventoryServer("backupvault-85", "10.180.0.85", 22, "root", "app", "backupvault"),
+    InventoryServer("backupvault-124", "10.180.0.124", 22, "root", "app", "backupvault"),
 )
 
 ALL_INVENTORY: tuple[InventoryServer, ...] = (

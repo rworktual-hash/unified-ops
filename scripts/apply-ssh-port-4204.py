@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync ssh_port from full_inventory into MariaDB (run after port KT fixes)."""
+"""Sync ssh_port from full_inventory into MariaDB (22 or 4204 per host)."""
 
 import sys
 from pathlib import Path
