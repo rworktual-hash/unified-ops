@@ -1,0 +1,35 @@
+# Production vhost (nlp-sm): /etc/nginx/sites-available/unified-ops
+# sites-enabled/unified-ops is usually a symlink to this file.
+# After any edit on the server: nginx -t && systemctl reload nginx
+#
+# Repo copy is documentation only — deploy does not overwrite /etc/nginx automatically.
+
+server {
+    listen 80;
+    server_name observability.worktual.tech 82.113.72.157;
+    return 301 https://observability.worktual.tech$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name observability.worktual.tech;
+
+    ssl_certificate     /etc/ssl/worktual.tech/STAR.worktual.tech.fullchain.pem;
+    ssl_certificate_key /etc/ssl/worktual.tech/STAR.worktual.tech_key.txt;
+
+    root /opt/unified-ops/frontend/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # auth + users required for dashboard login
+    location ~ ^/(health|auth|users|servers|chat|approvals|alerts|agent-actions|docs|openapi.json) {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 130s;
+    }
+}

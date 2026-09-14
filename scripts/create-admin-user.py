@@ -8,9 +8,14 @@ import sys
 _backend = os.path.join(os.path.dirname(__file__), "..", "backend")
 sys.path.insert(0, os.path.abspath(_backend))
 
-from app.db.session import SessionLocal  # noqa: E402
+from app.db.session import Base, SessionLocal, engine  # noqa: E402
+from app.models import app_user as _app_user_model  # noqa: F401, E402
 from app.models.app_user import AppUser  # noqa: E402
 from app.services.app_auth import hash_password, normalize_email  # noqa: E402
+
+
+def ensure_app_users_table() -> None:
+    Base.metadata.create_all(bind=engine, tables=[AppUser.__table__])
 
 
 def main() -> None:
@@ -20,6 +25,7 @@ def main() -> None:
         print("Set ADMIN_EMAIL and ADMIN_PASSWORD in the environment.")
         sys.exit(1)
     email = normalize_email(email)
+    ensure_app_users_table()
     db = SessionLocal()
     try:
         row = db.query(AppUser).filter(AppUser.email == email).first()

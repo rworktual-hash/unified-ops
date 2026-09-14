@@ -87,6 +87,8 @@ pip install -r backend/requirements.txt
 ADMIN_EMAIL='your@gmail.com' ADMIN_PASSWORD='your-secure-password' python scripts/create-admin-user.py
 ```
 
+The script creates the `app_users` table if needed (no need to start the API first).
+
 Sign in at the UI, open **Users**, and add each teammate’s Gmail + password. Only accounts you create can use the dashboard.
 
 Local dev without login: `AUTH_ENABLED=false` in `.env`.
@@ -118,7 +120,32 @@ nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-ap
 curl -s http://127.0.0.1:8000/health
 ```
 
-Nginx serves `frontend/dist` and proxies API — adjust if your vhost differs.
+Nginx serves `frontend/dist` and proxies API. Reference vhost (includes **`auth`** and **`users`** for login): [`nginx-unified-ops.conf.example`](./nginx-unified-ops.conf.example).
+
+On the server, edit `/etc/nginx/sites-available/unified-ops` — the API `location ~` regex must include `auth|users` next to `health|servers|...`. Git does **not** update nginx automatically; copy from the example or edit in place, then `nginx -t && systemctl reload nginx`.
+
+If `/auth` is missing, the sign-in page shows “Invalid email or password” even when the admin user exists.
+
+**Check from nlp-sm:**
+
+```bash
+curl -s http://127.0.0.1:8000/health
+curl -s -X POST http://127.0.0.1:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}'
+# via nginx (should return access_token JSON, not HTML):
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://observability.worktual.tech/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}'
+```
+
+Restart API after admin script if the shell reported uvicorn **Terminated**:
+
+```bash
+pkill -f "uvicorn app.main:app" || true
+cd /opt/unified-ops/backend && source .venv/bin/activate
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-api.log 2>&1 &
+```
 
 ---
 

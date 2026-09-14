@@ -44,12 +44,14 @@ export async function login(email: string, password: string): Promise<AppUser> {
     body: JSON.stringify({ email, password }),
   })
   if (!res.ok) {
-    let detail = 'Invalid email or password'
+    const text = await res.text()
+    let detail =
+      res.status === 401 ? 'Invalid email or password' : `Sign in failed (HTTP ${res.status})`
     try {
-      const body = (await res.json()) as { detail?: string }
-      if (body.detail) detail = body.detail
+      const body = JSON.parse(text) as { detail?: string | { msg?: string }[] }
+      if (typeof body.detail === 'string') detail = body.detail
     } catch {
-      /* ignore */
+      if (text && text.length < 200 && !text.includes('<html')) detail = text
     }
     throw new Error(detail)
   }
