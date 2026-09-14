@@ -196,7 +196,7 @@ python scripts/apply-ssh-port-4204.py   # syncs 22 or 4204 from seed
 # or: python scripts/seed-all-servers.py
 ```
 
-**Full inventory** (~39 hosts — VoiceMG, infra, email, backupvault, GPU; upsert by IP):
+**Full inventory** (~64 hosts — AI Insights set + backupvault/email extras; upsert by IP):
 
 ```bash
 python scripts/seed-all-servers.py

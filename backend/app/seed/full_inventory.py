@@ -56,6 +56,39 @@ INFRA_SERVERS: tuple[InventoryServer, ...] = (
     InventoryServer("ai-ccaas-db", "10.180.0.202", 22, "root", "database", "infrastructure"),
     InventoryServer("campaign-db", "10.180.0.203", 22, "root", "database", "infrastructure"),
     InventoryServer("Grafana-Dashboard", "82.113.72.19", 22, "root", "monitoring", "infrastructure"),
+    InventoryServer("miniai", "82.113.92.40", 22, "root", "cpu", "infrastructure", True, "key"),
+    InventoryServer("Apache-Kafka", "82.113.92.124", 4204, "root", "nginx", "infrastructure", True, "key"),
+    InventoryServer("CRM-DB", "10.180.0.204", 22, "root", "database", "infrastructure", True, "key"),
+    InventoryServer("Ontology-Postgresql", "10.180.0.126", 22, "root", "database", "infrastructure", True, "key"),
+)
+
+# AI Insights parity — Redis / PBX / SIP (root + key; ports from aiservers.worktual.tech)
+REDIS_SERVERS: tuple[InventoryServer, ...] = tuple(
+    InventoryServer(
+        f"Redis-{n}",
+        f"10.180.0.{octet}",
+        22,
+        "root",
+        "redis",
+        "infrastructure",
+        True,
+        "key",
+    )
+    for n, octet in enumerate([101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 115], start=1)
+)
+
+PBX_SERVERS: tuple[InventoryServer, ...] = (
+    InventoryServer("AI-CCaaS-PBX-1", "10.180.0.56", 22, "root", "pbx", "infrastructure", True, "key"),
+    InventoryServer("AI-CCaaS-PBX-2", "10.180.0.96", 22, "root", "pbx", "infrastructure", True, "key"),
+    InventoryServer("CCaaS-PBX-1", "10.180.0.68", 22, "root", "pbx", "infrastructure", True, "key"),
+    InventoryServer("CCaaS-PBX-2", "10.180.0.71", 22, "root", "pbx", "infrastructure", True, "key"),
+)
+
+SIP_SERVERS: tuple[InventoryServer, ...] = (
+    InventoryServer("AI-CCaaS-SGW-1", "10.180.0.57", 4204, "root", "sip", "infrastructure", True, "key"),
+    InventoryServer("AI-CCaaS-SGW-2", "10.180.0.64", 22, "root", "sip", "infrastructure", True, "key"),
+    InventoryServer("CCaaS-SGW-1", "10.180.0.81", 22, "root", "sip", "infrastructure", True, "key"),
+    InventoryServer("CCaaS-SGW-2", "10.180.0.82", 22, "root", "sip", "infrastructure", True, "key"),
 )
 
 EMAIL_SERVERS: tuple[InventoryServer, ...] = (
@@ -80,7 +113,14 @@ BACKUPVAULT_SERVERS: tuple[InventoryServer, ...] = (
 )
 
 ALL_INVENTORY: tuple[InventoryServer, ...] = (
-    GPU_SERVERS + VOICEMG_SERVERS + INFRA_SERVERS + EMAIL_SERVERS + BACKUPVAULT_SERVERS
+    GPU_SERVERS
+    + VOICEMG_SERVERS
+    + INFRA_SERVERS
+    + REDIS_SERVERS
+    + PBX_SERVERS
+    + SIP_SERVERS
+    + EMAIL_SERVERS
+    + BACKUPVAULT_SERVERS
 )
 
 

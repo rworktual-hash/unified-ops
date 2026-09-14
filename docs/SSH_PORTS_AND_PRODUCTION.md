@@ -6,7 +6,7 @@ Unified Ops runs on **nlp-sm** and opens SSH **from that host** to each inventor
 **App path on server:** `/opt/unified-ops`  
 **Repo:** `https://github.com/rworktual-hash/unified-ops.git` (branch `main`)
 
-Inventory source of truth in code: `backend/app/seed/full_inventory.py`.
+Inventory source of truth in code: `backend/app/seed/full_inventory.py` (~64 hosts: AI Insights 45 + backupvault/email extras).
 
 ---
 
