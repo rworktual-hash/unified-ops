@@ -154,7 +154,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell app-shell--fixed">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">UO</div>

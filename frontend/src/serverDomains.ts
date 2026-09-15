@@ -24,7 +24,7 @@ export const SERVER_DOMAINS: DomainDef[] = [
   {
     id: 'ai',
     label: 'AI / GPU',
-    description: 'GPU hosts and AI Insights–style metrics (148, 149, 165, 166).',
+    description: 'GPU pilot hosts (148 & 149). “Devices” = GPUs on that machine from nvidia-smi, not host count.',
   },
   {
     id: 'infrastructure',

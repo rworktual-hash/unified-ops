@@ -1,4 +1,12 @@
-import type { ConnectionTestResult, MetricsBundle, Server } from '../types'
+import type { ConnectionTestResult, GpuMetric, MetricsBundle, Server } from '../types'
+
+function uniqueGpusByIndex(rows: GpuMetric[]): GpuMetric[] {
+  const byIndex = new Map<number, GpuMetric>()
+  for (const g of rows) {
+    if (!byIndex.has(g.gpu_index)) byIndex.set(g.gpu_index, g)
+  }
+  return [...byIndex.values()].sort((a, b) => a.gpu_index - b.gpu_index)
+}
 import { MetricBar } from './MetricBar'
 import { ServerMetricsCharts } from './ServerMetricsCharts'
 
@@ -29,9 +37,10 @@ export function ServerCard({
 }: Props) {
   const host = metrics?.host[0]
   const isGpu = server.server_type === 'gpu'
-  const gpus =
+  const gpus = uniqueGpusByIndex(
     (metrics?.gpu_latest?.length ? metrics.gpu_latest : metrics?.gpu.filter((g) => g.status === 'ok')) ??
-    []
+      [],
+  )
   const maxGpuUtil = gpus.length ? Math.max(...gpus.map((g) => g.utilization_pct ?? 0)) : null
   const maxTemp = gpus.length ? Math.max(...gpus.map((g) => g.temperature_c ?? 0)) : null
   const product = metrics?.gpu_product ?? null
@@ -112,15 +121,17 @@ export function ServerCard({
                         : '—'}
                   </span>
                 </div>
-                <div className="metric-tile">
-                  <span className="metric-label">GPUs</span>
+                <div className="metric-tile" title="Physical GPU indices on this host (nvidia-smi), not fleet host count">
+                  <span className="metric-label">GPU devices</span>
                   <span className="metric-value">{gpus.length || '—'}</span>
                 </div>
               </div>
 
               {gpus.length > 0 ? (
-                <div className="gpu-per-grid">
-                  <p className="server-card-label">Per-GPU (latest collect)</p>
+                <details className="gpu-detail-fold">
+                  <summary>
+                    Per-GPU ({gpus.length} device{gpus.length === 1 ? '' : 's'} on this host)
+                  </summary>
                   <div className="gpu-per-cards">
                     {gpus.map((g) => (
                       <div key={g.gpu_index} className="gpu-per-card">
@@ -141,14 +152,14 @@ export function ServerCard({
                       </div>
                     ))}
                   </div>
-                </div>
+                </details>
               ) : null}
             </>
           )}
 
           {isGpu && insights ? (
-            <div className="gpu-product-block">
-              <p className="server-card-label">Host & network (AI Insights style)</p>
+            <details className="gpu-detail-fold gpu-product-block">
+              <summary>Host & network</summary>
               <div className="metric-grid gpu-metrics">
                 <div className="metric-tile">
                   <span className="metric-label">App processes</span>
@@ -188,15 +199,15 @@ export function ServerCard({
               {insights.collect_error ? (
                 <p className="ssh-line fail">Insights collect: {insights.collect_error}</p>
               ) : null}
-            </div>
+            </details>
           ) : null}
 
           {isGpu && product ? (
-            <div className="gpu-product-block">
-              <p className="server-card-label">Product metrics (SSH, read-only)</p>
+            <details className="gpu-detail-fold gpu-product-block">
+              <summary>Product metrics (vLLM / Docker)</summary>
               <div className="metric-grid gpu-metrics">
                 <div className="metric-tile">
-                  <span className="metric-label">GPU jobs</span>
+                  <span className="metric-label">Compute jobs</span>
                   <span className="metric-value">
                     {product.compute_process_count != null ? product.compute_process_count : '—'}
                   </span>
@@ -230,7 +241,7 @@ export function ServerCard({
               {product.collect_error ? (
                 <p className="ssh-line fail">Product collect: {product.collect_error}</p>
               ) : null}
-            </div>
+            </details>
           ) : null}
 
           {testResult ? (
