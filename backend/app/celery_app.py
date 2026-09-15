@@ -16,9 +16,13 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-celery_app.conf.beat_schedule = {
-    "collect-server-metrics": {
-        "task": "app.tasks.metrics.collect_all_active_servers_task",
-        "schedule": settings.metrics_collect_interval_seconds,
-    },
-}
+if settings.metrics_scheduled_collect_enabled:
+    celery_app.conf.beat_schedule = {
+        "collect-server-metrics": {
+            "task": "app.tasks.metrics.collect_all_active_servers_task",
+            "schedule": settings.metrics_collect_interval_seconds,
+            "options": {"expires": max(60.0, settings.metrics_collect_interval_seconds - 30)},
+        },
+    }
+else:
+    celery_app.conf.beat_schedule = {}

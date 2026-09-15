@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,9 +19,12 @@ from app.schemas.metrics import (
     GpuProductSnapshotRead,
     ServerMetricRead,
     ServerMetricsBundle,
+    ServerMetricsHistoryResponse,
 )
 from app.schemas.server import ServerCreate, ServerRead, ServerUpdate, server_to_read
+from app.services.fleet_collect_log import record_fleet_collect_run
 from app.services.metrics_collect import collect_all_active_servers, collect_and_store_metrics
+from app.services.metrics_history import fetch_metrics_history
 from app.services.metrics_query import latest_gpu_metrics_batch
 from app.services.server_ssh import ssh_kwargs_from_server
 
@@ -107,7 +112,15 @@ def collect_all_server_metrics(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Celery unavailable: {exc}. Use background=false or start worker.",
             ) from exc
+    started = datetime.now(timezone.utc)
     ok, failed = collect_all_active_servers(db)
+    record_fleet_collect_run(
+        started_at=started,
+        servers_ok=ok,
+        servers_failed=failed,
+        trigger="api_sync",
+        db=db,
+    )
     return CollectAllResponse(servers_collected=ok, servers_failed=failed, mode="sync")
 
 
@@ -143,6 +156,25 @@ def get_server_metrics(
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     return _metrics_bundle(db, server_id, host_limit=limit, gpu_limit=limit * 4)
+
+
+@router.get("/{server_id}/metrics/history", response_model=ServerMetricsHistoryResponse)
+def get_server_metrics_history(
+    server_id: int,
+    hours: float = Query(default=1.0, ge=0.25, le=168),
+    db: Session = Depends(get_db),
+) -> ServerMetricsHistoryResponse:
+    server = db.get(Server, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    host_rows, gpu_rows, insight_rows = fetch_metrics_history(db, server_id, hours=hours)
+    return ServerMetricsHistoryResponse(
+        server_id=server_id,
+        hours=hours,
+        host=[ServerMetricRead.model_validate(h) for h in host_rows],
+        gpu=[GpuMetricRead.model_validate(g) for g in gpu_rows],
+        gpu_insights=[GpuInsightsSnapshotRead.model_validate(i) for i in insight_rows],
+    )
 
 
 @router.post("/{server_id}/collect-metrics", response_model=ServerMetricsBundle)

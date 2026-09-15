@@ -87,3 +87,11 @@ class ServerMetricsBundle(BaseModel):
     gpu_latest: list[GpuMetricRead] = []
     gpu_product: GpuProductSnapshotRead | None = None
     gpu_insights: GpuInsightsSnapshotRead | None = None
+
+
+class ServerMetricsHistoryResponse(BaseModel):
+    server_id: int
+    hours: float
+    host: list[ServerMetricRead]
+    gpu: list[GpuMetricRead]
+    gpu_insights: list[GpuInsightsSnapshotRead]

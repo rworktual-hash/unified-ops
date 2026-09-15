@@ -1,5 +1,6 @@
 import type { ConnectionTestResult, MetricsBundle, Server } from '../types'
 import { MetricBar } from './MetricBar'
+import { ServerMetricsCharts } from './ServerMetricsCharts'
 
 type Props = {
   server: Server
@@ -239,6 +240,12 @@ export function ServerCard({
               {!testResult.success ? ` · ${testResult.message}` : ''}
             </p>
           ) : null}
+
+          <ServerMetricsCharts
+            serverId={server.id}
+            serverName={server.server_name}
+            isGpu={isGpu}
+          />
 
           <div className="server-actions">
             <button type="button" className="btn ghost" disabled={testing} onClick={onTest}>

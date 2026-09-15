@@ -30,6 +30,8 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://127.0.0.1:6379/0"
     metrics_collect_interval_seconds: float = 300.0
+    # When true, Celery Beat schedules collect_all_active_servers_task (needs Redis + worker + beat).
+    metrics_scheduled_collect_enabled: bool = False
 
     alert_mem_used_pct_warning: float = 85.0
     alert_disk_used_pct_warning: float = 85.0

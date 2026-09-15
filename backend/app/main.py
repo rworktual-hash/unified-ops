@@ -28,6 +28,7 @@ from app.models import app_user as _app_user_model  # noqa: F401
 from app.models import email_log_event as _email_log_event_model  # noqa: F401
 from app.models import email_queue_snapshot as _email_queue_snapshot_model  # noqa: F401
 from app.models import email_sync_state as _email_sync_state_model  # noqa: F401
+from app.models import fleet_collect_run as _fleet_collect_run_model  # noqa: F401
 from app.services.app_auth import ensure_bootstrap_admin
 
 

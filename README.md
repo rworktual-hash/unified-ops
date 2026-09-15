@@ -10,6 +10,8 @@ Full knowledge transfer: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./
 
 **Email metrics (SSH queue + email-management DB sync):** [`docs/EMAIL_METRICS.md`](./docs/EMAIL_METRICS.md)
 
+**Scheduled fleet collect (Celery Beat):** [`docs/SCHEDULED_COLLECT.md`](./docs/SCHEDULED_COLLECT.md)
+
 **Production API:** UI and authenticated routes use prefix **`/api`** (e.g. `GET /api/servers`, `POST /api/servers/{id}/collect-metrics`). Root `GET /health` remains for simple uptime checks.
 
 ## Architecture (simple)
@@ -228,7 +230,7 @@ API startup also runs `ensure_gpu_ai_insights_schema()` so new columns/tables ar
 
 UI: **Collect metrics** on a pilot GPU host shows per-GPU tiles, **Host & network**, and **Product metrics** blocks.
 
-**Not in pilot yet:** 1h history charts (needs scheduled collect), legacy **aiservers.worktual.tech** fleet health UI, read-only sync from **10.180.1.222:4202** product DBs.
+**Metrics history charts:** **Metrics history** on each server card (`GET /api/servers/{id}/metrics/history?hours=1|6|24`); needs multiple collects (scheduled or manual). Legacy aiservers fleet donuts / **1.222:4202** DB sync still separate.
 
 ### AI-GPU 165 / 166 (later — password / sshpass)
 
@@ -302,7 +304,7 @@ Step-by-step SSH/nginx/auth: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_POR
 
 **Production (observability.worktual.tech):** ~50 active hosts; fleet **host metrics** (SSH) + **alerts**; login via `app_users`. **GPU insights pilot live** on **DR-GPU1-148** and **DR-GPU1-149** (`GPU_PRODUCT_COLLECT_IPS` in nlp-sm `.env`).
 
-**Next (typical order):** scheduled collect (Celery/cron) for history graphs; UI grouping by project; **165/166** when `SSH_GPU_PASSWORD` + sshpass test OK; BackupVault / email-management DB sync; systemd for uvicorn/worker.
+**Next (typical order):** enable **scheduled collect** on nlp-sm ([`docs/SCHEDULED_COLLECT.md`](./docs/SCHEDULED_COLLECT.md)); history charts UI; sidebar grouping by project; **165/166** when password ready; BackupVault / email DB sync; systemd for uvicorn/worker/beat.
 
 ### Phase 3 — Metrics (Redis + Celery)
 

@@ -4,7 +4,9 @@ import {
   collectAllServerMetrics,
   collectServerMetrics,
   createApproval,
+  fetchFleetCollectStatus,
   fetchHealth,
+  type FleetCollectStatus,
   fetchMe,
   fetchServerMetrics,
   investigateAlert,
@@ -47,6 +49,7 @@ function App() {
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [showAllApprovals, setShowAllApprovals] = useState(false)
   const [collectingAll, setCollectingAll] = useState(false)
+  const [fleetStatus, setFleetStatus] = useState<FleetCollectStatus | null>(null)
 
   const activeServers = useMemo(() => servers.filter((s) => s.is_active), [servers])
   const pendingServers = useMemo(() => servers.filter((s) => !s.is_active), [servers])
@@ -85,6 +88,11 @@ function App() {
           }),
       )
       setMetricsByServer(metrics)
+      try {
+        setFleetStatus(await fetchFleetCollectStatus())
+      } catch {
+        setFleetStatus(null)
+      }
       setAlerts(await listAlerts(showResolved ? undefined : 'open'))
       setAgentActions(await listAgentActions(15))
       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
@@ -197,6 +205,21 @@ function App() {
                   Host metrics (CPU load, memory, disk) for {monitoredServers.length} active hosts. Email
                   gateway DB sync later — SSH collect includes email queue. Voice MG — coming soon.
                 </p>
+                {fleetStatus ? (
+                  <p className="muted fleet-collect-line">
+                    Scheduled collect:{' '}
+                    {fleetStatus.scheduled_collect_enabled
+                      ? `every ${Math.round(fleetStatus.interval_seconds / 60)} min (Celery Beat)`
+                      : 'off — set METRICS_SCHEDULED_COLLECT_ENABLED=true on API host'}
+                    {fleetStatus.last_run_at
+                      ? ` · Last run ${new Date(fleetStatus.last_run_at).toLocaleString()} (${fleetStatus.last_servers_ok ?? 0} ok${
+                          fleetStatus.last_servers_failed
+                            ? `, ${fleetStatus.last_servers_failed} failed`
+                            : ''
+                        }, ${fleetStatus.last_trigger ?? '?'})`
+                      : ' · No fleet run logged yet'}
+                  </p>
+                ) : null}
               </div>
               {session.role === 'admin' && (
                 <button

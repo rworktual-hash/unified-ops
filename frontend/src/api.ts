@@ -187,6 +187,21 @@ export async function fetchHealth(): Promise<{ status: string }> {
   return body as { status: string }
 }
 
+export type FleetCollectStatus = {
+  scheduled_collect_enabled: boolean
+  interval_seconds: number
+  last_run_at: string | null
+  last_servers_ok: number | null
+  last_servers_failed: number | null
+  last_trigger: string | null
+}
+
+export async function fetchFleetCollectStatus(): Promise<FleetCollectStatus> {
+  const res = await apiFetch('/fleet/collect-status')
+  if (!res.ok) throw new Error('Failed to load fleet collect status')
+  return res.json()
+}
+
 export async function collectAllServerMetrics(sync = true): Promise<{
   servers_collected: number
   servers_failed: number
@@ -234,6 +249,23 @@ export async function collectServerMetrics(serverId: number): Promise<MetricsBun
 export async function fetchServerMetrics(serverId: number, limit = 5): Promise<MetricsBundle> {
   const res = await apiFetch(`/servers/${serverId}/metrics?limit=${limit}`)
   if (!res.ok) throw new Error('Failed to load metrics')
+  return res.json()
+}
+
+export type ServerMetricsHistory = {
+  server_id: number
+  hours: number
+  host: import('./types').ServerMetric[]
+  gpu: import('./types').GpuMetric[]
+  gpu_insights: import('./types').GpuInsightsSnapshot[]
+}
+
+export async function fetchServerMetricsHistory(
+  serverId: number,
+  hours = 1,
+): Promise<ServerMetricsHistory> {
+  const res = await apiFetch(`/servers/${serverId}/metrics/history?hours=${hours}`)
+  if (!res.ok) throw new Error('Failed to load metrics history')
   return res.json()
 }
 
