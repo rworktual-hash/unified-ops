@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, Text
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -21,6 +21,6 @@ class GpuInsightsSnapshotRow(Base):
     cpu_util_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     gpu_util_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     gpu_temp_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
-    net_rx_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    net_tx_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    net_rx_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    net_tx_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     collect_error: Mapped[str | None] = mapped_column(Text, nullable=True)
