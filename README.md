@@ -10,6 +10,8 @@ Full knowledge transfer: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./
 
 **Email metrics (SSH queue + email-management DB sync):** [`docs/EMAIL_METRICS.md`](./docs/EMAIL_METRICS.md)
 
+**Production API:** UI and authenticated routes use prefix **`/api`** (e.g. `GET /api/servers`, `POST /api/servers/{id}/collect-metrics`). Root `GET /health` remains for simple uptime checks.
+
 ## Architecture (simple)
 
 ```
@@ -185,11 +187,69 @@ Update `ssh_username` in the UI or re-seed after server team confirms the monito
 
 4. Restart backend, open UI, click **Test SSH** per server (or `POST /servers/{id}/test-connection`).
 
-**Current AI/GPU access:** **148/149** — `linuxteam`, auth **`key`**. **165/166** — `krishna`, auth **`auto`** (key then password); stay **inactive** until `ssh_password` is set in DB. Sync GPU rows:
+**Current AI/GPU access**
+
+| Host | IP | SSH | Auth | Collect in UI |
+|------|-----|-----|------|----------------|
+| DR-GPU1-148 / 149 | `81.17.61.148`, `.149` | 4204 | `linuxteam` + **key** | **Yes** — GPU insights pilot (see below) |
+| AI-GPU-Server-1 / 2 | `173.234.75.165`, `.166` | 4204 | `krishna` + **`auto`** | **Paused** — `is_active=false` until password works |
+
+Sync GPU rows from seed:
 
 ```bash
 python scripts/sync-ai-gpu-ssh-access.py
 ```
+
+### GPU insights pilot (production: 148 + 149)
+
+Read-only SSH collectors (whitelisted commands only) store extra AI-server metrics on nlp-sm MariaDB:
+
+| Layer | Tables / fields | Examples |
+|-------|-----------------|----------|
+| Host | `server_metrics` | load, RAM, disk |
+| GPU | `gpu_metrics` | per-GPU util, VRAM, temp, **power**, **clock** |
+| Product | `gpu_product_snapshots` | vLLM jobs, Docker count, driver/model |
+| Host insights | `gpu_insights_snapshots` | processes, TCP, listen sockets, CPU util sample, net bytes (**BIGINT**) |
+
+**Who runs product + insights collect:** servers whose IP is listed in `GPU_PRODUCT_COLLECT_IPS` (comma-separated) or `*` for all `server_type=gpu`. Default in code if unset: **`81.17.61.148` only**. Production example:
+
+```bash
+# In .env on nlp-sm (restart uvicorn after change)
+GPU_PRODUCT_COLLECT_IPS=81.17.61.148,81.17.61.149
+```
+
+After schema changes or first deploy of this feature:
+
+```bash
+python scripts/migrate-gpu-ai-insights.py   # gpu_metrics columns + gpu_insights_snapshots; idempotent
+```
+
+API startup also runs `ensure_gpu_ai_insights_schema()` so new columns/tables are applied on restart.
+
+UI: **Collect metrics** on a pilot GPU host shows per-GPU tiles, **Host & network**, and **Product metrics** blocks.
+
+**Not in pilot yet:** 1h history charts (needs scheduled collect), legacy **aiservers.worktual.tech** fleet health UI, read-only sync from **10.180.1.222:4202** product DBs.
+
+### AI-GPU 165 / 166 (later — password / sshpass)
+
+These hosts stay **inactive** in the UI until SSH works from nlp-sm. No code change required when ready:
+
+1. From nlp-sm, verify login (team uses password; optional manual test with `sshpass` — never commit passwords):
+
+   ```bash
+   sshpass -p '…' ssh -p 4204 -o StrictHostKeyChecking=no krishna@173.234.75.165 'echo ok'
+   ```
+
+2. Store password in DB only (nlp-sm, not Git):
+
+   ```bash
+   export SSH_GPU_PASSWORD='…'
+   python scripts/set-gpu-ssh-password.py
+   ```
+
+   Sets `is_active=true`, `ssh_auth_mode=auto`, user `krishna`.
+
+3. Add IPs to `GPU_PRODUCT_COLLECT_IPS` (or use `*`), restart uvicorn, **Test SSH** → **Collect metrics** — same UI as 148/149.
 
 **SSH ports (22 vs 4204):** Varies by host — public Nginx/Kong/email and many GPU/VoiceMG STT boxes use **4204**; internal DBs, Grafana, and most backupvault/mysql slaves use **22**; **backupvault-150** uses **4204**. Canonical list: `backend/app/seed/full_inventory.py` and [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md). After editing inventory, sync MariaDB:
 
@@ -224,11 +284,25 @@ GPU **165/166** password (nlp-sm only, never Git): `SSH_GPU_PASSWORD='...' pytho
 | SSH key | `CREDENTIAL_GPU_KEY_1_PATH=/root/.ssh/id_rsa` |
 | Host keys | `SSH_STRICT_HOST_KEYS=false` |
 
-Deploy: `git pull` → `migrate` / `seed-all-servers` / `apply-ssh-port-4204` as needed → `frontend/npm run build` → restart `uvicorn`. Step-by-step: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md).
+Deploy on nlp-sm:
+
+```bash
+cd /opt/unified-ops && git pull
+source backend/.venv/bin/activate
+pip install -r backend/requirements.txt
+python scripts/migrate-gpu-ai-insights.py   # when GPU insights / schema changed
+pkill -f "uvicorn app.main:app" || true; sleep 2
+cd backend && nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-api.log 2>&1 &
+cd /opt/unified-ops/frontend && npm run build
+```
+
+Step-by-step SSH/nginx/auth: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md).
 
 ## Status
 
-**Phase 6** complete locally; **production** inventory and SSH (22/4204 + key auth) validated on observability.worktual.tech. **Pending:** GPU 165/166 passwords, optional UI grouping by project, systemd for API/worker/beat.
+**Production (observability.worktual.tech):** ~50 active hosts; fleet **host metrics** (SSH) + **alerts**; login via `app_users`. **GPU insights pilot live** on **DR-GPU1-148** and **DR-GPU1-149** (`GPU_PRODUCT_COLLECT_IPS` in nlp-sm `.env`).
+
+**Next (typical order):** scheduled collect (Celery/cron) for history graphs; UI grouping by project; **165/166** when `SSH_GPU_PASSWORD` + sshpass test OK; BackupVault / email-management DB sync; systemd for uvicorn/worker.
 
 ### Phase 3 — Metrics (Redis + Celery)
 
@@ -242,7 +316,7 @@ chmod +x scripts/run-celery-worker.sh scripts/run-celery-beat.sh
 
 Manual collect: UI **Collect now** or `POST /servers/{id}/collect-metrics`. History: `GET /servers/{id}/metrics`.
 
-Collectors only run whitelisted read commands (`free`, `df`, `/proc/loadavg`, `nvidia-smi` with timeout).
+Collectors only run whitelisted read commands (`free`, `df`, `/proc/loadavg`, `nvidia-smi`, and on GPU pilot hosts: `ss`, `ps`, `/proc/stat`, compute-apps query, etc. — see `backend/app/monitoring/`).
 
 ### Phase 4 — Alerts
 
