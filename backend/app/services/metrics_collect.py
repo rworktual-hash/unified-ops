@@ -7,6 +7,7 @@ from app.models.email_queue_snapshot import EmailQueueSnapshot
 from app.monitoring.collectors import collect_gpu_metrics, collect_host_metrics
 from app.monitoring.email_collectors import collect_email_queue_snapshot
 from app.services.alert_eval import evaluate_alerts
+from app.services.gpu_product_collect import collect_and_store_gpu_product
 
 
 def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric, list[GpuMetric]]:
@@ -78,6 +79,9 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
             )
             db.add(gm)
             gpu_rows.append(gm)
+
+    if server.server_type == "gpu":
+        collect_and_store_gpu_product(db, server)
 
     db.commit()
     db.refresh(row)

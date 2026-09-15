@@ -5,16 +5,56 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.gpu_metric import GpuMetric
+from app.models.gpu_product_snapshot import GpuProductSnapshotRow
 from app.models.server import Server
 from app.models.server_metric import ServerMetric
 from app.monitoring.ssh_test import test_ssh_connection
 from app.schemas.connection import ConnectionTestResponse
-from app.schemas.metrics import GpuMetricRead, ServerMetricRead, ServerMetricsBundle
+from app.schemas.metrics import (
+    GpuMetricRead,
+    GpuProductSnapshotRead,
+    ServerMetricRead,
+    ServerMetricsBundle,
+)
 from app.schemas.server import ServerCreate, ServerRead, ServerUpdate, server_to_read
 from app.services.metrics_collect import collect_all_active_servers, collect_and_store_metrics
 from app.services.server_ssh import ssh_kwargs_from_server
 
 router = APIRouter(prefix="/servers", tags=["servers"])
+
+
+def _metrics_bundle(
+    db: Session,
+    server_id: int,
+    *,
+    host_limit: int,
+    gpu_limit: int,
+) -> ServerMetricsBundle:
+    host = (
+        db.query(ServerMetric)
+        .filter(ServerMetric.server_id == server_id)
+        .order_by(ServerMetric.collected_at.desc())
+        .limit(host_limit)
+        .all()
+    )
+    gpu = (
+        db.query(GpuMetric)
+        .filter(GpuMetric.server_id == server_id)
+        .order_by(GpuMetric.collected_at.desc())
+        .limit(gpu_limit)
+        .all()
+    )
+    product = (
+        db.query(GpuProductSnapshotRow)
+        .filter(GpuProductSnapshotRow.server_id == server_id)
+        .order_by(GpuProductSnapshotRow.collected_at.desc())
+        .first()
+    )
+    return ServerMetricsBundle(
+        host=host,
+        gpu=gpu,
+        gpu_product=GpuProductSnapshotRead.model_validate(product) if product else None,
+    )
 
 
 class CollectAllResponse(BaseModel):
@@ -90,21 +130,7 @@ def get_server_metrics(
     server = db.get(Server, server_id)
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
-    host = (
-        db.query(ServerMetric)
-        .filter(ServerMetric.server_id == server_id)
-        .order_by(ServerMetric.collected_at.desc())
-        .limit(limit)
-        .all()
-    )
-    gpu = (
-        db.query(GpuMetric)
-        .filter(GpuMetric.server_id == server_id)
-        .order_by(GpuMetric.collected_at.desc())
-        .limit(limit * 4)
-        .all()
-    )
-    return ServerMetricsBundle(host=host, gpu=gpu)
+    return _metrics_bundle(db, server_id, host_limit=limit, gpu_limit=limit * 4)
 
 
 @router.post("/{server_id}/collect-metrics", response_model=ServerMetricsBundle)
@@ -115,21 +141,7 @@ def collect_metrics_now(server_id: int, db: Session = Depends(get_db)) -> Server
     if not server.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Server is inactive.")
     collect_and_store_metrics(db, server)
-    host = (
-        db.query(ServerMetric)
-        .filter(ServerMetric.server_id == server_id)
-        .order_by(ServerMetric.collected_at.desc())
-        .limit(1)
-        .all()
-    )
-    gpu = (
-        db.query(GpuMetric)
-        .filter(GpuMetric.server_id == server_id)
-        .order_by(GpuMetric.collected_at.desc())
-        .limit(8)
-        .all()
-    )
-    return ServerMetricsBundle(host=host, gpu=gpu)
+    return _metrics_bundle(db, server_id, host_limit=1, gpu_limit=8)
 
 
 @router.post("/{server_id}/test-connection", response_model=ConnectionTestResponse)

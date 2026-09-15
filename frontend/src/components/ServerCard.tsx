@@ -31,6 +31,7 @@ export function ServerCard({
   const gpus = metrics?.gpu.filter((g) => g.status === 'ok') ?? []
   const maxGpuUtil = gpus.length ? Math.max(...gpus.map((g) => g.utilization_pct ?? 0)) : null
   const maxTemp = gpus.length ? Math.max(...gpus.map((g) => g.temperature_c ?? 0)) : null
+  const product = metrics?.gpu_product ?? null
 
   const loadDisplay = host?.load_1m != null ? host.load_1m.toFixed(2) : '—'
   const loadPct = host?.load_1m != null ? Math.min(100, (host.load_1m / 8) * 100) : null
@@ -94,6 +95,48 @@ export function ServerCard({
               </div>
             </div>
           )}
+
+          {isGpu && product ? (
+            <div className="gpu-product-block">
+              <p className="server-card-label">Product metrics (SSH, read-only)</p>
+              <div className="metric-grid gpu-metrics">
+                <div className="metric-tile">
+                  <span className="metric-label">GPU jobs</span>
+                  <span className="metric-value">
+                    {product.compute_process_count != null ? product.compute_process_count : '—'}
+                  </span>
+                </div>
+                <div className="metric-tile">
+                  <span className="metric-label">Job VRAM</span>
+                  <span className="metric-value">
+                    {product.compute_mem_used_mb != null
+                      ? `${product.compute_mem_used_mb.toFixed(0)} MiB`
+                      : '—'}
+                  </span>
+                </div>
+                <div className="metric-tile">
+                  <span className="metric-label">Docker up</span>
+                  <span className="metric-value">
+                    {product.docker_containers_running != null
+                      ? product.docker_containers_running
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+              {product.gpu_model_name ? (
+                <p className="muted product-meta">
+                  {product.gpu_model_name}
+                  {product.driver_version ? ` · driver ${product.driver_version}` : ''}
+                </p>
+              ) : null}
+              {product.compute_process_names ? (
+                <p className="muted product-meta">{product.compute_process_names}</p>
+              ) : null}
+              {product.collect_error ? (
+                <p className="ssh-line fail">Product collect: {product.collect_error}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           {testResult ? (
             <p className={`ssh-line ${testResult.success ? 'ok' : 'fail'}`}>

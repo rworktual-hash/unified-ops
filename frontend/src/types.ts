@@ -45,9 +45,23 @@ export type GpuMetric = {
   collect_error: string | null
 }
 
+export type GpuProductSnapshot = {
+  id: number
+  server_id: number
+  collected_at: string
+  compute_process_count: number | null
+  compute_mem_used_mb: number | null
+  compute_process_names: string | null
+  docker_containers_running: number | null
+  gpu_model_name: string | null
+  driver_version: string | null
+  collect_error: string | null
+}
+
 export type MetricsBundle = {
   host: ServerMetric[]
   gpu: GpuMetric[]
+  gpu_product?: GpuProductSnapshot | null
 }
 
 export type AgentAction = {

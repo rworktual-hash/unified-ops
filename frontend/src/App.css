@@ -162,6 +162,17 @@
   overflow: hidden;
 }
 
+.gpu-product-block {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, #e8e4f0);
+}
+
+.gpu-product-block .product-meta {
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+}
+
 .metric-grid.gpu-metrics {
   margin-top: 0.25rem;
 }

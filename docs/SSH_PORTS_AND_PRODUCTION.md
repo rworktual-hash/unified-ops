@@ -185,6 +185,7 @@ nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-ap
 - Lists all **`is_active`** servers as metric cards; inactive hosts appear under **Pending SSH access**.
 - Nav copy is still GPU-oriented; inventory includes infra, email, backupvault, VoiceMG.
 - Host metrics (RAM, disk, load) work for any reachable Linux SSH host; GPU tiles only when `server_type` is `gpu` and `nvidia-smi` succeeds.
+- **GPU product metrics (pilot):** read-only SSH (`nvidia-smi` compute apps, driver/model, `docker ps` count) for IPs in `GPU_PRODUCT_COLLECT_IPS` (default **81.17.61.148**). Stored in `gpu_product_snapshots` on nlp-sm. Set `*` to enable on all GPU hosts after pilot.
 
 ---
 
