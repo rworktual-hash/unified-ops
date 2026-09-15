@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.gpu_metric import GpuMetric
+from app.models.gpu_insights_snapshot import GpuInsightsSnapshotRow
 from app.models.gpu_product_snapshot import GpuProductSnapshotRow
 from app.models.server import Server
 from app.models.server_metric import ServerMetric
 from app.monitoring.ssh_test import test_ssh_connection
 from app.schemas.connection import ConnectionTestResponse
 from app.schemas.metrics import (
+    GpuInsightsSnapshotRead,
     GpuMetricRead,
     GpuProductSnapshotRead,
     ServerMetricRead,
@@ -18,6 +20,7 @@ from app.schemas.metrics import (
 )
 from app.schemas.server import ServerCreate, ServerRead, ServerUpdate, server_to_read
 from app.services.metrics_collect import collect_all_active_servers, collect_and_store_metrics
+from app.services.metrics_query import latest_gpu_metrics_batch
 from app.services.server_ssh import ssh_kwargs_from_server
 
 router = APIRouter(prefix="/servers", tags=["servers"])
@@ -50,10 +53,19 @@ def _metrics_bundle(
         .order_by(GpuProductSnapshotRow.collected_at.desc())
         .first()
     )
+    insights = (
+        db.query(GpuInsightsSnapshotRow)
+        .filter(GpuInsightsSnapshotRow.server_id == server_id)
+        .order_by(GpuInsightsSnapshotRow.collected_at.desc())
+        .first()
+    )
+    gpu_latest_rows = latest_gpu_metrics_batch(db, server_id)
     return ServerMetricsBundle(
         host=host,
         gpu=gpu,
+        gpu_latest=[GpuMetricRead.model_validate(g) for g in gpu_latest_rows],
         gpu_product=GpuProductSnapshotRead.model_validate(product) if product else None,
+        gpu_insights=GpuInsightsSnapshotRead.model_validate(insights) if insights else None,
     )
 
 

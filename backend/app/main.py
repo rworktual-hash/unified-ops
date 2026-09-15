@@ -19,6 +19,7 @@ from app.models import agent_action as _agent_action_model  # noqa: F401
 from app.models import approval_request as _approval_request_model  # noqa: F401
 from app.models import alert as _alert_model  # noqa: F401
 from app.models import gpu_metric as _gpu_metric_model  # noqa: F401
+from app.models import gpu_insights_snapshot as _gpu_insights_snapshot_model  # noqa: F401
 from app.models import gpu_product_snapshot as _gpu_product_snapshot_model  # noqa: F401
 from app.models import server as _server_model  # noqa: F401
 from app.models import server_metric as _server_metric_model  # noqa: F401

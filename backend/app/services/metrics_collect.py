@@ -7,6 +7,7 @@ from app.models.email_queue_snapshot import EmailQueueSnapshot
 from app.monitoring.collectors import collect_gpu_metrics, collect_host_metrics
 from app.monitoring.email_collectors import collect_email_queue_snapshot
 from app.services.alert_eval import evaluate_alerts
+from app.services.gpu_insights_collect import collect_and_store_gpu_insights
 from app.services.gpu_product_collect import collect_and_store_gpu_product
 
 
@@ -74,6 +75,8 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
                 mem_used_mb=snap.mem_used_mb,
                 mem_total_mb=snap.mem_total_mb,
                 temperature_c=snap.temperature_c,
+                power_w=snap.power_w,
+                clock_mhz=snap.clock_mhz,
                 status=snap.status,
                 collect_error=snap.error,
             )
@@ -82,6 +85,7 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
 
     if server.server_type == "gpu":
         collect_and_store_gpu_product(db, server)
+        collect_and_store_gpu_insights(db, server, gpu_rows)
 
     db.commit()
     db.refresh(row)

@@ -173,6 +173,37 @@
   margin: 0.35rem 0 0;
 }
 
+.gpu-per-grid {
+  margin-top: 0.75rem;
+}
+
+.gpu-per-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.gpu-per-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  background: var(--surface-muted, #f6f4fb);
+  border: 1px solid var(--border, #e8e4f0);
+}
+
+.gpu-per-card strong {
+  font-size: 0.72rem;
+  color: var(--text-muted, #5c5470);
+}
+
+.gpu-per-meta {
+  color: var(--text-muted, #5c5470);
+  font-size: 0.68rem;
+}
+
 .metric-grid.gpu-metrics {
   margin-top: 0.25rem;
 }

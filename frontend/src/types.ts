@@ -40,8 +40,31 @@ export type GpuMetric = {
   collected_at: string
   gpu_index: number
   utilization_pct: number | null
+  mem_used_mb: number | null
+  mem_total_mb: number | null
+  mem_used_pct: number | null
   temperature_c: number | null
+  power_w: number | null
+  clock_mhz: number | null
   status: string
+  collect_error: string | null
+}
+
+export type GpuInsightsSnapshot = {
+  id: number
+  server_id: number
+  collected_at: string
+  process_count: number | null
+  tcp_inuse: number | null
+  tcp_connection_lines: number | null
+  tcp_established: number | null
+  listen_sockets: number | null
+  listen_port_8000: number | null
+  cpu_util_pct: number | null
+  gpu_util_avg: number | null
+  gpu_temp_avg: number | null
+  net_rx_bytes: number | null
+  net_tx_bytes: number | null
   collect_error: string | null
 }
 
@@ -61,7 +84,9 @@ export type GpuProductSnapshot = {
 export type MetricsBundle = {
   host: ServerMetric[]
   gpu: GpuMetric[]
+  gpu_latest?: GpuMetric[]
   gpu_product?: GpuProductSnapshot | null
+  gpu_insights?: GpuInsightsSnapshot | null
 }
 
 export type AgentAction = {

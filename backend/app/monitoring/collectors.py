@@ -15,8 +15,8 @@ CMD_MEM = "free -m"
 CMD_DISK = "df -P /"
 CMD_UPTIME = "cat /proc/uptime"
 CMD_GPU = (
-    "nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu "
-    "--format=csv,noheader,nounits"
+    "nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,"
+    "power.draw,clocks.current.graphics --format=csv,noheader,nounits"
 )
 
 
@@ -44,6 +44,8 @@ class GpuMetricsSnapshot:
     mem_used_mb: float | None
     mem_total_mb: float | None
     temperature_c: float | None
+    power_w: float | None
+    clock_mhz: float | None
     status: str
     error: str | None = None
 
@@ -216,6 +218,8 @@ def collect_gpu_metrics(
                         mem_used_mb=None,
                         mem_total_mb=None,
                         temperature_c=None,
+                        power_w=None,
+                        clock_mhz=None,
                         status=status,
                         error=msg[:500],
                     )
@@ -234,6 +238,8 @@ def collect_gpu_metrics(
                     mem_used = float(parts[2])
                     mem_total = float(parts[3])
                     temp = float(parts[4])
+                    power = float(parts[5]) if len(parts) > 5 and parts[5] else None
+                    clock = float(parts[6]) if len(parts) > 6 and parts[6] else None
                 except ValueError:
                     continue
                 rows.append(
@@ -244,6 +250,8 @@ def collect_gpu_metrics(
                         mem_used_mb=mem_used,
                         mem_total_mb=mem_total,
                         temperature_c=temp,
+                        power_w=power,
+                        clock_mhz=clock,
                         status="ok",
                     )
                 )
@@ -256,6 +264,8 @@ def collect_gpu_metrics(
                         mem_used_mb=None,
                         mem_total_mb=None,
                         temperature_c=None,
+                        power_w=None,
+                        clock_mhz=None,
                         status="no_gpu",
                         error="empty nvidia-smi output",
                     )
@@ -270,6 +280,8 @@ def collect_gpu_metrics(
                 mem_used_mb=None,
                 mem_total_mb=None,
                 temperature_c=None,
+                power_w=None,
+                clock_mhz=None,
                 status="error",
                 error=str(exc),
             )
