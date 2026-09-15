@@ -25,6 +25,8 @@ import { clearStoredToken } from './authStorage'
 import { ChatPanel } from './components/ChatPanel'
 import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
+import { ServersByDomain } from './components/ServersByDomain'
+import type { DomainId } from './serverDomains'
 import { EmailPanel } from './components/EmailPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
@@ -50,13 +52,11 @@ function App() {
   const [showAllApprovals, setShowAllApprovals] = useState(false)
   const [collectingAll, setCollectingAll] = useState(false)
   const [fleetStatus, setFleetStatus] = useState<FleetCollectStatus | null>(null)
+  const [serverDomain, setServerDomain] = useState<DomainId>('ai')
 
   const activeServers = useMemo(() => servers.filter((s) => s.is_active), [servers])
   const pendingServers = useMemo(() => servers.filter((s) => !s.is_active), [servers])
-  const monitoredServers = useMemo(
-    () => activeServers.filter((s) => s.project !== 'voicemg'),
-    [activeServers],
-  )
+  const monitoredServers = useMemo(() => activeServers, [activeServers])
   const emailServers = useMemo(
     () => activeServers.filter((s) => s.project === 'email'),
     [activeServers],
@@ -253,8 +253,11 @@ function App() {
               )}
             </header>
 
-            <div className="server-grid">
-              {monitoredServers.map((s) => (
+            <ServersByDomain
+              servers={monitoredServers}
+              domainFilter={serverDomain}
+              onDomainFilterChange={setServerDomain}
+              renderCard={(s) => (
                 <ServerCard
                   key={s.id}
                   server={s}
@@ -315,8 +318,8 @@ function App() {
                     }
                   }}
                 />
-              ))}
-            </div>
+              )}
+            />
 
             {pendingServers.length > 0 && (
               <section className="pending-section">
