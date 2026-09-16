@@ -234,6 +234,11 @@ function App() {
                       if (result.mode === 'celery_queued') {
                         setError('Collect all queued in Celery — refresh in a few minutes.')
                       } else {
+                        try {
+                          setFleetStatus(await fetchFleetCollectStatus())
+                        } catch {
+                          /* keep previous line */
+                        }
                         await load()
                         if (result.servers_failed > 0) {
                           setError(

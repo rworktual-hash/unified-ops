@@ -53,7 +53,8 @@ Restart **beat** after changing `METRICS_SCHEDULED_COLLECT_ENABLED` or interval 
 - UI **Servers** tab: “Scheduled collect: every 5 min …”
 - `GET /api/fleet/collect-status` (authenticated)
 - Logs: `tail -f /var/log/unified-ops-celery-worker.log`
-- DB: `SELECT * FROM fleet_collect_runs ORDER BY id DESC LIMIT 3;`
+- DB: `SELECT id, finished_at, servers_ok, servers_failed, run_trigger FROM fleet_collect_runs ORDER BY id DESC LIMIT 3;`
+- One-off migrate (rename legacy `` `trigger` `` column): `python scripts/migrate-fleet-collect-runs.py`
 
 ## History for charts
 
@@ -70,4 +71,4 @@ More data points appear after Celery beat runs or repeated **Collect metrics**.
 | Sync collect all | UI **Collect all servers** or `POST /api/fleet/collect-metrics` |
 | Queue one Celery job | `POST /api/fleet/collect-metrics?background=true` (admin) |
 
-Runs are logged in `fleet_collect_runs` (`trigger`: `celery`, `api_sync`).
+Runs are logged in `fleet_collect_runs` (`run_trigger`: `celery`, `api_sync`).

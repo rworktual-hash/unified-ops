@@ -21,14 +21,15 @@ def collect_all_active_servers_task() -> dict[str, int]:
     except Exception as exc:
         err = str(exc)[:2000]
         logger.exception("Fleet collect task failed")
-        raise
     finally:
         db.close()
     record_fleet_collect_run(
         started_at=started,
         servers_ok=ok,
         servers_failed=failed,
-        trigger="celery",
+        run_trigger="celery",
         error_summary=err,
     )
+    if err:
+        raise RuntimeError(err)
     return {"servers_collected": ok, "servers_failed": failed}

@@ -14,5 +14,5 @@ class FleetCollectRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     servers_ok: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     servers_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    trigger: Mapped[str] = mapped_column(String(32), nullable=False, default="celery")
+    run_trigger: Mapped[str] = mapped_column(String(32), nullable=False, default="celery")
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)

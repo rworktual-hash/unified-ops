@@ -118,7 +118,7 @@ def collect_all_server_metrics(
         started_at=started,
         servers_ok=ok,
         servers_failed=failed,
-        trigger="api_sync",
+        run_trigger="api_sync",
         db=db,
     )
     return CollectAllResponse(servers_collected=ok, servers_failed=failed, mode="sync")

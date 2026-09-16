@@ -14,6 +14,7 @@ from app.api.fleet import router as fleet_router
 from app.api.servers import router as servers_router
 from app.api.users import router as users_router
 from app.config import settings
+from app.db.ensure_fleet_collect import ensure_fleet_collect_schema
 from app.db.ensure_gpu_ai_insights import ensure_gpu_ai_insights_schema
 from app.db.session import Base, SessionLocal, engine
 from app.models import agent_action as _agent_action_model  # noqa: F401
@@ -35,6 +36,7 @@ from app.services.app_auth import ensure_bootstrap_admin
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_fleet_collect_schema()
     ensure_gpu_ai_insights_schema()
     db = SessionLocal()
     try:

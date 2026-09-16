@@ -37,7 +37,7 @@ def fleet_collect_status(db: Session = Depends(get_db)) -> FleetCollectStatusRes
         last_run_at=last.finished_at if last else None,
         last_servers_ok=last.servers_ok if last else None,
         last_servers_failed=last.servers_failed if last else None,
-        last_trigger=last.trigger if last else None,
+        last_trigger=last.run_trigger if last else None,
     )
 
 
@@ -64,7 +64,7 @@ def fleet_collect_metrics(
         started_at=started,
         servers_ok=ok,
         servers_failed=failed,
-        trigger="api_sync",
+        run_trigger="api_sync",
         db=db,
     )
     return CollectAllResponse(servers_collected=ok, servers_failed=failed, mode="sync")
