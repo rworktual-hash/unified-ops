@@ -29,12 +29,14 @@ import { ServerCard } from './components/ServerCard'
 import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
 import { EmailPanel } from './components/EmailPanel'
+import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
 import './App.css'
 
 type NavId =
   | 'servers'
+  | 'infrastructure'
   | 'backupvault'
   | 'email'
   | 'chat'
@@ -72,6 +74,14 @@ function App() {
   )
   const backupVaultServers = useMemo(
     () => activeServers.filter((s) => s.project === 'backupvault'),
+    [activeServers],
+  )
+  const infrastructureServers = useMemo(
+    () =>
+      activeServers.filter((s) => {
+        const p = (s.project ?? '').toLowerCase()
+        return p === 'infrastructure' || p === 'infra'
+      }),
     [activeServers],
   )
 
@@ -136,6 +146,9 @@ function App() {
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
+    ...(infrastructureServers.length > 0
+      ? [{ id: 'infrastructure' as const, label: 'Infrastructure' }]
+      : []),
     ...(backupVaultServers.length > 0
       ? [{ id: 'backupvault' as const, label: 'BackupVault' }]
       : []),
@@ -359,6 +372,10 @@ function App() {
 
         {nav === 'email' && session && emailServers.length > 0 && (
           <EmailPanel emailServers={emailServers} session={session} />
+        )}
+
+        {nav === 'infrastructure' && infrastructureServers.length > 0 && (
+          <InfrastructurePanel />
         )}
 
         {nav === 'backupvault' && backupVaultServers.length > 0 && <BackupVaultPanel />}

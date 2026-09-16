@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     # Optional localhost-only health URLs, e.g. "http://127.0.0.1:8080/health".
     backupvault_local_health_urls: str = ""
 
+    # Read-only SSH probes on project=infrastructure hosts.
+    infrastructure_ssh_insights_enabled: bool = True
+    infrastructure_ssh_command_timeout: int = 30
+    infrastructure_ssh_insights_ips: str = ""
+    infrastructure_app_service_units: str = ""
+    infrastructure_local_health_urls: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -150,6 +157,27 @@ class Settings(BaseSettings):
             pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
         )
         return urls
+
+    @property
+    def infrastructure_ssh_insights_ips_set(self) -> set[str]:
+        raw = self.infrastructure_ssh_insights_ips.strip()
+        if not raw or raw == "*":
+            return set()
+        return {p.strip() for p in raw.split(",") if p.strip()}
+
+    @property
+    def infrastructure_app_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.infrastructure_app_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
+        )
+
+    @property
+    def infrastructure_local_health_urls_list(self) -> list[str]:
+        return self._validated_csv(
+            self.infrastructure_local_health_urls,
+            pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
+        )
 
     @staticmethod
     def _validated_csv(raw: str, *, pattern: str) -> list[str]:

@@ -12,12 +12,14 @@ from app.api.alerts import router as alerts_router
 from app.api.deps import get_current_user
 from app.api.email import router as email_router
 from app.api.fleet import router as fleet_router
+from app.api.infrastructure import router as infrastructure_router
 from app.api.servers import router as servers_router
 from app.api.users import router as users_router
 from app.config import settings
 from app.db.ensure_backupvault_ssh import ensure_backupvault_ssh_schema
 from app.db.ensure_email_ssh import ensure_email_ssh_schema
 from app.db.ensure_fleet_collect import ensure_fleet_collect_schema
+from app.db.ensure_infrastructure_ssh import ensure_infrastructure_ssh_schema
 from app.db.ensure_gpu_ai_insights import ensure_gpu_ai_insights_schema
 from app.db.session import Base, SessionLocal, engine
 from app.models import agent_action as _agent_action_model  # noqa: F401
@@ -35,6 +37,7 @@ from app.models import email_queue_snapshot as _email_queue_snapshot_model  # no
 from app.models import email_ssh_snapshot as _email_ssh_snapshot_model  # noqa: F401
 from app.models import email_sync_state as _email_sync_state_model  # noqa: F401
 from app.models import fleet_collect_run as _fleet_collect_run_model  # noqa: F401
+from app.models import infrastructure_ssh_snapshot as _infrastructure_ssh_snapshot_model  # noqa: F401
 from app.services.app_auth import ensure_bootstrap_admin
 
 
@@ -44,6 +47,7 @@ async def lifespan(_app: FastAPI):
     ensure_fleet_collect_schema()
     ensure_backupvault_ssh_schema()
     ensure_email_ssh_schema()
+    ensure_infrastructure_ssh_schema()
     ensure_gpu_ai_insights_schema()
     db = SessionLocal()
     try:
@@ -76,6 +80,7 @@ api.include_router(approvals_router, dependencies=_protected)
 api.include_router(chat_router, dependencies=_protected)
 api.include_router(users_router, dependencies=_protected)
 api.include_router(email_router, dependencies=_protected)
+api.include_router(infrastructure_router, dependencies=_protected)
 api.include_router(fleet_router, dependencies=_protected)
 
 

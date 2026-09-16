@@ -297,6 +297,58 @@ export async function fetchBackupVaultOverview(): Promise<BackupVaultOverview> {
   return res.json()
 }
 
+export type InfrastructureSnapshot = {
+  id: number
+  server_id: number
+  collected_at: string
+  role: string
+  service_active: boolean | null
+  nginx_active: boolean | null
+  kong_active: boolean | null
+  docker_active: boolean | null
+  redis_role: string | null
+  redis_connected_clients: number | null
+  redis_used_memory_bytes: number | null
+  replication_io_running: boolean | null
+  replication_sql_running: boolean | null
+  replica_in_recovery: boolean | null
+  replication_lag_seconds: number | null
+  db_connections: number | null
+  slow_queries: number | null
+  db_uptime_seconds: number | null
+  data_mount: string | null
+  data_disk_used_pct: number | null
+  data_disk_free_gb: number | null
+  extra_service_status: string | null
+  healthcheck_status: string | null
+  collect_error: string | null
+}
+
+export type InfrastructureOverview = {
+  read_only: boolean
+  source: string
+  servers: {
+    server_id: number
+    server_name: string
+    ip_address: string
+    server_type: string | null
+    snapshot: InfrastructureSnapshot | null
+  }[]
+  total_hosts: number
+  collected_hosts: number
+  service_down: number
+  storage_warning: number
+  replication_healthy: number
+  replication_unhealthy: number
+  note: string
+}
+
+export async function fetchInfrastructureOverview(): Promise<InfrastructureOverview> {
+  const res = await apiFetch('/infrastructure/ssh-overview')
+  if (!res.ok) throw new Error('Failed to load infrastructure SSH overview')
+  return res.json()
+}
+
 export async function fetchHealth(): Promise<{ status: string }> {
   const res = await fetch(apiPath('/health'))
   if (!res.ok) throw new Error(`Health check failed (HTTP ${res.status})`)
