@@ -36,13 +36,16 @@ function services(snapshot: InfrastructureSnapshot): string {
     parts.push(`Kong ${state(snapshot.kong_active)}`)
   }
   if (snapshot.role === 'redis') {
+    if (snapshot.docker_active != null) parts.push(`Docker ${state(snapshot.docker_active)}`)
+    if (snapshot.service_active != null) {
+      parts.push(`signal ${state(snapshot.service_active)}`)
+    }
     if (snapshot.redis_role) parts.push(`role ${snapshot.redis_role}`)
     if (snapshot.redis_connected_clients != null) {
       parts.push(`${snapshot.redis_connected_clients} clients`)
     }
-    if (snapshot.service_active != null) {
-      parts.push(`ping ${state(snapshot.service_active)}`)
-    }
+    if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
+    return parts.join(' · ') || '—'
   }
   if (snapshot.role === 'pbx' || snapshot.role === 'sip') {
     if (snapshot.docker_active != null) parts.push(`Docker ${state(snapshot.docker_active)}`)

@@ -38,10 +38,20 @@ CMD_KAFKA_ACTIVE = (
     "systemctl is-active kafka 2>/dev/null || systemctl is-active kafka-server "
     "2>/dev/null || echo inactive"
 )
-CMD_REDIS_PING = "timeout 5 redis-cli ping 2>/dev/null || echo FAIL"
-CMD_REDIS_INFO = (
-    "timeout 5 redis-cli INFO 2>/dev/null | grep -E "
-    "'^(role:|connected_clients:|used_memory:|maxmemory:|master_link_status:)'"
+DEFAULT_REDIS_UNITS: tuple[str, ...] = (
+    "redis",
+    "redis-server",
+    "redis@6379",
+)
+DEFAULT_REDIS_CLI_PROBES: tuple[str, ...] = (
+    "default",
+    "/var/run/redis/redis.sock",
+    "/run/redis/redis.sock",
+    "127.0.0.1:6379",
+)
+CMD_REDIS_PROCESSES = "pgrep -af 'redis-server' 2>/dev/null | head -6"
+CMD_REDIS_DOCKER = (
+    "docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null | grep -i redis | head -5"
 )
 DEFAULT_PBX_UNITS: tuple[str, ...] = (
     "asterisk",
@@ -73,6 +83,66 @@ def pbx_service_units() -> list[str]:
 def sip_service_units() -> list[str]:
     configured = settings.infrastructure_sip_service_units_list
     return configured if configured else list(DEFAULT_SIP_UNITS)
+
+
+def redis_service_units() -> list[str]:
+    configured = settings.infrastructure_redis_service_units_list
+    return configured if configured else list(DEFAULT_REDIS_UNITS)
+
+
+def redis_cli_probes() -> list[str]:
+    configured = settings.infrastructure_redis_cli_probes_list
+    return configured if configured else list(DEFAULT_REDIS_CLI_PROBES)
+
+
+def redis_cli_args_from_probe(probe: str) -> str:
+    if probe in {"", "default"}:
+        return ""
+    if probe.startswith("/"):
+        return f"-s {probe}"
+    if ":" in probe:
+        host, port = probe.split(":", 1)
+        if host in {"127.0.0.1", "localhost"} and port.isdigit():
+            host_flag = "127.0.0.1" if host == "localhost" else host
+            return f"-h {host_flag} -p {port}"
+    return ""
+
+
+def build_redis_ping_cmd(probe: str) -> str:
+    args = redis_cli_args_from_probe(probe)
+    if not args:
+        return "timeout 5 redis-cli ping 2>/dev/null || echo FAIL"
+    return f"timeout 5 redis-cli {args} ping 2>/dev/null || echo FAIL"
+
+
+def build_redis_info_cmd(probe: str) -> str:
+    args = redis_cli_args_from_probe(probe)
+    grep = (
+        "grep -E '^(role:|connected_clients:|used_memory:|maxmemory:|master_link_status:)'"
+    )
+    if not args:
+        return f"timeout 5 redis-cli INFO 2>/dev/null | {grep}"
+    return f"timeout 5 redis-cli {args} INFO 2>/dev/null | {grep}"
+
+
+def evaluate_redis_service(
+    *,
+    unit_up: list[bool],
+    pong_ok: bool,
+    process_count: int | None,
+    docker_redis_containers: int | None,
+) -> bool | None:
+    if pong_ok:
+        return True
+    if any(unit_up):
+        return True
+    if process_count is not None and process_count > 0:
+        return True
+    if docker_redis_containers is not None and docker_redis_containers > 0:
+        return True
+    if unit_up or process_count == 0:
+        return False
+    return None
 
 
 def evaluate_telephony_service(
@@ -115,8 +185,8 @@ def _allowed_commands() -> frozenset[str]:
         CMD_DOCKER_ACTIVE,
         CMD_GRAFANA_ACTIVE,
         CMD_KAFKA_ACTIVE,
-        CMD_REDIS_PING,
-        CMD_REDIS_INFO,
+        CMD_REDIS_PROCESSES,
+        CMD_REDIS_DOCKER,
         CMD_PBX_PROCESSES,
         CMD_SIP_PROCESSES,
         CMD_DOCKER_ACTIVE,
@@ -132,8 +202,12 @@ def _allowed_commands() -> frozenset[str]:
         settings.infrastructure_app_service_units_list
         + pbx_service_units()
         + sip_service_units()
+        + redis_service_units()
     ):
         commands.add(build_app_service_cmd(unit))
+    for probe in redis_cli_probes():
+        commands.add(build_redis_ping_cmd(probe))
+        commands.add(build_redis_info_cmd(probe))
     for url in settings.infrastructure_local_health_urls_list:
         commands.add(build_healthcheck_cmd(url))
     return frozenset(commands)
@@ -290,6 +364,79 @@ def _collect_telephony(
         errors.append(f"{role}: no systemd unit active and no matching processes")
 
 
+def _collect_redis(
+    client,
+    result: InfrastructureSshInsights,
+    errors: list[str],
+) -> None:
+    unit_rows: list[str] = []
+    unit_up: list[bool] = []
+    pong_ok = False
+    winning_probe: str | None = None
+
+    code, out, _err = _run(client, CMD_DOCKER_ACTIVE)
+    result.docker_active = _active(out) if code == 0 else None
+
+    for unit in redis_service_units():
+        code, out, _err = _run(client, build_app_service_cmd(unit))
+        up = code == 0 and _active(out)
+        unit_up.append(up)
+        unit_rows.append(f"{unit}: {'Running' if up else 'Check failed'}")
+
+    probe_rows: list[str] = []
+    for probe in redis_cli_probes():
+        cmd = build_redis_ping_cmd(probe)
+        code, out, err = _run(client, cmd)
+        label = probe if probe != "default" else "cli default"
+        if code == 0 and out.strip().upper() == "PONG":
+            pong_ok = True
+            probe_rows.append(f"ping {label}: PONG")
+            if winning_probe is None:
+                winning_probe = probe
+        else:
+            probe_rows.append(f"ping {label}: fail")
+            if err and "NOAUTH" not in err.upper():
+                errors.append(f"redis ping {label}: {err or out}")
+
+    process_count: int | None = None
+    code, out, _err = _run(client, CMD_REDIS_PROCESSES)
+    if code == 0:
+        lines = [line for line in out.splitlines() if line.strip()]
+        process_count = len(lines)
+    elif code == 1:
+        process_count = 0
+
+    docker_redis = 0
+    code, out, _err = _run(client, CMD_REDIS_DOCKER)
+    if code == 0 and out.strip():
+        docker_redis = len([line for line in out.splitlines() if line.strip()])
+
+    if winning_probe is not None:
+        code, out, _err = _run(client, build_redis_info_cmd(winning_probe))
+        if code == 0 and out:
+            result.redis_role, result.redis_connected_clients, result.redis_used_memory_bytes = (
+                parse_redis_info(out)
+            )
+
+    if unit_rows:
+        _merge_extra_status(result, " · ".join(unit_rows))
+    if probe_rows:
+        _merge_extra_status(result, " · ".join(probe_rows))
+    if process_count is not None:
+        _merge_extra_status(result, f"{process_count} redis procs")
+    if docker_redis:
+        _merge_extra_status(result, f"{docker_redis} redis container(s)")
+
+    result.service_active = evaluate_redis_service(
+        unit_up=unit_up,
+        pong_ok=pong_ok,
+        process_count=process_count,
+        docker_redis_containers=docker_redis,
+    )
+    if result.service_active is False and not pong_ok:
+        errors.append("redis: no PONG and no unit/process/container signal")
+
+
 def collect_infrastructure_ssh_insights(
     *,
     host: str,
@@ -366,15 +513,7 @@ def collect_infrastructure_ssh_insights(
                 if code == 0 and out.isdigit():
                     result.db_connections = int(out)
             elif role == "redis":
-                code, out, err = _run(client, CMD_REDIS_PING)
-                result.service_active = out.strip().upper() == "PONG" if code == 0 else None
-                if code != 0 or out.strip().upper() != "PONG":
-                    errors.append(f"redis ping: {err or out}")
-                code, out, _err = _run(client, CMD_REDIS_INFO)
-                if code == 0 and out:
-                    result.redis_role, result.redis_connected_clients, result.redis_used_memory_bytes = (
-                        parse_redis_info(out)
-                    )
+                _collect_redis(client, result, errors)
             elif role == "monitoring":
                 code, out, err = _run(client, CMD_GRAFANA_ACTIVE)
                 result.service_active = _active(out) if code == 0 else None
