@@ -22,6 +22,7 @@ import {
   type AppUser,
 } from './api'
 import { clearStoredToken } from './authStorage'
+import { BackupVaultPanel } from './components/BackupVaultPanel'
 import { ChatPanel } from './components/ChatPanel'
 import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
@@ -32,7 +33,15 @@ import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
 import './App.css'
 
-type NavId = 'servers' | 'email' | 'chat' | 'alerts' | 'approvals' | 'activity' | 'users'
+type NavId =
+  | 'servers'
+  | 'backupvault'
+  | 'email'
+  | 'chat'
+  | 'alerts'
+  | 'approvals'
+  | 'activity'
+  | 'users'
 
 function App() {
   const [session, setSession] = useState<AppUser | null | 'pending'>('pending')
@@ -59,6 +68,10 @@ function App() {
   const monitoredServers = useMemo(() => activeServers, [activeServers])
   const emailServers = useMemo(
     () => activeServers.filter((s) => s.project === 'email'),
+    [activeServers],
+  )
+  const backupVaultServers = useMemo(
+    () => activeServers.filter((s) => s.project === 'backupvault'),
     [activeServers],
   )
 
@@ -123,6 +136,9 @@ function App() {
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
+    ...(backupVaultServers.length > 0
+      ? [{ id: 'backupvault' as const, label: 'BackupVault' }]
+      : []),
     ...(emailServers.length > 0 ? [{ id: 'email' as const, label: 'Email' }] : []),
     { id: 'chat', label: 'Chat' },
     { id: 'alerts', label: 'Alerts' },
@@ -344,6 +360,8 @@ function App() {
         {nav === 'email' && session && emailServers.length > 0 && (
           <EmailPanel emailServers={emailServers} session={session} />
         )}
+
+        {nav === 'backupvault' && backupVaultServers.length > 0 && <BackupVaultPanel />}
 
         {nav === 'chat' && (
           <div className="chat-page">

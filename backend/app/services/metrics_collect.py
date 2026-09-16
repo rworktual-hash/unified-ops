@@ -9,6 +9,7 @@ from app.services.email_ssh_collect import collect_and_store_email_ssh
 from app.monitoring.email_ssh_collectors import should_collect_email_ssh_insights
 from app.monitoring.email_collectors import collect_email_queue_snapshot
 from app.services.alert_eval import evaluate_alerts
+from app.services.backupvault_ssh_collect import collect_and_store_backupvault_ssh
 from app.services.gpu_insights_collect import collect_and_store_gpu_insights
 from app.services.gpu_product_collect import collect_and_store_gpu_product
 
@@ -60,6 +61,9 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
                 collect_error=mail.error,
             )
         )
+
+    if server.project == "backupvault":
+        collect_and_store_backupvault_ssh(db, server)
 
     gpu_rows: list[GpuMetric] = []
     if server.server_type == "gpu":

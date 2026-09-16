@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.agent_actions import router as agent_router
 from app.api.auth import router as auth_router
+from app.api.backupvault import router as backupvault_router
 from app.api.chat import router as chat_router
 from app.api.approvals import router as approvals_router
 from app.api.alerts import router as alerts_router
@@ -27,6 +28,7 @@ from app.models import gpu_product_snapshot as _gpu_product_snapshot_model  # no
 from app.models import server as _server_model  # noqa: F401
 from app.models import server_metric as _server_metric_model  # noqa: F401
 from app.models import app_user as _app_user_model  # noqa: F401
+from app.models import backupvault_ssh_snapshot as _backupvault_ssh_snapshot_model  # noqa: F401
 from app.models import email_log_event as _email_log_event_model  # noqa: F401
 from app.models import email_queue_snapshot as _email_queue_snapshot_model  # noqa: F401
 from app.models import email_ssh_snapshot as _email_ssh_snapshot_model  # noqa: F401
@@ -64,6 +66,7 @@ api = APIRouter(prefix="/api")
 _protected = [Depends(get_current_user)]
 
 api.include_router(auth_router)
+api.include_router(backupvault_router, dependencies=_protected)
 api.include_router(servers_router, dependencies=_protected)
 api.include_router(alerts_router, dependencies=_protected)
 api.include_router(agent_router, dependencies=_protected)

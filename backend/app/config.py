@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     # Comma-separated IPs or empty = all inventory rows with project=email.
     email_ssh_insights_ips: str = ""
 
+    # Strictly read-only SSH status probes on BackupVault app/database hosts.
+    backupvault_ssh_insights_enabled: bool = True
+    backupvault_ssh_command_timeout: int = 30
+    # Comma-separated IPs; empty or "*" = all project=backupvault hosts.
+    backupvault_ssh_insights_ips: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -105,6 +111,13 @@ class Settings(BaseSettings):
     @property
     def email_ssh_insights_ips_set(self) -> set[str]:
         raw = self.email_ssh_insights_ips.strip()
+        if not raw or raw == "*":
+            return set()
+        return {p.strip() for p in raw.split(",") if p.strip()}
+
+    @property
+    def backupvault_ssh_insights_ips_set(self) -> set[str]:
+        raw = self.backupvault_ssh_insights_ips.strip()
         if not raw or raw == "*":
             return set()
         return {p.strip() for p in raw.split(",") if p.strip()}

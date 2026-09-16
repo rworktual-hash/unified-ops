@@ -863,6 +863,19 @@
   margin-top: 0.75rem;
 }
 
+.backupvault-stat-row {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.backupvault-note {
+  margin: 0.85rem 0 0;
+}
+
+.backupvault-error {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .email-log-sample pre {
   font-size: 0.68rem;
   max-height: 12rem;
