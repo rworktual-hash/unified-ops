@@ -1,10 +1,10 @@
-# Email metrics (SSH + email-management DB)
+# Email metrics (SSH + optional email-management DB)
 
-**Status:** Gateway **DB sync** waits until you have the real email-management MariaDB URL. **SSH queue + host metrics** work with **Collect metrics** / fleet collect like any other server.
+**Status:** **SSH insights (Option 3)** are on by default for `project=email` — queue, Postfix/Dovecot/OpenDKIM, `pflogsumm` today stats, log sample. No MariaDB required. **DB sync** is optional for full log history like email-management.
 
 Unified Ops combines:
 
-1. **SSH** (from nlp-sm) — host CPU/RAM/disk (same as other servers) + **Postfix queue** (`mailq`) and **postfix active** for inventory rows with `project=email`.
+1. **SSH** (from nlp-sm) — host CPU/RAM/disk + **email_ssh_snapshots**: `mailq`, service status, **`pflogsumm -d today`**, recent postfix/mail.log lines. Enabled when `EMAIL_SSH_INSIGHTS_ENABLED=true` (default). Limit hosts with `EMAIL_SSH_INSIGHTS_IPS=82.113.72.84,...` or empty = all email inventory rows.
 2. **Read-only MariaDB** — sync parsed mail log rows from **email-management.worktual.tech** into Unified Ops `email_log_events`.
 
 ### Guardrails (mandatory)
@@ -88,6 +88,7 @@ location ~ ^/(health|auth|users|email|servers|...) {
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/email/ssh-overview` | Latest SSH snapshot per email host + summed today stats |
 | GET | `/email/overview` | Totals from synced events (24h default) |
 | GET | `/email/events?server_id=&limit=` | Recent log rows |
 | GET | `/email/servers/{id}/queue` | Latest SSH mailq snapshot |

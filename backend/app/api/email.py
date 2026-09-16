@@ -10,16 +10,79 @@ from app.db.session import get_db
 from app.models.email_log_event import EmailLogEvent
 from app.models.email_queue_snapshot import EmailQueueSnapshot
 from app.models.email_sync_state import EmailSyncState
+from app.models.email_ssh_snapshot import EmailSshSnapshot
 from app.models.server import Server
 from app.schemas.email import (
     EmailLogEventRead,
     EmailOverviewRead,
     EmailQueueSnapshotRead,
+    EmailSshOverviewRead,
+    EmailSshServerOverview,
+    EmailSshSnapshotRead,
     EmailSyncResultRead,
 )
 from app.services.email_mgmt_sync import STREAM_KEY, compute_email_overview, sync_email_events_from_mgmt_db
 
 router = APIRouter(prefix="/email", tags=["email"])
+
+
+@router.get("/ssh-overview", response_model=EmailSshOverviewRead)
+def email_ssh_overview(db: Session = Depends(get_db)) -> EmailSshOverviewRead:
+    servers = (
+        db.query(Server)
+        .filter(Server.is_active.is_(True), Server.project == "email")
+        .order_by(Server.server_name)
+        .all()
+    )
+    items: list[EmailSshServerOverview] = []
+    sums = {k: 0 for k in ("received", "delivered", "bounced", "rejected", "deferred")}
+    any_stats = False
+    for s in servers:
+        row = (
+            db.query(EmailSshSnapshot)
+            .filter(EmailSshSnapshot.server_id == s.id)
+            .order_by(EmailSshSnapshot.collected_at.desc())
+            .first()
+        )
+        snap = EmailSshSnapshotRead.model_validate(row) if row else None
+        items.append(
+            EmailSshServerOverview(
+                server_id=s.id,
+                server_name=s.server_name,
+                ip_address=s.ip_address,
+                snapshot=snap,
+            )
+        )
+        if row and row.stats_source:
+            any_stats = True
+            for key, attr in (
+                ("received", "mail_received"),
+                ("delivered", "mail_delivered"),
+                ("bounced", "mail_bounced"),
+                ("rejected", "mail_rejected"),
+                ("deferred", "mail_deferred"),
+            ):
+                val = getattr(row, attr)
+                if val is not None:
+                    sums[key] += val
+
+    def _sum(key: str) -> int | None:
+        if not any_stats:
+            return None
+        return sums[key]
+
+    return EmailSshOverviewRead(
+        servers=items,
+        total_received=_sum("received"),
+        total_delivered=_sum("delivered"),
+        total_bounced=_sum("bounced"),
+        total_rejected=_sum("rejected"),
+        total_deferred=_sum("deferred"),
+        note=(
+            "Per-gateway SSH stats (pflogsumm today). Totals sum all email hosts — "
+            "may double-count if logs overlap; use per-server rows for accuracy."
+        ),
+    )
 
 
 @router.get("/overview", response_model=EmailOverviewRead)

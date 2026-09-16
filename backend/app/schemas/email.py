@@ -51,6 +51,46 @@ class EmailOverviewRead(BaseModel):
     last_sync_error: str | None
 
 
+class EmailSshSnapshotRead(BaseModel):
+    id: int
+    server_id: int
+    collected_at: datetime
+    queue_messages: int | None
+    queue_size_kb: int | None
+    postfix_active: bool | None
+    dovecot_active: bool | None
+    opendkim_active: bool | None
+    mail_received: int | None
+    mail_delivered: int | None
+    mail_bounced: int | None
+    mail_rejected: int | None
+    mail_deferred: int | None
+    stats_source: str | None
+    recent_log_sample: str | None
+    collect_error: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class EmailSshServerOverview(BaseModel):
+    server_id: int
+    server_name: str
+    ip_address: str
+    snapshot: EmailSshSnapshotRead | None
+
+
+class EmailSshOverviewRead(BaseModel):
+    read_only: bool = True
+    source: str = "ssh"
+    servers: list[EmailSshServerOverview]
+    total_delivered: int | None
+    total_bounced: int | None
+    total_rejected: int | None
+    total_deferred: int | None
+    total_received: int | None
+    note: str
+
+
 class EmailSyncResultRead(BaseModel):
     ok: bool
     inserted: int | None = None

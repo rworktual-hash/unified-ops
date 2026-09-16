@@ -5,6 +5,8 @@ from app.models.server import Server
 from app.models.server_metric import ServerMetric
 from app.models.email_queue_snapshot import EmailQueueSnapshot
 from app.monitoring.collectors import collect_gpu_metrics, collect_host_metrics
+from app.services.email_ssh_collect import collect_and_store_email_ssh
+from app.monitoring.email_ssh_collectors import should_collect_email_ssh_insights
 from app.monitoring.email_collectors import collect_email_queue_snapshot
 from app.services.alert_eval import evaluate_alerts
 from app.services.gpu_insights_collect import collect_and_store_gpu_insights
@@ -37,7 +39,9 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
     )
     db.add(row)
 
-    if server.project == "email":
+    if should_collect_email_ssh_insights(server.ip_address, server.project):
+        collect_and_store_email_ssh(db, server)
+    elif server.project == "email":
         mail = collect_email_queue_snapshot(
             host=server.ip_address,
             port=server.ssh_port,

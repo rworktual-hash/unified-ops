@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     )
     email_mgmt_default_server_name: str = "email-mgmt-1"
 
+    # Read-only SSH insights on email gateways (queue, services, pflogsumm) — no MariaDB required.
+    email_ssh_insights_enabled: bool = True
+    email_ssh_command_timeout: int = 25
+    # Comma-separated IPs or empty = all inventory rows with project=email.
+    email_ssh_insights_ips: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -95,6 +101,13 @@ class Settings(BaseSettings):
             host, name = part.split(":", 1)
             out[host.strip()] = name.strip()
         return out
+
+    @property
+    def email_ssh_insights_ips_set(self) -> set[str]:
+        raw = self.email_ssh_insights_ips.strip()
+        if not raw or raw == "*":
+            return set()
+        return {p.strip() for p in raw.split(",") if p.strip()}
 
 
 settings = Settings()

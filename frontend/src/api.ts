@@ -149,6 +149,48 @@ export type EmailQueueSnapshot = {
   collect_error: string | null
 }
 
+export type EmailSshSnapshot = {
+  id: number
+  server_id: number
+  collected_at: string
+  queue_messages: number | null
+  queue_size_kb: number | null
+  postfix_active: boolean | null
+  dovecot_active: boolean | null
+  opendkim_active: boolean | null
+  mail_received: number | null
+  mail_delivered: number | null
+  mail_bounced: number | null
+  mail_rejected: number | null
+  mail_deferred: number | null
+  stats_source: string | null
+  recent_log_sample: string | null
+  collect_error: string | null
+}
+
+export type EmailSshOverview = {
+  read_only: boolean
+  source: string
+  servers: {
+    server_id: number
+    server_name: string
+    ip_address: string
+    snapshot: EmailSshSnapshot | null
+  }[]
+  total_delivered: number | null
+  total_bounced: number | null
+  total_rejected: number | null
+  total_deferred: number | null
+  total_received: number | null
+  note: string
+}
+
+export async function fetchEmailSshOverview(): Promise<EmailSshOverview> {
+  const res = await apiFetch('/email/ssh-overview')
+  if (!res.ok) throw new Error('Failed to load email SSH overview')
+  return res.json()
+}
+
 export async function fetchEmailOverview(hours = 24): Promise<EmailOverview> {
   const res = await apiFetch(`/email/overview?hours=${hours}`)
   if (!res.ok) throw new Error('Failed to load email overview')

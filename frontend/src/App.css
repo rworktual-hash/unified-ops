@@ -859,6 +859,21 @@
   white-space: nowrap;
 }
 
+.email-log-sample {
+  margin-top: 0.75rem;
+}
+
+.email-log-sample pre {
+  font-size: 0.68rem;
+  max-height: 12rem;
+  overflow: auto;
+  background: var(--bg);
+  padding: 0.5rem;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .email-events-table .email-cell-addr {
   max-width: 10rem;
   overflow: hidden;

@@ -3,11 +3,13 @@ import {
   fetchEmailEvents,
   fetchEmailOverview,
   fetchEmailQueue,
+  fetchEmailSshOverview,
   syncEmailLogs,
   type AppUser,
   type EmailLogEvent,
   type EmailOverview,
   type EmailQueueSnapshot,
+  type EmailSshOverview,
 } from '../api'
 import type { Server } from '../types'
 
@@ -29,11 +31,13 @@ export function EmailPanel({ emailServers, session }: Props) {
   const [search, setSearch] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
   const [queues, setQueues] = useState<Record<number, EmailQueueSnapshot | null>>({})
+  const [sshOverview, setSshOverview] = useState<EmailSshOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
+    setSshOverview(await fetchEmailSshOverview())
     setOverview(await fetchEmailOverview(periodHours))
     setEvents(
       await fetchEmailEvents(undefined, periodHours, searchApplied.trim() || undefined, 200),
@@ -65,18 +69,104 @@ export function EmailPanel({ emailServers, session }: Props) {
       <header className="page-head">
         <h1>Email</h1>
         <p>
-          Read-only: Postfix queue via SSH; mail log rows copied from email-management DB into Unified Ops
-          (no sends, queue deletes, or remote DB writes).
+          Read-only SSH on email gateways (queue, Postfix/Dovecot/OpenDKIM, today&apos;s mail stats via{' '}
+          <code>pflogsumm</code>). Optional DB sync adds full log history when configured.
         </p>
       </header>
 
       {error && <p className="banner error">{error}</p>}
 
+      {sshOverview ? (
+        <section className="panel">
+          <h2>Today (SSH — per gateway)</h2>
+          <p className="muted email-sync-meta">{sshOverview.note}</p>
+          <div className="stat-row stat-row--email">
+            <div className="stat-card">
+              <span className="stat-label">Received</span>
+              <span className="stat-value">{sshOverview.total_received ?? '—'}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Delivered</span>
+              <span className="stat-value accent">{sshOverview.total_delivered ?? '—'}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Bounced</span>
+              <span className="stat-value warn">{sshOverview.total_bounced ?? '—'}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Rejected</span>
+              <span className="stat-value">{sshOverview.total_rejected ?? '—'}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Deferred</span>
+              <span className="stat-value">{sshOverview.total_deferred ?? '—'}</span>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>Services</th>
+                  <th>Queue</th>
+                  <th>Delivered</th>
+                  <th>Bounced</th>
+                  <th>Collected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sshOverview.servers.map((row) => {
+                  const s = row.snapshot
+                  const svc = s
+                    ? [
+                        s.postfix_active == null ? '?' : s.postfix_active ? 'Postfix ✓' : 'Postfix ✗',
+                        s.dovecot_active == null ? '?' : s.dovecot_active ? 'Dovecot ✓' : 'Dovecot ✗',
+                        s.opendkim_active == null ? '?' : s.opendkim_active ? 'DKIM ✓' : 'DKIM ✗',
+                      ].join(' · ')
+                    : '—'
+                  return (
+                    <tr key={row.server_id}>
+                      <td>
+                        {row.server_name}
+                        <br />
+                        <span className="muted">{row.ip_address}</span>
+                      </td>
+                      <td className="email-cell-subject">{svc}</td>
+                      <td>{s?.queue_messages ?? '—'}</td>
+                      <td>{s?.mail_delivered ?? '—'}</td>
+                      <td>{s?.mail_bounced ?? '—'}</td>
+                      <td>
+                        {s?.collected_at
+                          ? new Date(s.collected_at).toLocaleString()
+                          : 'Run fleet collect'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {sshOverview.servers.some((r) => r.snapshot?.recent_log_sample) ? (
+            <details className="gpu-detail-fold">
+              <summary>Recent mail log sample (SSH)</summary>
+              {sshOverview.servers.map((row) =>
+                row.snapshot?.recent_log_sample ? (
+                  <div key={row.server_id} className="email-log-sample">
+                    <strong>{row.server_name}</strong>
+                    <pre>{row.snapshot.recent_log_sample}</pre>
+                  </div>
+                ) : null,
+              )}
+            </details>
+          ) : null}
+        </section>
+      ) : null}
+
       {overview && (
         <section className="panel">
           <div className="panel-head">
             <div>
-              <h2>Email logs &amp; analytics</h2>
+              <h2>DB sync — logs &amp; analytics</h2>
               <p className="muted email-sync-meta">
                 Synced copy · {events.length} events shown
                 {lastUpdated ? ` · Last sync ${lastUpdated}` : ''}
@@ -119,12 +209,12 @@ export function EmailPanel({ emailServers, session }: Props) {
               )}
             </div>
           </div>
-          {!overview.sync_configured && (
+          {!overview.sync_configured ? (
             <p className="muted">
-              Set <code>EMAIL_MGMT_DATABASE_URL</code> on the API server (read-only DB user) and run{' '}
-              <code>inspect-email-mgmt-db.py</code> — see docs/EMAIL_METRICS.md.
+              Optional: set <code>EMAIL_MGMT_DATABASE_URL</code> for full log history like email-management
+              (SSH metrics above work without it).
             </p>
-          )}
+          ) : null}
           {overview.last_sync_error && (
             <p className="banner error">Last sync error: {overview.last_sync_error}</p>
           )}
