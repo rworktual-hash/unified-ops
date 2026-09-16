@@ -57,14 +57,24 @@ class EmailSshSnapshotRead(BaseModel):
     collected_at: datetime
     queue_messages: int | None
     queue_size_kb: int | None
+    queue_active: int | None = None
+    queue_deferred: int | None = None
+    queue_hold: int | None = None
     postfix_active: bool | None
     dovecot_active: bool | None
     opendkim_active: bool | None
+    amavis_active: bool | None = None
+    clamav_active: bool | None = None
     mail_received: int | None
     mail_delivered: int | None
     mail_bounced: int | None
     mail_rejected: int | None
     mail_deferred: int | None
+    log_reject_lines: int | None = None
+    log_bounce_lines: int | None = None
+    log_amavis_lines: int | None = None
+    log_spam_lines: int | None = None
+    fail2ban_banned: int | None = None
     stats_source: str | None
     recent_log_sample: str | None
     collect_error: str | None

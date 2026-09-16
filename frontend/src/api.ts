@@ -155,14 +155,24 @@ export type EmailSshSnapshot = {
   collected_at: string
   queue_messages: number | null
   queue_size_kb: number | null
+  queue_active: number | null
+  queue_deferred: number | null
+  queue_hold: number | null
   postfix_active: boolean | null
   dovecot_active: boolean | null
   opendkim_active: boolean | null
+  amavis_active: boolean | null
+  clamav_active: boolean | null
   mail_received: number | null
   mail_delivered: number | null
   mail_bounced: number | null
   mail_rejected: number | null
   mail_deferred: number | null
+  log_reject_lines: number | null
+  log_bounce_lines: number | null
+  log_amavis_lines: number | null
+  log_spam_lines: number | null
+  fail2ban_banned: number | null
   stats_source: string | null
   recent_log_sample: string | null
   collect_error: string | null

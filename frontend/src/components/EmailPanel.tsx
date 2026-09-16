@@ -108,9 +108,10 @@ export function EmailPanel({ emailServers, session }: Props) {
                 <tr>
                   <th>Server</th>
                   <th>Services</th>
-                  <th>Queue</th>
-                  <th>Delivered</th>
-                  <th>Bounced</th>
+                  <th>Queue (act/def/hold)</th>
+                  <th>Today delivered</th>
+                  <th>Log lines (rej/bnc/spam)</th>
+                  <th>Fail2ban</th>
                   <th>Collected</th>
                 </tr>
               </thead>
@@ -119,10 +120,20 @@ export function EmailPanel({ emailServers, session }: Props) {
                   const s = row.snapshot
                   const svc = s
                     ? [
-                        s.postfix_active == null ? '?' : s.postfix_active ? 'Postfix ✓' : 'Postfix ✗',
-                        s.dovecot_active == null ? '?' : s.dovecot_active ? 'Dovecot ✓' : 'Dovecot ✗',
-                        s.opendkim_active == null ? '?' : s.opendkim_active ? 'DKIM ✓' : 'DKIM ✗',
-                      ].join(' · ')
+                        s.postfix_active == null ? '?' : s.postfix_active ? 'Px✓' : 'Px✗',
+                        s.dovecot_active == null ? '?' : s.dovecot_active ? 'Dv✓' : 'Dv✗',
+                        s.opendkim_active == null ? '?' : s.opendkim_active ? 'DK✓' : 'DK✗',
+                        s.amavis_active == null ? '?' : s.amavis_active ? 'Am✓' : 'Am✗',
+                        s.clamav_active == null ? '?' : s.clamav_active ? 'Cl✓' : 'Cl✗',
+                      ].join(' ')
+                    : '—'
+                  const qdepth =
+                    s &&
+                    [s.queue_active, s.queue_deferred, s.queue_hold].some((v) => v != null)
+                      ? `${s.queue_active ?? '—'}/${s.queue_deferred ?? '—'}/${s.queue_hold ?? '—'}`
+                      : (s?.queue_messages ?? '—')
+                  const logLines = s
+                    ? `${s.log_reject_lines ?? '—'}/${s.log_bounce_lines ?? '—'}/${s.log_spam_lines ?? '—'}`
                     : '—'
                   return (
                     <tr key={row.server_id}>
@@ -132,9 +143,10 @@ export function EmailPanel({ emailServers, session }: Props) {
                         <span className="muted">{row.ip_address}</span>
                       </td>
                       <td className="email-cell-subject">{svc}</td>
-                      <td>{s?.queue_messages ?? '—'}</td>
-                      <td>{s?.mail_delivered ?? '—'}</td>
-                      <td>{s?.mail_bounced ?? '—'}</td>
+                      <td>{qdepth}</td>
+                      <td>{s?.mail_delivered ?? s?.mail_received ?? '—'}</td>
+                      <td>{logLines}</td>
+                      <td>{s?.fail2ban_banned ?? '—'}</td>
                       <td>
                         {s?.collected_at
                           ? new Date(s.collected_at).toLocaleString()

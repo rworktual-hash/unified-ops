@@ -4,7 +4,20 @@
 
 Unified Ops combines:
 
-1. **SSH** (from nlp-sm) — host CPU/RAM/disk + **email_ssh_snapshots**: `mailq`, service status, **`pflogsumm -d today`**, recent postfix/mail.log lines. Enabled when `EMAIL_SSH_INSIGHTS_ENABLED=true` (default). Limit hosts with `EMAIL_SSH_INSIGHTS_IPS=82.113.72.84,...` or empty = all email inventory rows.
+1. **SSH** (from nlp-sm) — host CPU/RAM/disk + **email_ssh_snapshots** (strict allowlist, read-only):
+
+   | Category | What we collect |
+   |----------|-----------------|
+   | Queue | `mailq`; active/deferred/hold file counts under `/var/spool/postfix/` |
+   | Services | `systemctl is-active` postfix, dovecot, opendkim, amavis, clamav |
+   | Today totals | `pflogsumm -d today` (received, delivered, bounced, rejected, deferred) |
+   | Log hints (today) | `journalctl -u postfix` line counts: reject, bounce, amavis, spam |
+   | Firewall | `fail2ban-client status` → currently banned count |
+   | Sample | last 30 postfix log lines |
+
+   **Not collected via SSH:** App vs Campaign split, campaign IDs, AI threat scores, quarantine DB, full searchable log table (use optional MariaDB sync).
+
+   Enabled when `EMAIL_SSH_INSIGHTS_ENABLED=true` (default). Limit with `EMAIL_SSH_INSIGHTS_IPS` or empty = all `project=email` hosts.
 2. **Read-only MariaDB** — sync parsed mail log rows from **email-management.worktual.tech** into Unified Ops `email_log_events`.
 
 ### Guardrails (mandatory)
