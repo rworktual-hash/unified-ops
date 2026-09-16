@@ -30,6 +30,7 @@ import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
+import { VoiceMgPanel } from './components/VoiceMgPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
 import './App.css'
@@ -39,6 +40,7 @@ type NavId =
   | 'infrastructure'
   | 'backupvault'
   | 'email'
+  | 'voicemg'
   | 'chat'
   | 'alerts'
   | 'approvals'
@@ -82,6 +84,10 @@ function App() {
         const p = (s.project ?? '').toLowerCase()
         return p === 'infrastructure' || p === 'infra'
       }),
+    [activeServers],
+  )
+  const voiceMgServers = useMemo(
+    () => activeServers.filter((s) => (s.project ?? '').toLowerCase() === 'voicemg'),
     [activeServers],
   )
 
@@ -153,6 +159,7 @@ function App() {
       ? [{ id: 'backupvault' as const, label: 'BackupVault' }]
       : []),
     ...(emailServers.length > 0 ? [{ id: 'email' as const, label: 'Email' }] : []),
+    ...(voiceMgServers.length > 0 ? [{ id: 'voicemg' as const, label: 'VoiceMG' }] : []),
     { id: 'chat', label: 'Chat' },
     { id: 'alerts', label: 'Alerts' },
     { id: 'approvals', label: 'Approvals' },
@@ -231,8 +238,21 @@ function App() {
               <div>
                 <h1>Servers</h1>
                 <p>
-                  Host metrics (CPU load, memory, disk) for {monitoredServers.length} active hosts. Email
-                  gateway DB sync later — SSH collect includes email queue. Voice MG — coming soon.
+                  Host metrics (CPU load, memory, disk) for {monitoredServers.length} active hosts. Domain
+                  tabs filter this grid; use sidebar{' '}
+                  {infrastructureServers.length > 0 ? (
+                    <>
+                      <button
+                        type="button"
+                        className="linkish"
+                        onClick={() => setNav('infrastructure')}
+                      >
+                        Infrastructure
+                      </button>
+                      ,{' '}
+                    </>
+                  ) : null}
+                  BackupVault, Email, and VoiceMG for SSH role dashboards.
                 </p>
                 {fleetStatus ? (
                   <p className="muted fleet-collect-line">
@@ -379,6 +399,8 @@ function App() {
         )}
 
         {nav === 'backupvault' && backupVaultServers.length > 0 && <BackupVaultPanel />}
+
+        {nav === 'voicemg' && voiceMgServers.length > 0 && <VoiceMgPanel />}
 
         {nav === 'chat' && (
           <div className="chat-page">

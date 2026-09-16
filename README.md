@@ -289,14 +289,23 @@ GPU **165/166** password (nlp-sm only, never Git): `SSH_GPU_PASSWORD='...' pytho
 Deploy on nlp-sm:
 
 ```bash
-cd /opt/unified-ops && git pull
+cd /opt/unified-ops && git pull origin main
+git log -1 --oneline   # should match latest commit on GitHub (e.g. Infrastructure panel)
+
 source backend/.venv/bin/activate
 pip install -r backend/requirements.txt
 python scripts/migrate-gpu-ai-insights.py   # when GPU insights / schema changed
 pkill -f "uvicorn app.main:app" || true; sleep 2
 cd backend && nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-api.log 2>&1 &
-cd /opt/unified-ops/frontend && npm run build
+
+# Required for new sidebar tabs (BackupVault, Email, Infrastructure) — pull alone is not enough
+cd /opt/unified-ops/frontend && npm ci && npm run build
+
+# Restart Celery if you use scheduled fleet collect
+# pkill -f "celery.*app.celery_app" ; ./scripts/run-celery-worker.sh &
 ```
+
+Then hard-refresh the browser (Ctrl+Shift+R). Open **Infrastructure** in the left sidebar (not only the Infrastructure domain tab on Servers). Run **Collect all** once so SSH snapshots appear.
 
 Step-by-step SSH/nginx/auth: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md).
 

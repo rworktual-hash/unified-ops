@@ -1112,6 +1112,17 @@ pre.diagnosis {
   }
 }
 
+button.linkish {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent, #3b82f6);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .sidebar-signout {
   margin-top: 0.65rem;
   width: 100%;

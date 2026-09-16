@@ -11,6 +11,7 @@ from app.monitoring.email_collectors import collect_email_queue_snapshot
 from app.services.alert_eval import evaluate_alerts
 from app.services.backupvault_ssh_collect import collect_and_store_backupvault_ssh
 from app.services.infrastructure_ssh_collect import collect_and_store_infrastructure_ssh
+from app.services.voicemg_ssh_collect import collect_and_store_voicemg_ssh
 from app.services.gpu_insights_collect import collect_and_store_gpu_insights
 from app.services.gpu_product_collect import collect_and_store_gpu_product
 
@@ -68,6 +69,9 @@ def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric
 
     if (server.project or "").lower() in {"infrastructure", "infra"}:
         collect_and_store_infrastructure_ssh(db, server)
+
+    if (server.project or "").lower() == "voicemg":
+        collect_and_store_voicemg_ssh(db, server)
 
     gpu_rows: list[GpuMetric] = []
     if server.server_type == "gpu":

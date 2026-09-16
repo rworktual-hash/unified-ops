@@ -107,6 +107,15 @@ class Settings(BaseSettings):
     infrastructure_app_service_units: str = ""
     infrastructure_local_health_urls: str = ""
 
+    # Read-only SSH on project=voicemg hosts (VMG / STT apps).
+    voicemg_ssh_insights_enabled: bool = True
+    voicemg_ssh_command_timeout: int = 30
+    voicemg_ssh_insights_ips: str = ""
+    voicemg_app_service_units: str = ""
+    voicemg_vmg_service_units: str = ""
+    voicemg_stt_service_units: str = ""
+    voicemg_local_health_urls: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -176,6 +185,41 @@ class Settings(BaseSettings):
     def infrastructure_local_health_urls_list(self) -> list[str]:
         return self._validated_csv(
             self.infrastructure_local_health_urls,
+            pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
+        )
+
+    @property
+    def voicemg_ssh_insights_ips_set(self) -> set[str]:
+        raw = self.voicemg_ssh_insights_ips.strip()
+        if not raw or raw == "*":
+            return set()
+        return {p.strip() for p in raw.split(",") if p.strip()}
+
+    @property
+    def voicemg_app_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.voicemg_app_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
+        )
+
+    @property
+    def voicemg_vmg_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.voicemg_vmg_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
+        )
+
+    @property
+    def voicemg_stt_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.voicemg_stt_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
+        )
+
+    @property
+    def voicemg_local_health_urls_list(self) -> list[str]:
+        return self._validated_csv(
+            self.voicemg_local_health_urls,
             pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
         )
 
