@@ -818,6 +818,55 @@
   color: var(--muted);
 }
 
+.email-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.email-period-tabs {
+  margin-bottom: 0;
+}
+
+.email-sync-meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+}
+
+.stat-row--email {
+  margin-bottom: 0.75rem;
+}
+
+.email-search-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.email-search {
+  min-width: 14rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.email-events-table .email-cell-subject {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email-events-table .email-cell-addr {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
 .stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

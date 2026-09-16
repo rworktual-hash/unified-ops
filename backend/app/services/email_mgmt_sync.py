@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+Guardrails: remote email-management DB is **read-only** from Unified Ops.
+Only SELECT batches by id; copies rows into nlp-sm `email_log_events`.
+SSH mail collect uses mailq / postfix status only (no queue deletes).
+"""
+
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
@@ -78,14 +84,25 @@ def sync_email_events_from_mgmt_db(db: Session) -> dict:
         cfg.email_mgmt_col_dsn,
         cfg.email_mgmt_col_queue_id,
     ]
+    category_col: str | None = None
+    if cfg.email_mgmt_col_category:
+        category_col = cfg.email_mgmt_col_category
+        if category_col not in cols:
+            cols.append(category_col)
+
     if cfg.email_mgmt_col_host:
         cols.append(cfg.email_mgmt_col_host)
 
     col_list = ", ".join(f"`{c}`" for c in cols)
     table = cfg.email_mgmt_events_table
     id_col = cfg.email_mgmt_col_id
+    where = f"`{id_col}` > :last_id"
+    params: dict = {"last_id": state.last_source_id, "lim": cfg.email_mgmt_sync_batch_size}
+    if category_col and cfg.email_mgmt_category_filter:
+        where += f" AND `{category_col}` = :cat"
+        params["cat"] = cfg.email_mgmt_category_filter
     sql = text(
-        f"SELECT {col_list} FROM `{table}` WHERE `{id_col}` > :last_id "
+        f"SELECT {col_list} FROM `{table}` WHERE {where} "
         f"ORDER BY `{id_col}` ASC LIMIT :lim"
     )
 
@@ -93,10 +110,7 @@ def sync_email_events_from_mgmt_db(db: Session) -> dict:
     now = datetime.now(timezone.utc)
     try:
         with engine.connect() as conn:
-            rows = conn.execute(
-                sql,
-                {"last_id": state.last_source_id, "lim": cfg.email_mgmt_sync_batch_size},
-            ).mappings().all()
+            rows = conn.execute(sql, params).mappings().all()
 
         max_id = state.last_source_id
         for row in rows:
@@ -143,20 +157,34 @@ def _str(value) -> str | None:
     return s if s else None
 
 
-def compute_email_overview(db: Session, *, hours: int = 24) -> dict:
-    """Aggregate synced events for dashboard cards (Unified Ops copy)."""
+def _events_in_period(db: Session, *, hours: int) -> list[EmailLogEvent]:
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    events = (
-        db.query(EmailLogEvent)
-        .filter(EmailLogEvent.occurred_at >= since)
-        .all()
-    )
+    return db.query(EmailLogEvent).filter(EmailLogEvent.occurred_at >= since).all()
+
+
+def _status(e: EmailLogEvent) -> str:
+    return (e.status or "").lower()
+
+
+def compute_email_overview(db: Session, *, hours: int = 24) -> dict:
+    """Aggregate synced log rows for dashboard cards (similar to email-management overview)."""
+    events = _events_in_period(db, hours=hours)
     total = len(events)
     inbound = sum(1 for e in events if (e.direction or "").lower().startswith("in"))
     outbound = sum(1 for e in events if (e.direction or "").lower().startswith("out"))
-    delivered = sum(1 for e in events if (e.status or "").lower() in {"delivered", "sent"})
-    bounced = sum(1 for e in events if "bounce" in (e.status or "").lower())
-    failed = sum(1 for e in events if (e.status or "").lower() in {"failed", "reject", "rejected"})
+    delivered = sum(1 for e in events if _status(e) in {"delivered", "sent"})
+    bounced = sum(1 for e in events if "bounce" in _status(e))
+    failed = sum(
+        1
+        for e in events
+        if _status(e) in {"failed", "reject", "rejected", "invalid"} or "fail" in _status(e)
+    )
+    deferred = sum(1 for e in events if "defer" in _status(e))
+    blocked = sum(
+        1 for e in events if "block" in _status(e) or _status(e) in {"rejected", "reject"}
+    )
+    timed_out = sum(1 for e in events if "timeout" in _status(e) or "timed out" in _status(e))
+    wrong_hits = failed + bounced
     return {
         "period_hours": hours,
         "total": total,
@@ -165,4 +193,8 @@ def compute_email_overview(db: Session, *, hours: int = 24) -> dict:
         "delivered": delivered,
         "bounced": bounced,
         "failed": failed,
+        "deferred": deferred,
+        "blocked": blocked,
+        "timed_out": timed_out,
+        "wrong_hits": wrong_hits,
     }

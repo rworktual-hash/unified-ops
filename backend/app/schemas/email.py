@@ -39,7 +39,13 @@ class EmailOverviewRead(BaseModel):
     delivered: int
     bounced: int
     failed: int
+    deferred: int = 0
+    blocked: int = 0
+    timed_out: int = 0
+    wrong_hits: int = 0
     sync_configured: bool
+    scheduled_sync_enabled: bool = False
+    read_only: bool = True
     last_source_id: int | None
     last_synced_at: datetime | None
     last_sync_error: str | None

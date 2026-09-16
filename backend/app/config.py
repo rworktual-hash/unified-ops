@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     email_mgmt_col_queue_id: str = "queue_id"
     email_mgmt_col_host: str | None = None
     email_mgmt_sync_batch_size: int = 500
+    # Optional: only count/sync rows where category column equals this (e.g. transactional app mail).
+    email_mgmt_col_category: str | None = None
+    email_mgmt_category_filter: str | None = None
+    # Celery beat: read-only incremental sync (needs REDIS_URL + worker + beat restart).
+    email_mgmt_scheduled_sync_enabled: bool = False
+    email_mgmt_sync_interval_seconds: float = 120.0
     # Map remote host/IP values to inventory server_name: "82.113.72.84:email-mgmt-1,10.180.0.84:email-mgmt-private"
     email_mgmt_host_server_map: str = (
         "82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private"

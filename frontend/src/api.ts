@@ -113,7 +113,13 @@ export type EmailOverview = {
   delivered: number
   bounced: number
   failed: number
+  deferred?: number
+  blocked?: number
+  timed_out?: number
+  wrong_hits?: number
   sync_configured: boolean
+  scheduled_sync_enabled?: boolean
+  read_only?: boolean
   last_source_id: number | null
   last_synced_at: string | null
   last_sync_error: string | null
@@ -149,9 +155,16 @@ export async function fetchEmailOverview(hours = 24): Promise<EmailOverview> {
   return res.json()
 }
 
-export async function fetchEmailEvents(serverId?: number, limit = 200): Promise<EmailLogEvent[]> {
+export async function fetchEmailEvents(
+  serverId?: number,
+  hours?: number,
+  search?: string,
+  limit = 200,
+): Promise<EmailLogEvent[]> {
   const params = new URLSearchParams({ limit: String(limit) })
   if (serverId != null) params.set('server_id', String(serverId))
+  if (hours != null) params.set('hours', String(hours))
+  if (search) params.set('q', search)
   const res = await apiFetch(`/email/events?${params}`)
   if (!res.ok) throw new Error('Failed to load email events')
   return res.json()

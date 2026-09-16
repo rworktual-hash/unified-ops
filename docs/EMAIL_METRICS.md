@@ -7,6 +7,17 @@ Unified Ops combines:
 1. **SSH** (from nlp-sm) — host CPU/RAM/disk (same as other servers) + **Postfix queue** (`mailq`) and **postfix active** for inventory rows with `project=email`.
 2. **Read-only MariaDB** — sync parsed mail log rows from **email-management.worktual.tech** into Unified Ops `email_log_events`.
 
+### Guardrails (mandatory)
+
+| Action | Allowed? |
+|--------|----------|
+| `SELECT` on email-mgmt events table | Yes (read-only DB user) |
+| `INSERT` into nlp-sm `email_log_events` | Yes (local copy only) |
+| Send mail / `postsuper` / queue delete / `systemctl restart postfix` via Unified Ops | **No** |
+| Remote DB `UPDATE` / `DELETE` | **No** |
+
+Create a MariaDB user with **`SELECT` only** on the events table (and `SHOW`/`information_schema` for inspect script).
+
 ## Inventory (SSH targets)
 
 | server_name           | ip_address    | ssh_port |
@@ -54,12 +65,16 @@ EMAIL_MGMT_COL_QUEUE_ID=queue_id
 # EMAIL_MGMT_COL_HOST=hostname
 EMAIL_MGMT_HOST_SERVER_MAP=82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private
 EMAIL_MGMT_DEFAULT_SERVER_NAME=email-mgmt-1
+# Optional — match legacy “App Mail (Transactional)” only (column name from inspect script):
+# EMAIL_MGMT_COL_CATEGORY=mail_category
+# EMAIL_MGMT_CATEGORY_FILTER=transactional
 ```
 
 ### Sync
 
 - **Admin:** `POST /email/sync` or **Sync mail logs** in the Email UI.
 - Cursor stored in `email_sync_state` (incremental by remote `id`).
+- **Scheduled (optional):** `EMAIL_MGMT_SCHEDULED_SYNC_ENABLED=true`, `EMAIL_MGMT_SYNC_INTERVAL_SECONDS=120` — Celery beat task `sync_email_events_task` (restart beat after `.env` change).
 
 ### Nginx
 

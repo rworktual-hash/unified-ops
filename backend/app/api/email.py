@@ -1,4 +1,7 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -29,6 +32,9 @@ def email_overview(
     return EmailOverviewRead(
         **stats,
         sync_configured=bool(settings.email_mgmt_database_url),
+        scheduled_sync_enabled=bool(
+            settings.email_mgmt_scheduled_sync_enabled and settings.email_mgmt_database_url
+        ),
         last_source_id=state.last_source_id if state else None,
         last_synced_at=state.last_synced_at if state else None,
         last_sync_error=state.last_error if state else None,
@@ -38,13 +44,30 @@ def email_overview(
 @router.get("/events", response_model=list[EmailLogEventRead])
 def list_email_events(
     server_id: int | None = None,
+    hours: int | None = Query(default=None, ge=1, le=24 * 30),
+    q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[EmailLogEventRead]:
-    q = db.query(EmailLogEvent).order_by(EmailLogEvent.occurred_at.desc())
+    query = db.query(EmailLogEvent).order_by(EmailLogEvent.occurred_at.desc())
     if server_id is not None:
-        q = q.filter(EmailLogEvent.server_id == server_id)
-    rows = q.limit(limit).all()
+        query = query.filter(EmailLogEvent.server_id == server_id)
+    if hours is not None:
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        query = query.filter(EmailLogEvent.occurred_at >= since)
+    if q and q.strip():
+        needle = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                EmailLogEvent.from_addr.like(needle),
+                EmailLogEvent.to_addr.like(needle),
+                EmailLogEvent.subject.like(needle),
+                EmailLogEvent.queue_id.like(needle),
+                EmailLogEvent.event_type.like(needle),
+                EmailLogEvent.status.like(needle),
+            )
+        )
+    rows = query.limit(limit).all()
     return [EmailLogEventRead.model_validate(r) for r in rows]
 
 
