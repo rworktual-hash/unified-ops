@@ -264,7 +264,11 @@ export type BackupVaultSnapshot = {
   latest_backup_at: string | null
   latest_backup_path: string | null
   latest_backup_size_bytes: number | null
+  backup_file_count: number | null
+  backup_total_size_bytes: number | null
   backup_process_count: number | null
+  extra_service_status: string | null
+  healthcheck_status: string | null
   collect_error: string | null
 }
 

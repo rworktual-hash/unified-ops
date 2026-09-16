@@ -29,13 +29,14 @@ function replication(snapshot: BackupVaultSnapshot): string {
 
 function services(snapshot: BackupVaultSnapshot): string {
   if (snapshot.role !== 'app') return state(snapshot.service_active)
-  return [
+  const base = [
     snapshot.docker_active == null ? null : `Docker ${state(snapshot.docker_active)}`,
     snapshot.nginx_active == null ? null : `Nginx ${state(snapshot.nginx_active)}`,
     snapshot.cron_active == null ? null : `Cron ${state(snapshot.cron_active)}`,
   ]
     .filter(Boolean)
-    .join(' · ') || 'Unavailable'
+    .join(' · ')
+  return [base, snapshot.extra_service_status].filter(Boolean).join(' · ') || 'Unavailable'
 }
 
 function formatBytes(value: number | null): string {
@@ -178,9 +179,21 @@ export function BackupVaultPanel() {
                           {snapshot?.latest_backup_size_bytes != null
                             ? ` · ${formatBytes(snapshot.latest_backup_size_bytes)}`
                             : ''}
+                          {snapshot?.backup_file_count != null
+                            ? ` · ${snapshot.backup_file_count} files`
+                            : ''}
+                          {snapshot?.backup_total_size_bytes != null
+                            ? ` · total ${formatBytes(snapshot.backup_total_size_bytes)}`
+                            : ''}
                         </td>
                         <td>
                           {snapshot ? new Date(snapshot.collected_at).toLocaleString() : '—'}
+                          {snapshot?.healthcheck_status ? (
+                            <span className="muted">
+                              <br />
+                              {snapshot.healthcheck_status}
+                            </span>
+                          ) : null}
                           {snapshot?.collect_error ? (
                             <span className="backupvault-error" title={snapshot.collect_error}>
                               {' '}

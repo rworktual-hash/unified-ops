@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -92,6 +93,12 @@ class Settings(BaseSettings):
     backupvault_ssh_command_timeout: int = 30
     # Comma-separated IPs; empty or "*" = all project=backupvault hosts.
     backupvault_ssh_insights_ips: str = ""
+    # Comma-separated absolute paths checked for newest backup file and totals.
+    backupvault_backup_paths: str = "/backup,/backups,/var/backups"
+    # Optional extra app units, e.g. "backupvault,backupvault-worker".
+    backupvault_app_service_units: str = ""
+    # Optional localhost-only health URLs, e.g. "http://127.0.0.1:8080/health".
+    backupvault_local_health_urls: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -121,6 +128,38 @@ class Settings(BaseSettings):
         if not raw or raw == "*":
             return set()
         return {p.strip() for p in raw.split(",") if p.strip()}
+
+    @property
+    def backupvault_backup_paths_list(self) -> list[str]:
+        return self._validated_csv(
+            self.backupvault_backup_paths,
+            pattern=r"^/[A-Za-z0-9._/\-]+$",
+        )
+
+    @property
+    def backupvault_app_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.backupvault_app_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
+        )
+
+    @property
+    def backupvault_local_health_urls_list(self) -> list[str]:
+        urls = self._validated_csv(
+            self.backupvault_local_health_urls,
+            pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
+        )
+        return urls
+
+    @staticmethod
+    def _validated_csv(raw: str, *, pattern: str) -> list[str]:
+        items = [item.strip() for item in raw.split(",") if item.strip()]
+        out: list[str] = []
+        for item in items:
+            if not re.fullmatch(pattern, item):
+                continue
+            out.append(item)
+        return out
 
 
 settings = Settings()

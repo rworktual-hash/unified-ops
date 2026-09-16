@@ -46,7 +46,11 @@ def collect_and_store_backupvault_ssh(
         latest_backup_at=snap.latest_backup_at,
         latest_backup_path=snap.latest_backup_path,
         latest_backup_size_bytes=snap.latest_backup_size_bytes,
+        backup_file_count=snap.backup_file_count,
+        backup_total_size_bytes=snap.backup_total_size_bytes,
         backup_process_count=snap.backup_process_count,
+        extra_service_status=snap.extra_service_status,
+        healthcheck_status=snap.healthcheck_status,
         collect_error=snap.collect_error,
     )
     db.add(row)

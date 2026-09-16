@@ -14,10 +14,6 @@ CMD_STORAGE = (
     "df -Pk / /var/lib/mysql /var/lib/postgresql /backup /backups /var/backups "
     "2>/dev/null | awk 'NR==1 || !seen[$6]++'"
 )
-CMD_LAST_BACKUP = (
-    "timeout 15s find /backup /backups /var/backups -maxdepth 4 -type f "
-    "-printf '%T@|%s|%p\\n' 2>/dev/null | sort -nr | head -1"
-)
 CMD_BACKUP_PROCESSES = (
     "pgrep -af '(restic|borg|rsync|rclone|mysqldump|mariadb-dump|pg_dump)' "
     "2>/dev/null | head -10"
@@ -55,10 +51,40 @@ CMD_POSTGRES_CONNECTIONS = (
     "2>/dev/null"
 )
 
-_ALLOWED = frozenset(
-    {
+
+def _quoted_paths(paths: list[str]) -> str:
+    return " ".join(paths)
+
+
+def configured_backup_paths() -> list[str]:
+    return settings.backupvault_backup_paths_list or ["/backup", "/backups", "/var/backups"]
+
+
+def build_last_backup_cmd(paths: list[str]) -> str:
+    return (
+        f"timeout 15s find {_quoted_paths(paths)} -maxdepth 4 -type f "
+        "-printf '%T@|%s|%p\\n' 2>/dev/null | sort -nr | head -1"
+    )
+
+
+def build_backup_totals_cmd(paths: list[str]) -> str:
+    return (
+        f"timeout 15s find {_quoted_paths(paths)} -maxdepth 4 -type f "
+        "-printf '%s\\n' 2>/dev/null | awk 'BEGIN{n=0;s=0}{n+=1;s+=$1}END{print n\"|\"s}'"
+    )
+
+
+def build_app_service_cmd(unit: str) -> str:
+    return f"systemctl is-active {unit} 2>/dev/null || echo inactive"
+
+
+def build_healthcheck_cmd(url: str) -> str:
+    return f"curl -fsS --max-time 5 {url} 2>/dev/null | head -c 400"
+
+
+def _allowed_commands() -> frozenset[str]:
+    commands = {
         CMD_STORAGE,
-        CMD_LAST_BACKUP,
         CMD_BACKUP_PROCESSES,
         CMD_DOCKER_ACTIVE,
         CMD_NGINX_ACTIVE,
@@ -70,8 +96,14 @@ _ALLOWED = frozenset(
         CMD_POSTGRES_ACTIVE,
         CMD_POSTGRES_REPLICA,
         CMD_POSTGRES_CONNECTIONS,
+        build_last_backup_cmd(configured_backup_paths()),
+        build_backup_totals_cmd(configured_backup_paths()),
     }
-)
+    for unit in settings.backupvault_app_service_units_list:
+        commands.add(build_app_service_cmd(unit))
+    for url in settings.backupvault_local_health_urls_list:
+        commands.add(build_healthcheck_cmd(url))
+    return frozenset(commands)
 
 
 @dataclass
@@ -97,12 +129,16 @@ class BackupVaultSshInsights:
     latest_backup_at: datetime | None = None
     latest_backup_path: str | None = None
     latest_backup_size_bytes: int | None = None
+    backup_file_count: int | None = None
+    backup_total_size_bytes: int | None = None
     backup_process_count: int | None = None
+    extra_service_status: str | None = None
+    healthcheck_status: str | None = None
     collect_error: str | None = None
 
 
 def _run(client, command: str) -> tuple[int, str, str]:
-    if command not in _ALLOWED:
+    if command not in _allowed_commands():
         raise ValueError("Command not allowed")
     _stdin, stdout, stderr = client.exec_command(
         command, timeout=settings.backupvault_ssh_command_timeout
@@ -187,18 +223,32 @@ def parse_latest_backup(
     return when, size, parts[2][:1024]
 
 
+def parse_backup_totals(output: str) -> tuple[int | None, int | None]:
+    parts = output.strip().split("|")
+    if len(parts) != 2:
+        return None, None
+    count = int(parts[0]) if parts[0].isdigit() else None
+    total = int(parts[1]) if parts[1].isdigit() else None
+    return count, total
+
+
 def _common_metrics(client, result: BackupVaultSshInsights, errors: list[str]) -> None:
+    backup_paths = configured_backup_paths()
     code, out, err = _run(client, CMD_STORAGE)
     if code == 0:
         result.data_mount, result.data_disk_used_pct, result.data_disk_free_gb = parse_storage(out)
     else:
         errors.append(f"storage: {err or out}")
 
-    code, out, _err = _run(client, CMD_LAST_BACKUP)
+    code, out, _err = _run(client, build_last_backup_cmd(backup_paths))
     if code == 0 and out:
         result.latest_backup_at, result.latest_backup_size_bytes, result.latest_backup_path = (
             parse_latest_backup(out)
         )
+
+    code, out, _err = _run(client, build_backup_totals_cmd(backup_paths))
+    if code == 0 and out:
+        result.backup_file_count, result.backup_total_size_bytes = parse_backup_totals(out)
 
     code, out, _err = _run(client, CMD_BACKUP_PROCESSES)
     if code == 0:
@@ -283,6 +333,24 @@ def collect_backupvault_ssh_insights(
                     lines = [line for line in out.splitlines() if line.strip()]
                     result.containers_running = len(lines)
                     result.container_summary = "\n".join(lines)[:4000] or None
+                extra_services: list[str] = []
+                for unit in settings.backupvault_app_service_units_list:
+                    code, out, _err = _run(client, build_app_service_cmd(unit))
+                    label = "Healthy" if code == 0 and _active(out) else "Down"
+                    extra_services.append(f"{unit}: {label}")
+                if extra_services:
+                    result.extra_service_status = " · ".join(extra_services)[:4000]
+                health_rows: list[str] = []
+                for url in settings.backupvault_local_health_urls_list:
+                    code, out, err = _run(client, build_healthcheck_cmd(url))
+                    if code == 0 and out:
+                        health_rows.append(f"{url}: OK")
+                    else:
+                        health_rows.append(f"{url}: fail")
+                        if err:
+                            errors.append(f"healthcheck {url}: {err}")
+                if health_rows:
+                    result.healthcheck_status = " · ".join(health_rows)[:4000]
     except CredentialError as exc:
         errors.append(str(exc))
     except Exception as exc:

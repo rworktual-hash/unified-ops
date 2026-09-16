@@ -27,7 +27,11 @@ class BackupVaultSnapshotRead(BaseModel):
     latest_backup_at: datetime | None
     latest_backup_path: str | None
     latest_backup_size_bytes: int | None
+    backup_file_count: int | None
+    backup_total_size_bytes: int | None
     backup_process_count: int | None
+    extra_service_status: str | None
+    healthcheck_status: str | None
     collect_error: str | None
 
     model_config = {"from_attributes": True}

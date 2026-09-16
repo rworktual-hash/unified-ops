@@ -1,7 +1,12 @@
 import unittest
 
 from app.monitoring.backupvault_ssh_collectors import (
+    build_app_service_cmd,
+    build_backup_totals_cmd,
+    build_healthcheck_cmd,
+    build_last_backup_cmd,
     parse_latest_backup,
+    parse_backup_totals,
     parse_mysql_replica,
     parse_mysql_status,
     parse_postgres_replica,
@@ -46,6 +51,21 @@ Seconds_Behind_Master: NULL
         self.assertIsNotNone(when)
         self.assertEqual(size, 12345)
         self.assertEqual(path, "/backup/a.tar")
+
+    def test_backup_totals(self):
+        self.assertEqual(parse_backup_totals("4|123456"), (4, 123456))
+
+    def test_safe_command_builders(self):
+        self.assertIn("/srv/backupvault", build_last_backup_cmd(["/srv/backupvault"]))
+        self.assertIn("/srv/backupvault", build_backup_totals_cmd(["/srv/backupvault"]))
+        self.assertEqual(
+            build_app_service_cmd("backupvault-worker"),
+            "systemctl is-active backupvault-worker 2>/dev/null || echo inactive",
+        )
+        self.assertEqual(
+            build_healthcheck_cmd("http://127.0.0.1:8080/health"),
+            "curl -fsS --max-time 5 http://127.0.0.1:8080/health 2>/dev/null | head -c 400",
+        )
 
 
 if __name__ == "__main__":

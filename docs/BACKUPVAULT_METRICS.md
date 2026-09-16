@@ -19,10 +19,10 @@ input can become a shell command.
 
 | Role | Read-only metrics |
 |------|-------------------|
-| All | data-filesystem usage, newest file under `/backup`, `/backups`, `/var/backups`, active backup process count |
+| All | data-filesystem usage, newest file under configured backup paths, backup file count/total size, active backup process count |
 | MySQL/MariaDB | service state, `SHOW REPLICA STATUS` / legacy `SHOW SLAVE STATUS`, connections, slow-query counter, uptime |
 | PostgreSQL | service state, recovery state, replay lag, connection count |
-| Application | Docker/Nginx/Cron state, running container names/status |
+| Application | Docker/Nginx/Cron state, running container names/status, optional extra fixed service units, optional localhost health URLs |
 
 Explicitly absent: replication start/stop/reset/promote, SQL writes, dump creation,
 service restart, container exec/restart, backup deletion, and arbitrary commands.
@@ -37,7 +37,20 @@ BACKUPVAULT_SSH_INSIGHTS_ENABLED=true
 # Empty or * means all project=backupvault hosts:
 BACKUPVAULT_SSH_INSIGHTS_IPS=
 BACKUPVAULT_SSH_COMMAND_TIMEOUT=30
+BACKUPVAULT_BACKUP_PATHS=/backup,/backups,/var/backups
+# Optional validated systemd units on app hosts:
+BACKUPVAULT_APP_SERVICE_UNITS=
+# Optional localhost-only health URLs:
+BACKUPVAULT_LOCAL_HEALTH_URLS=
 ```
+
+Extra values are validated before use:
+
+- backup paths must be absolute paths
+- service units may contain letters, numbers, `.`, `_`, `-`, `@`
+- health URLs must target `127.0.0.1` or `localhost`
+
+Any invalid entry is ignored; it does not become a shell command.
 
 For a pilot, set a comma-separated IP list, restart the API/Celery worker, and run
 Collect metrics on those servers. Remove the list after validation to cover all 11.
@@ -50,6 +63,6 @@ Collect metrics on those servers. Remove the list after validation to cover all 
 - Stale backup: newest file found in common backup paths is older than 24 hours
 - PostgreSQL healthy standby: in recovery and replay lag <= 300 seconds
 
-The backup-path check is intentionally generic. If BackupVault stores artifacts
-elsewhere, add the confirmed path as a fixed command in the collector; do not accept
-paths from request parameters.
+The backup-path check is configurable for real environments. Add confirmed paths,
+units, and localhost health URLs in `.env`; do not accept them from request
+parameters or UI input.
