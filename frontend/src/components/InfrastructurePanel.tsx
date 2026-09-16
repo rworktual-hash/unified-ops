@@ -6,7 +6,7 @@ import {
 } from '../api'
 
 function state(value: boolean | null): string {
-  return value == null ? '—' : value ? 'Healthy' : 'Down'
+  return value == null ? 'Unknown' : value ? 'Running' : 'Check failed'
 }
 
 function replication(snapshot: InfrastructureSnapshot): string {
@@ -40,6 +40,17 @@ function services(snapshot: InfrastructureSnapshot): string {
     if (snapshot.redis_connected_clients != null) {
       parts.push(`${snapshot.redis_connected_clients} clients`)
     }
+    if (snapshot.service_active != null) {
+      parts.push(`ping ${state(snapshot.service_active)}`)
+    }
+  }
+  if (snapshot.role === 'pbx' || snapshot.role === 'sip') {
+    if (snapshot.docker_active != null) parts.push(`Docker ${state(snapshot.docker_active)}`)
+    if (snapshot.service_active != null) {
+      parts.push(`signal ${state(snapshot.service_active)}`)
+    }
+    if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
+    return parts.join(' · ') || '—'
   }
   if (snapshot.service_active != null && !parts.length) {
     parts.push(state(snapshot.service_active))

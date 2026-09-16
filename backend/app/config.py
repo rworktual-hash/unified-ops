@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     infrastructure_ssh_insights_ips: str = ""
     infrastructure_app_service_units: str = ""
     infrastructure_local_health_urls: str = ""
+    # PBX/SIP systemd units; empty = built-in defaults in collector.
+    infrastructure_pbx_service_units: str = ""
+    infrastructure_sip_service_units: str = ""
 
     # Read-only SSH on project=voicemg hosts (VMG / STT apps).
     voicemg_ssh_insights_enabled: bool = True
@@ -186,6 +189,20 @@ class Settings(BaseSettings):
         return self._validated_csv(
             self.infrastructure_local_health_urls,
             pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
+        )
+
+    @property
+    def infrastructure_pbx_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.infrastructure_pbx_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
+        )
+
+    @property
+    def infrastructure_sip_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.infrastructure_sip_service_units,
+            pattern=r"^[A-Za-z0-9@._-]+$",
         )
 
     @property

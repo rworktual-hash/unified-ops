@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.monitoring.backupvault_ssh_collectors import (
+    CMD_DOCKER_ACTIVE,
+    CMD_DOCKER_STATUS,
     CMD_MYSQL_ACTIVE,
     CMD_MYSQL_REPLICA,
     CMD_MYSQL_STATUS,
@@ -29,7 +31,6 @@ CMD_STORAGE = (
 )
 CMD_NGINX_ACTIVE = "systemctl is-active nginx 2>/dev/null || echo inactive"
 CMD_KONG_ACTIVE = "systemctl is-active kong 2>/dev/null || echo inactive"
-CMD_DOCKER_ACTIVE = "systemctl is-active docker 2>/dev/null || echo inactive"
 CMD_GRAFANA_ACTIVE = (
     "systemctl is-active grafana-server 2>/dev/null || echo inactive"
 )
@@ -42,14 +43,54 @@ CMD_REDIS_INFO = (
     "timeout 5 redis-cli INFO 2>/dev/null | grep -E "
     "'^(role:|connected_clients:|used_memory:|maxmemory:|master_link_status:)'"
 )
-CMD_PBX_ACTIVE = (
-    "systemctl is-active asterisk 2>/dev/null || systemctl is-active freeswitch "
-    "2>/dev/null || echo inactive"
+DEFAULT_PBX_UNITS: tuple[str, ...] = (
+    "asterisk",
+    "freeswitch",
+    "freepbx",
+    "pbx",
+    "ccaas-pbx",
 )
-CMD_SIP_ACTIVE = (
-    "systemctl is-active kamailio 2>/dev/null || systemctl is-active opensips "
-    "2>/dev/null || echo inactive"
+DEFAULT_SIP_UNITS: tuple[str, ...] = (
+    "kamailio",
+    "opensips",
+    "rtpengine",
+    "rtpproxy",
+    "sgw",
 )
+CMD_PBX_PROCESSES = (
+    "pgrep -af '(asterisk|freeswitch|freepbx|pbx)' 2>/dev/null | head -6"
+)
+CMD_SIP_PROCESSES = (
+    "pgrep -af '(kamailio|opensips|rtpengine|rtpproxy|sip)' 2>/dev/null | head -6"
+)
+
+
+def pbx_service_units() -> list[str]:
+    configured = settings.infrastructure_pbx_service_units_list
+    return configured if configured else list(DEFAULT_PBX_UNITS)
+
+
+def sip_service_units() -> list[str]:
+    configured = settings.infrastructure_sip_service_units_list
+    return configured if configured else list(DEFAULT_SIP_UNITS)
+
+
+def evaluate_telephony_service(
+    *,
+    unit_up: list[bool],
+    process_count: int | None,
+    docker_active: bool | None,
+    containers_running: int | None,
+) -> bool | None:
+    if any(unit_up):
+        return True
+    if process_count is not None and process_count > 0:
+        return True
+    if docker_active and containers_running is not None and containers_running > 0:
+        return True
+    if unit_up:
+        return False
+    return None
 
 
 def _role(server_name: str, server_type: str | None) -> str:
@@ -76,8 +117,10 @@ def _allowed_commands() -> frozenset[str]:
         CMD_KAFKA_ACTIVE,
         CMD_REDIS_PING,
         CMD_REDIS_INFO,
-        CMD_PBX_ACTIVE,
-        CMD_SIP_ACTIVE,
+        CMD_PBX_PROCESSES,
+        CMD_SIP_PROCESSES,
+        CMD_DOCKER_ACTIVE,
+        CMD_DOCKER_STATUS,
         CMD_MYSQL_ACTIVE,
         CMD_MYSQL_REPLICA,
         CMD_MYSQL_STATUS,
@@ -85,7 +128,11 @@ def _allowed_commands() -> frozenset[str]:
         CMD_POSTGRES_REPLICA,
         CMD_POSTGRES_CONNECTIONS,
     }
-    for unit in settings.infrastructure_app_service_units_list:
+    for unit in (
+        settings.infrastructure_app_service_units_list
+        + pbx_service_units()
+        + sip_service_units()
+    ):
         commands.add(build_app_service_cmd(unit))
     for url in settings.infrastructure_local_health_urls_list:
         commands.add(build_healthcheck_cmd(url))
@@ -174,14 +221,73 @@ def _healthchecks(client, result: InfrastructureSshInsights, errors: list[str]) 
         result.healthcheck_status = " · ".join(rows)[:4000]
 
 
+def _merge_extra_status(result: InfrastructureSshInsights, fragment: str) -> None:
+    if not fragment:
+        return
+    if result.extra_service_status:
+        result.extra_service_status = f"{result.extra_service_status} · {fragment}"[:4000]
+    else:
+        result.extra_service_status = fragment[:4000]
+
+
 def _extra_units(client, result: InfrastructureSshInsights) -> None:
     extra: list[str] = []
     for unit in settings.infrastructure_app_service_units_list:
         code, out, _err = _run(client, build_app_service_cmd(unit))
-        label = "Healthy" if code == 0 and _active(out) else "Down"
+        label = "Running" if code == 0 and _active(out) else "Check failed"
         extra.append(f"{unit}: {label}")
     if extra:
-        result.extra_service_status = " · ".join(extra)[:4000]
+        _merge_extra_status(result, " · ".join(extra))
+
+
+def _collect_telephony(
+    client,
+    result: InfrastructureSshInsights,
+    *,
+    role: str,
+    errors: list[str],
+) -> None:
+    units = pbx_service_units() if role == "pbx" else sip_service_units()
+    proc_cmd = CMD_PBX_PROCESSES if role == "pbx" else CMD_SIP_PROCESSES
+    unit_rows: list[str] = []
+    unit_up: list[bool] = []
+
+    code, out, _err = _run(client, CMD_DOCKER_ACTIVE)
+    result.docker_active = _active(out) if code == 0 else None
+
+    code, out, _err = _run(client, CMD_DOCKER_STATUS)
+    containers = 0
+    if code == 0:
+        lines = [line for line in out.splitlines() if line.strip()]
+        containers = len(lines)
+
+    for unit in units:
+        code, out, _err = _run(client, build_app_service_cmd(unit))
+        up = code == 0 and _active(out)
+        unit_up.append(up)
+        unit_rows.append(f"{unit}: {'Running' if up else 'Check failed'}")
+
+    process_count: int | None = None
+    code, out, _err = _run(client, proc_cmd)
+    if code == 0:
+        lines = [line for line in out.splitlines() if line.strip()]
+        process_count = len(lines)
+    elif code == 1:
+        process_count = 0
+
+    if unit_rows:
+        _merge_extra_status(result, " · ".join(unit_rows))
+    if process_count is not None:
+        _merge_extra_status(result, f"{process_count} voice procs")
+
+    result.service_active = evaluate_telephony_service(
+        unit_up=unit_up,
+        process_count=process_count,
+        docker_active=result.docker_active,
+        containers_running=containers if containers else None,
+    )
+    if result.service_active is False and not any(unit_up) and process_count == 0:
+        errors.append(f"{role}: no systemd unit active and no matching processes")
 
 
 def collect_infrastructure_ssh_insights(
@@ -274,16 +380,8 @@ def collect_infrastructure_ssh_insights(
                 result.service_active = _active(out) if code == 0 else None
                 if code != 0:
                     errors.append(f"grafana: {err or out}")
-            elif role == "pbx":
-                code, out, err = _run(client, CMD_PBX_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"pbx: {err or out}")
-            elif role == "sip":
-                code, out, err = _run(client, CMD_SIP_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"sip: {err or out}")
+            elif role in {"pbx", "sip"}:
+                _collect_telephony(client, result, role=role, errors=errors)
             else:
                 code, out, _err = _run(client, CMD_DOCKER_ACTIVE)
                 result.docker_active = _active(out) if code == 0 else None
