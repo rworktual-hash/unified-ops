@@ -11,13 +11,28 @@ function probeState(value: boolean | null): string {
 }
 
 function services(snapshot: VoiceMgSnapshot): string {
-  const parts = [
-    snapshot.docker_active == null ? null : `Docker ${probeState(snapshot.docker_active)}`,
-    snapshot.nginx_active == null ? null : `Nginx ${probeState(snapshot.nginx_active)}`,
-    snapshot.containers_running != null ? `${snapshot.containers_running} containers` : null,
-    snapshot.app_process_count != null ? `${snapshot.app_process_count} app procs` : null,
-    snapshot.extra_service_status,
-  ].filter(Boolean)
+  const workloadUp =
+    snapshot.service_active === true ||
+    (snapshot.app_process_count != null && snapshot.app_process_count > 0)
+  const parts: string[] = []
+  if (snapshot.service_active != null) {
+    parts.push(`App ${probeState(snapshot.service_active)}`)
+  }
+  if (snapshot.app_process_count != null) {
+    parts.push(`${snapshot.app_process_count} app procs`)
+  }
+  if (snapshot.containers_running != null && snapshot.containers_running > 0) {
+    parts.push(`${snapshot.containers_running} containers`)
+  }
+  if (!workloadUp) {
+    if (snapshot.docker_active != null) {
+      parts.push(`Docker ${probeState(snapshot.docker_active)}`)
+    }
+    if (snapshot.nginx_active != null) {
+      parts.push(`Nginx ${probeState(snapshot.nginx_active)}`)
+    }
+  }
+  if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
   return parts.join(' · ') || '—'
 }
 
@@ -154,7 +169,8 @@ export function VoiceMgPanel() {
                               {snapshot.healthcheck_status}
                             </span>
                           ) : null}
-                          {snapshot?.collect_error ? (
+                          {snapshot?.collect_error &&
+                          snapshot.service_active !== true ? (
                             <span className="backupvault-error" title={snapshot.collect_error}>
                               {' '}
                               · partial

@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     infrastructure_redis_service_units: str = ""
     # Comma-separated redis-cli probes: default, /path/to.sock, 127.0.0.1:6379
     infrastructure_redis_cli_probes: str = ""
+    infrastructure_kong_service_units: str = ""
+    infrastructure_grafana_service_units: str = ""
 
     # Read-only SSH on project=voicemg hosts (VMG / STT apps).
     voicemg_ssh_insights_enabled: bool = True
@@ -222,6 +224,20 @@ class Settings(BaseSettings):
             pattern=(
                 r"^(default|/[A-Za-z0-9._/\-]+|(127\.0\.0\.1|localhost):[0-9]{1,5})$"
             ),
+        )
+
+    @property
+    def infrastructure_kong_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.infrastructure_kong_service_units,
+            pattern=r"^[A-Za-z0-9@._:-]+$",
+        )
+
+    @property
+    def infrastructure_grafana_service_units_list(self) -> list[str]:
+        return self._validated_csv(
+            self.infrastructure_grafana_service_units,
+            pattern=r"^[A-Za-z0-9@._:-]+$",
         )
 
     @property

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.config import settings
+from app.monitoring.service_signal import mysql_service_active, postgres_service_active
 from app.monitoring.ssh_client import ssh_session
 from app.services.credentials import CredentialError
 
@@ -289,10 +290,8 @@ def collect_backupvault_ssh_insights(
         ) as client:
             _common_metrics(client, result, errors)
             if role == "mysql":
-                code, out, err = _run(client, CMD_MYSQL_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"mysql service: {err or out}")
+                code, out, _err = _run(client, CMD_MYSQL_ACTIVE)
+                systemd_ok = _active(out) if code == 0 else None
                 code, out, _err = _run(client, CMD_MYSQL_REPLICA)
                 if code == 0 and out:
                     (
@@ -307,11 +306,23 @@ def collect_backupvault_ssh_insights(
                         result.slow_queries,
                         result.db_uptime_seconds,
                     ) = parse_mysql_status(out)
+                result.service_active = mysql_service_active(
+                    systemd_ok=systemd_ok,
+                    db_connections=result.db_connections,
+                    db_uptime_seconds=result.db_uptime_seconds,
+                )
+                if systemd_ok is False and result.service_active:
+                    note = "systemd: unit name mismatch"
+                    result.extra_service_status = (
+                        f"{result.extra_service_status} · {note}"
+                        if result.extra_service_status
+                        else note
+                    )
+                elif result.service_active is False:
+                    errors.append("mysql: no systemd or SQL status")
             elif role == "postgres":
-                code, out, err = _run(client, CMD_POSTGRES_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"postgres service: {err or out}")
+                code, out, _err = _run(client, CMD_POSTGRES_ACTIVE)
+                systemd_ok = _active(out) if code == 0 else None
                 code, out, _err = _run(client, CMD_POSTGRES_REPLICA)
                 if code == 0 and out:
                     result.replica_in_recovery, result.replication_lag_seconds = (
@@ -320,6 +331,19 @@ def collect_backupvault_ssh_insights(
                 code, out, _err = _run(client, CMD_POSTGRES_CONNECTIONS)
                 if code == 0 and out.isdigit():
                     result.db_connections = int(out)
+                result.service_active = postgres_service_active(
+                    systemd_ok=systemd_ok,
+                    db_connections=result.db_connections,
+                )
+                if systemd_ok is False and result.service_active:
+                    note = "systemd: unit name mismatch"
+                    result.extra_service_status = (
+                        f"{result.extra_service_status} · {note}"
+                        if result.extra_service_status
+                        else note
+                    )
+                elif result.service_active is False:
+                    errors.append("postgres: no systemd or connection probe")
             else:
                 for command, attr in (
                     (CMD_DOCKER_ACTIVE, "docker_active"),
@@ -334,23 +358,35 @@ def collect_backupvault_ssh_insights(
                     result.containers_running = len(lines)
                     result.container_summary = "\n".join(lines)[:4000] or None
                 extra_services: list[str] = []
+                extra_up = False
                 for unit in settings.backupvault_app_service_units_list:
                     code, out, _err = _run(client, build_app_service_cmd(unit))
-                    label = "Healthy" if code == 0 and _active(out) else "Down"
+                    is_up = code == 0 and _active(out)
+                    extra_up = extra_up or is_up
+                    label = "Running" if is_up else "Check failed"
                     extra_services.append(f"{unit}: {label}")
                 if extra_services:
                     result.extra_service_status = " · ".join(extra_services)[:4000]
                 health_rows: list[str] = []
+                health_ok = False
                 for url in settings.backupvault_local_health_urls_list:
                     code, out, err = _run(client, build_healthcheck_cmd(url))
                     if code == 0 and out:
                         health_rows.append(f"{url}: OK")
+                        health_ok = True
                     else:
                         health_rows.append(f"{url}: fail")
-                        if err:
-                            errors.append(f"healthcheck {url}: {err}")
                 if health_rows:
                     result.healthcheck_status = " · ".join(health_rows)[:4000]
+                if (result.containers_running or 0) > 0 or extra_up or health_ok:
+                    result.service_active = True
+                elif (
+                    result.docker_active is False
+                    and result.nginx_active is False
+                    and not extra_up
+                    and not health_ok
+                ):
+                    result.service_active = False
     except CredentialError as exc:
         errors.append(str(exc))
     except Exception as exc:

@@ -167,7 +167,7 @@ def collect_voicemg_ssh_insights(
                 code, out, _err = _run(client, build_app_service_cmd(unit))
                 is_up = code == 0 and _active(out)
                 unit_states.append(is_up)
-                extra.append(f"{unit}: {'Healthy' if is_up else 'Down'}")
+                extra.append(f"{unit}: {'Running' if is_up else 'Check failed'}")
             if extra:
                 result.extra_service_status = " · ".join(extra)[:4000]
 

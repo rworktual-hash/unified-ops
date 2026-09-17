@@ -22,8 +22,12 @@ from app.monitoring.backupvault_ssh_collectors import (
     parse_postgres_replica,
     parse_storage,
 )
+from app.monitoring.service_signal import mysql_service_active, postgres_service_active
 from app.monitoring.ssh_client import ssh_session
 from app.services.credentials import CredentialError
+
+DEFAULT_KONG_UNITS: tuple[str, ...] = ("kong", "kong.service", "kong-gateway")
+DEFAULT_GRAFANA_UNITS: tuple[str, ...] = ("grafana-server", "grafana")
 
 CMD_STORAGE = (
     "df -Pk / /var/lib/mysql /var/lib/postgresql /var/lib/redis "
@@ -93,6 +97,16 @@ def redis_service_units() -> list[str]:
 def redis_cli_probes() -> list[str]:
     configured = settings.infrastructure_redis_cli_probes_list
     return configured if configured else list(DEFAULT_REDIS_CLI_PROBES)
+
+
+def kong_service_units() -> list[str]:
+    configured = settings.infrastructure_kong_service_units_list
+    return configured if configured else list(DEFAULT_KONG_UNITS)
+
+
+def grafana_service_units() -> list[str]:
+    configured = settings.infrastructure_grafana_service_units_list
+    return configured if configured else list(DEFAULT_GRAFANA_UNITS)
 
 
 def redis_cli_args_from_probe(probe: str) -> str:
@@ -203,6 +217,8 @@ def _allowed_commands() -> frozenset[str]:
         + pbx_service_units()
         + sip_service_units()
         + redis_service_units()
+        + kong_service_units()
+        + grafana_service_units()
     ):
         commands.add(build_app_service_cmd(unit))
     for probe in redis_cli_probes():
@@ -293,6 +309,23 @@ def _healthchecks(client, result: InfrastructureSshInsights, errors: list[str]) 
                 errors.append(f"healthcheck {url}: {err}")
     if rows:
         result.healthcheck_status = " · ".join(rows)[:4000]
+
+
+def _probe_systemd_units(
+    client,
+    units: list[str],
+) -> tuple[bool | None, str | None]:
+    if not units:
+        return None, None
+    rows: list[str] = []
+    any_up = False
+    for unit in units:
+        code, out, _err = _run(client, build_app_service_cmd(unit))
+        up = code == 0 and _active(out)
+        any_up = any_up or up
+        rows.append(f"{unit}: {'Running' if up else 'Check failed'}")
+    active: bool | None = True if any_up else False
+    return active, " · ".join(rows)
 
 
 def _merge_extra_status(result: InfrastructureSshInsights, fragment: str) -> None:
@@ -395,8 +428,6 @@ def _collect_redis(
                 winning_probe = probe
         else:
             probe_rows.append(f"ping {label}: fail")
-            if err and "NOAUTH" not in err.upper():
-                errors.append(f"redis ping {label}: {err or out}")
 
     process_count: int | None = None
     code, out, _err = _run(client, CMD_REDIS_PROCESSES)
@@ -421,7 +452,10 @@ def _collect_redis(
     if unit_rows:
         _merge_extra_status(result, " · ".join(unit_rows))
     if probe_rows:
-        _merge_extra_status(result, " · ".join(probe_rows))
+        if not pong_ok and (any(unit_up) or (process_count or 0) > 0 or docker_redis > 0):
+            _merge_extra_status(result, "cli: no PONG (auth/socket/port)")
+        else:
+            _merge_extra_status(result, " · ".join(probe_rows))
     if process_count is not None:
         _merge_extra_status(result, f"{process_count} redis procs")
     if docker_redis:
@@ -433,8 +467,8 @@ def _collect_redis(
         process_count=process_count,
         docker_redis_containers=docker_redis,
     )
-    if result.service_active is False and not pong_ok:
-        errors.append("redis: no PONG and no unit/process/container signal")
+    if result.service_active is False:
+        errors.append("redis: no unit, process, container, or PONG signal")
 
 
 def collect_infrastructure_ssh_insights(
@@ -475,16 +509,19 @@ def collect_infrastructure_ssh_insights(
                 code, out, _err = _run(client, CMD_NGINX_ACTIVE)
                 result.nginx_active = _active(out) if code == 0 else None
             elif role == "kong":
-                code, out, err = _run(client, CMD_KONG_ACTIVE)
-                result.kong_active = _active(out) if code == 0 else None
-                result.service_active = result.kong_active
-                if code != 0:
-                    errors.append(f"kong: {err or out}")
+                active, detail = _probe_systemd_units(client, kong_service_units())
+                result.kong_active = active
+                result.service_active = active
+                if detail:
+                    _merge_extra_status(result, detail)
+                if active is False:
+                    code, out, err = _run(client, CMD_KONG_ACTIVE)
+                    if code == 0 and _active(out):
+                        result.kong_active = True
+                        result.service_active = True
             elif role == "mysql":
-                code, out, err = _run(client, CMD_MYSQL_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"mysql: {err or out}")
+                code, out, _err = _run(client, CMD_MYSQL_ACTIVE)
+                systemd_ok = _active(out) if code == 0 else None
                 code, out, _err = _run(client, CMD_MYSQL_REPLICA)
                 if code == 0 and out:
                     (
@@ -499,11 +536,18 @@ def collect_infrastructure_ssh_insights(
                         result.slow_queries,
                         result.db_uptime_seconds,
                     ) = parse_mysql_status(out)
+                result.service_active = mysql_service_active(
+                    systemd_ok=systemd_ok,
+                    db_connections=result.db_connections,
+                    db_uptime_seconds=result.db_uptime_seconds,
+                )
+                if systemd_ok is False and result.service_active:
+                    _merge_extra_status(result, "systemd: unit name mismatch")
+                elif result.service_active is False:
+                    errors.append("mysql: no systemd or SQL status")
             elif role == "postgres":
-                code, out, err = _run(client, CMD_POSTGRES_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"postgres: {err or out}")
+                code, out, _err = _run(client, CMD_POSTGRES_ACTIVE)
+                systemd_ok = _active(out) if code == 0 else None
                 code, out, _err = _run(client, CMD_POSTGRES_REPLICA)
                 if code == 0 and out:
                     result.replica_in_recovery, result.replication_lag_seconds = (
@@ -512,13 +556,23 @@ def collect_infrastructure_ssh_insights(
                 code, out, _err = _run(client, CMD_POSTGRES_CONNECTIONS)
                 if code == 0 and out.isdigit():
                     result.db_connections = int(out)
+                result.service_active = postgres_service_active(
+                    systemd_ok=systemd_ok,
+                    db_connections=result.db_connections,
+                )
+                if systemd_ok is False and result.service_active:
+                    _merge_extra_status(result, "systemd: unit name mismatch")
+                elif result.service_active is False:
+                    errors.append("postgres: no systemd or connection probe")
             elif role == "redis":
                 _collect_redis(client, result, errors)
             elif role == "monitoring":
-                code, out, err = _run(client, CMD_GRAFANA_ACTIVE)
-                result.service_active = _active(out) if code == 0 else None
-                if code != 0:
-                    errors.append(f"grafana: {err or out}")
+                active, detail = _probe_systemd_units(client, grafana_service_units())
+                result.service_active = active
+                if detail:
+                    _merge_extra_status(result, detail)
+                if active is False:
+                    errors.append("grafana: no matching systemd unit")
             elif role in {"pbx", "sip"}:
                 _collect_telephony(client, result, role=role, errors=errors)
             else:
@@ -532,6 +586,14 @@ def collect_infrastructure_ssh_insights(
         errors.append(str(exc))
     except Exception as exc:
         errors.append(f"{type(exc).__name__}: {exc}")
+    if result.service_active is True and errors:
+        errors = [
+            err
+            for err in errors
+            if not err.startswith(
+                ("mysql:", "postgres:", "redis:", "grafana:", "kong:", "nginx:", "kafka:", "pbx:", "sip:")
+            )
+        ]
     result.collect_error = "; ".join(errors) if errors else None
     return result
 

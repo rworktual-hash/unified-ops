@@ -6,13 +6,13 @@ import {
 } from '../api'
 
 function state(value: boolean | null): string {
-  return value == null ? '—' : value ? 'Healthy' : 'Down'
+  return value == null ? '—' : value ? 'Running' : 'Check failed'
 }
 
 function replication(snapshot: BackupVaultSnapshot): string {
   if (snapshot.role === 'mysql') {
     if (snapshot.replication_io_running == null && snapshot.replication_sql_running == null) {
-      return 'Unavailable'
+      return 'N/A or primary'
     }
     return snapshot.replication_io_running && snapshot.replication_sql_running
       ? `Healthy${snapshot.replication_lag_seconds != null ? ` · ${snapshot.replication_lag_seconds}s` : ''}`
@@ -28,6 +28,17 @@ function replication(snapshot: BackupVaultSnapshot): string {
 }
 
 function services(snapshot: BackupVaultSnapshot): string {
+  if (snapshot.role === 'mysql' || snapshot.role === 'postgres') {
+    const parts: string[] = []
+    if (snapshot.db_connections != null) {
+      parts.push(`DB OK · ${snapshot.db_connections} conn`)
+    }
+    if (snapshot.service_active != null) {
+      parts.push(`Overall ${state(snapshot.service_active)}`)
+    }
+    if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
+    return parts.join(' · ') || '—'
+  }
   if (snapshot.role !== 'app') return state(snapshot.service_active)
   const base = [
     snapshot.docker_active == null ? null : `Docker ${state(snapshot.docker_active)}`,

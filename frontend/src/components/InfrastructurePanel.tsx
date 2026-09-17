@@ -29,16 +29,32 @@ function replication(snapshot: InfrastructureSnapshot): string {
 
 function services(snapshot: InfrastructureSnapshot): string {
   const parts: string[] = []
+  if (snapshot.role === 'mysql' || snapshot.role === 'postgres') {
+    if (snapshot.db_connections != null) {
+      parts.push(`DB OK · ${snapshot.db_connections} conn`)
+    }
+    if (snapshot.service_active != null) {
+      parts.push(`Overall ${state(snapshot.service_active)}`)
+    }
+    if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
+    return parts.join(' · ') || '—'
+  }
   if (snapshot.role === 'nginx' || snapshot.role === 'kafka') {
     if (snapshot.nginx_active != null) parts.push(`Nginx ${state(snapshot.nginx_active)}`)
   }
-  if (snapshot.role === 'kong' && snapshot.kong_active != null) {
-    parts.push(`Kong ${state(snapshot.kong_active)}`)
+  if (snapshot.role === 'kong') {
+    if (snapshot.service_active != null) parts.push(`Kong ${state(snapshot.service_active)}`)
+    if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
+    return parts.join(' · ') || '—'
+  }
+  if (snapshot.role === 'monitoring') {
+    if (snapshot.service_active != null) parts.push(`Grafana ${state(snapshot.service_active)}`)
+    if (snapshot.extra_service_status) parts.push(snapshot.extra_service_status)
+    return parts.join(' · ') || '—'
   }
   if (snapshot.role === 'redis') {
-    if (snapshot.docker_active != null) parts.push(`Docker ${state(snapshot.docker_active)}`)
     if (snapshot.service_active != null) {
-      parts.push(`signal ${state(snapshot.service_active)}`)
+      parts.push(`Redis ${state(snapshot.service_active)}`)
     }
     if (snapshot.redis_role) parts.push(`role ${snapshot.redis_role}`)
     if (snapshot.redis_connected_clients != null) {
@@ -124,7 +140,7 @@ export function InfrastructurePanel() {
                 </span>
               </div>
               <div className="stat-card">
-                <span className="stat-label">Primary service down</span>
+                <span className="stat-label">Probe failed (overall)</span>
                 <span className="stat-value warn">{overview.service_down}</span>
               </div>
               <div className="stat-card">
@@ -200,7 +216,8 @@ export function InfrastructurePanel() {
                               {snapshot.healthcheck_status}
                             </span>
                           ) : null}
-                          {snapshot?.collect_error ? (
+                          {snapshot?.collect_error &&
+                          snapshot.service_active !== true ? (
                             <span className="backupvault-error" title={snapshot.collect_error}>
                               {' '}
                               · partial
