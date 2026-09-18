@@ -4,6 +4,7 @@ import {
   type VoiceMgOverview,
   type VoiceMgSnapshot,
 } from '../api'
+import { LegacyMetricsSection } from './LegacyMetricsSection'
 
 function probeState(value: boolean | null): string {
   if (value == null) return 'Unknown'
@@ -36,7 +37,11 @@ function services(snapshot: VoiceMgSnapshot): string {
   return parts.join(' · ') || '—'
 }
 
-export function VoiceMgPanel() {
+type Props = {
+  isAdmin?: boolean
+}
+
+export function VoiceMgPanel({ isAdmin = false }: Props) {
   const [overview, setOverview] = useState<VoiceMgOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -184,6 +189,12 @@ export function VoiceMgPanel() {
               </table>
             </div>
           </section>
+
+          <LegacyMetricsSection
+            domain="voicemg"
+            title="Legacy VoiceMG portal (MariaDB sync)"
+            isAdmin={isAdmin}
+          />
         </>
       ) : null}
     </>

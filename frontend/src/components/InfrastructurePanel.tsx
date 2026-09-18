@@ -4,6 +4,7 @@ import {
   type InfrastructureOverview,
   type InfrastructureSnapshot,
 } from '../api'
+import { LegacyMetricsSection } from './LegacyMetricsSection'
 
 function state(value: boolean | null): string {
   return value == null ? 'Unknown' : value ? 'Running' : 'Check failed'
@@ -91,7 +92,11 @@ function formatBytes(value: number | null): string {
   return `${amount.toFixed(index > 2 ? 2 : 1)} ${units[index]}`
 }
 
-export function InfrastructurePanel() {
+type Props = {
+  isAdmin?: boolean
+}
+
+export function InfrastructurePanel({ isAdmin = false }: Props) {
   const [overview, setOverview] = useState<InfrastructureOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -231,6 +236,12 @@ export function InfrastructurePanel() {
               </table>
             </div>
           </section>
+
+          <LegacyMetricsSection
+            domain="infrastructure"
+            title="Legacy server-inventory portal (MariaDB sync)"
+            isAdmin={isAdmin}
+          />
         </>
       ) : null}
     </>

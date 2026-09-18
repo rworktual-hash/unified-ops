@@ -603,3 +603,65 @@ export async function createServer(payload: ServerCreate): Promise<Server> {
   }
   return res.json()
 }
+
+export type LegacyStreamStatus = {
+  domain: string
+  enabled: boolean
+  configured: boolean
+  database: string | null
+  table: string
+  metric_cols: string[]
+  row_count: number
+  last_source_id: number
+  last_synced_at: string | null
+  last_error: string | null
+}
+
+export type LegacyStatus = {
+  configured: boolean
+  connection_ok: boolean
+  connection_error?: string | null
+  scheduled_sync_enabled: boolean
+  streams: LegacyStreamStatus[]
+}
+
+export type LegacyOverview = {
+  domain: string
+  period_hours: number
+  point_count: number
+  distinct_hosts: number
+  status_counts: Record<string, number>
+  averages: Record<string, number>
+  latest_by_server: {
+    server_id: number | null
+    server_name: string
+    ip_address: string | null
+    latest_at: string
+    metrics: Record<string, number | string | null>
+  }[]
+}
+
+export async function fetchLegacyStatus(): Promise<LegacyStatus> {
+  const res = await apiFetch('/legacy-metrics/status')
+  if (!res.ok) throw new Error('Failed to load legacy metrics status')
+  return res.json()
+}
+
+export async function fetchLegacyOverview(
+  domain: string,
+  hours = 24,
+): Promise<LegacyOverview> {
+  const res = await apiFetch(`/legacy-metrics/overview/${domain}?hours=${hours}`)
+  if (!res.ok) throw new Error('Failed to load legacy overview')
+  return res.json()
+}
+
+export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
+  const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
+  const res = await apiFetch(path, { method: 'POST' })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || 'Legacy sync failed')
+  }
+  return res.json()
+}

@@ -31,6 +31,7 @@ ssh -p 4204 -o ConnectTimeout=5 root@TARGET_IP
 
 - **GPU:** 165, 166, 148, 149 (users `krishna` / `linuxteam`)
 - **Infrastructure (public):** `82.113.72.52` (server-management), all DevOps-Nginx `82.113.92.115–119`, Kong `82.113.92.106`, `82.113.92.111`
+- **AI Insights monitoring (internal):** `10.180.1.222` — same server-management box, SSH **4204** (MySQL for legacy portal metrics is a **separate** port, usually **3306** — see `docs/LEGACY_METRICS.md`)
 - **Email (public):** `82.113.72.84`, `82.113.72.80`; **email-mgmt-private** `10.180.0.84`
 - **VoiceMG:** STT/VMG hosts on `10.180.0.93/95/83/97/98`, `10.180.1.230` (see inventory)
 - **BackupVault:** **backupvault-150** only (`10.180.0.150`) among backupvault app/db slaves

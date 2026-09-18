@@ -230,7 +230,9 @@ API startup also runs `ensure_gpu_ai_insights_schema()` so new columns/tables ar
 
 UI: **Collect metrics** on a pilot GPU host shows per-GPU tiles, **Host & network**, and **Product metrics** blocks.
 
-**Metrics history charts:** **Metrics history** on each server card (`GET /api/servers/{id}/metrics/history?hours=1|6|24`); needs multiple collects (scheduled or manual). Legacy aiservers fleet donuts / **1.222:4202** DB sync still separate.
+**Metrics history charts:** **Metrics history** on each server card (`GET /api/servers/{id}/metrics/history?hours=1|6|24`); needs multiple collects (scheduled or manual).
+
+**Legacy portal metrics:** Read-only MySQL sync from **server-management** (`10.180.1.222` — SSH **4204**, MySQL usually **3306**) — see `docs/LEGACY_METRICS.md`, `scripts/discover-legacy-mysql-via-ssh.py`, `scripts/inspect-legacy-metrics-db.py`.
 
 ### AI-GPU 165 / 166 (later — password / sshpass)
 

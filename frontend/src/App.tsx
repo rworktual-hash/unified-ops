@@ -30,6 +30,7 @@ import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
+import { LegacyMetricsSection } from './components/LegacyMetricsSection'
 import { VoiceMgPanel } from './components/VoiceMgPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
@@ -375,6 +376,14 @@ function App() {
               )}
             />
 
+            {serverDomain === 'ai' && (
+              <LegacyMetricsSection
+                domain="ai_insights"
+                title="Legacy AI Insights portal (MariaDB sync)"
+                isAdmin={session?.role === 'admin'}
+              />
+            )}
+
             {pendingServers.length > 0 && (
               <section className="pending-section">
                 <h2>Pending SSH access</h2>
@@ -395,12 +404,16 @@ function App() {
         )}
 
         {nav === 'infrastructure' && infrastructureServers.length > 0 && (
-          <InfrastructurePanel />
+          <InfrastructurePanel isAdmin={session?.role === 'admin'} />
         )}
 
-        {nav === 'backupvault' && backupVaultServers.length > 0 && <BackupVaultPanel />}
+        {nav === 'backupvault' && backupVaultServers.length > 0 && (
+          <BackupVaultPanel isAdmin={session?.role === 'admin'} />
+        )}
 
-        {nav === 'voicemg' && voiceMgServers.length > 0 && <VoiceMgPanel />}
+        {nav === 'voicemg' && voiceMgServers.length > 0 && (
+          <VoiceMgPanel isAdmin={session?.role === 'admin'} />
+        )}
 
         {nav === 'chat' && (
           <div className="chat-page">

@@ -5,7 +5,7 @@ celery_app = Celery(
     "unified_ops",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.metrics", "app.tasks.email_sync"],
+    include=["app.tasks.metrics", "app.tasks.email_sync", "app.tasks.legacy_sync"],
 )
 
 celery_app.conf.update(
@@ -29,5 +29,12 @@ if settings.email_mgmt_scheduled_sync_enabled and settings.email_mgmt_database_u
         "task": "app.tasks.email_sync.sync_email_events_task",
         "schedule": interval,
         "options": {"expires": max(30.0, interval - 15)},
+    }
+if settings.legacy_metrics_scheduled_sync_enabled and settings.legacy_metrics_database_url:
+    interval = settings.legacy_metrics_sync_interval_seconds
+    _beat["sync-legacy-metrics"] = {
+        "task": "app.tasks.legacy_sync.sync_legacy_metrics_task",
+        "schedule": interval,
+        "options": {"expires": max(60.0, interval - 30)},
     }
 celery_app.conf.beat_schedule = _beat

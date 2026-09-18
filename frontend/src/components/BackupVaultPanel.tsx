@@ -4,6 +4,7 @@ import {
   type BackupVaultOverview,
   type BackupVaultSnapshot,
 } from '../api'
+import { LegacyMetricsSection } from './LegacyMetricsSection'
 
 function state(value: boolean | null): string {
   return value == null ? '—' : value ? 'Running' : 'Check failed'
@@ -62,7 +63,11 @@ function formatBytes(value: number | null): string {
   return `${amount.toFixed(index > 2 ? 2 : 1)} ${units[index]}`
 }
 
-export function BackupVaultPanel() {
+type Props = {
+  isAdmin?: boolean
+}
+
+export function BackupVaultPanel({ isAdmin = false }: Props) {
   const [overview, setOverview] = useState<BackupVaultOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -223,6 +228,12 @@ export function BackupVaultPanel() {
               utility/path is absent; it does not mean replication is unhealthy.
             </p>
           </section>
+
+          <LegacyMetricsSection
+            domain="backupvault"
+            title="Legacy BackupVault portal (MariaDB sync)"
+            isAdmin={isAdmin}
+          />
         </>
       ) : null}
     </>
