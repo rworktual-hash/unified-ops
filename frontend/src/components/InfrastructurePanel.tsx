@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   fetchInfrastructureOverview,
+  fetchInventoryPortal,
   type InfrastructureOverview,
   type InfrastructureSnapshot,
+  type InventoryPortal as InventoryPortalData,
 } from '../api'
+import { InventoryPortal } from './InventoryPortal'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
+
+type TabId = 'dashboard' | 'baremetal' | 'proxmox' | 'vms' | 'hosts'
 
 function state(value: boolean | null): string {
   return value == null ? 'Unknown' : value ? 'Running' : 'Check failed'
@@ -97,145 +102,209 @@ type Props = {
 }
 
 export function InfrastructurePanel({ isAdmin = false }: Props) {
+  const [tab, setTab] = useState<TabId>('dashboard')
   const [overview, setOverview] = useState<InfrastructureOverview | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [inventory, setInventory] = useState<InventoryPortalData | null>(null)
+  const [loadingSsh, setLoadingSsh] = useState(true)
+  const [loadingInv, setLoadingInv] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const loadSsh = useCallback(async () => {
+    setLoadingSsh(true)
     try {
       setOverview(await fetchInfrastructureOverview())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load infrastructure metrics')
+      setError(err instanceof Error ? err.message : 'Failed to load SSH metrics')
     } finally {
-      setLoading(false)
+      setLoadingSsh(false)
+    }
+  }, [])
+
+  const loadInventory = useCallback(async () => {
+    setLoadingInv(true)
+    try {
+      const data = await fetchInventoryPortal()
+      setInventory(data)
+      if (!data.ok && data.reason) setError(data.reason)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load server inventory')
+    } finally {
+      setLoadingInv(false)
     }
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadSsh()
+    void loadInventory()
+  }, [loadInventory, loadSsh])
+
+  const counts = inventory?.ok
+    ? {
+        baremetal: inventory.baremetal.length,
+        hosts: inventory.hosts.length,
+        vms: inventory.vms.length,
+      }
+    : { baremetal: 0, hosts: 0, vms: 0 }
 
   return (
-    <>
+    <div className="bv-page">
       <header className="page-head">
         <div>
           <h1>Infrastructure</h1>
           <p>
-            Read-only SSH monitoring for Nginx, Kong, databases, Redis, Grafana, PBX/SIP, and
-            platform hosts. No restarts, config changes, or control actions.
+            servers.worktual.tech inventory from MariaDB, plus existing SSH snapshots. Read-only —
+            no passwords, restarts, or control actions.
           </p>
         </div>
-        <button type="button" className="btn ghost" disabled={loading} onClick={() => void load()}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
       </header>
 
       {error ? <p className="banner error">{error}</p> : null}
 
-      {overview ? (
-        <>
-          <section className="panel">
-            <div className="stat-row backupvault-stat-row">
-              <div className="stat-card">
-                <span className="stat-label">Hosts collected</span>
-                <span className="stat-value">
-                  {overview.collected_hosts}/{overview.total_hosts}
-                </span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-label">Probe failed (overall)</span>
-                <span className="stat-value warn">{overview.service_down}</span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-label">Storage ≥85%</span>
-                <span className="stat-value warn">{overview.storage_warning}</span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-label">DB replication OK</span>
-                <span className="stat-value accent">{overview.replication_healthy}</span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-label">DB replication issues</span>
-                <span className="stat-value warn">{overview.replication_unhealthy}</span>
-              </div>
-            </div>
-            <p className="muted backupvault-note">{overview.note}</p>
-          </section>
+      <nav className="bv-tabs" aria-label="Infrastructure sections">
+        {(
+          [
+            ['dashboard', 'Dashboard'],
+            ['baremetal', `Baremetal${counts.baremetal ? ` (${counts.baremetal})` : ''}`],
+            ['proxmox', `Proxmox${counts.hosts ? ` (${counts.hosts})` : ''}`],
+            ['vms', `VMs${counts.vms ? ` (${counts.vms})` : ''}`],
+            ['hosts', 'Host SSH'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={tab === id ? 'bv-tab active' : 'bv-tab'}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-          <section className="panel">
-            <h2>Latest SSH snapshots</h2>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Server</th>
-                    <th>Type / role</th>
-                    <th>Services</th>
-                    <th>Replication</th>
-                    <th>DB / Redis</th>
-                    <th>Storage</th>
-                    <th>Collected</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overview.servers.map((server) => {
-                    const snapshot = server.snapshot
-                    return (
-                      <tr key={server.server_id}>
-                        <td>
-                          {server.server_name}
-                          <br />
-                          <span className="muted">{server.ip_address}</span>
-                        </td>
-                        <td>
-                          {server.server_type ?? '—'}
-                          {snapshot ? (
-                            <>
-                              <br />
-                              <strong>{snapshot.role}</strong>
-                            </>
-                          ) : null}
-                        </td>
-                        <td>{snapshot ? services(snapshot) : 'Run fleet collect'}</td>
-                        <td>{snapshot ? replication(snapshot) : '—'}</td>
-                        <td>
-                          {snapshot?.role === 'redis'
-                            ? formatBytes(snapshot.redis_used_memory_bytes)
-                            : snapshot?.db_connections != null
-                              ? `${snapshot.db_connections} conn`
-                              : '—'}
-                          {snapshot?.slow_queries != null ? ` · ${snapshot.slow_queries} slow` : ''}
-                        </td>
-                        <td>
-                          {snapshot?.data_disk_used_pct != null
-                            ? `${snapshot.data_mount ?? '/'} · ${snapshot.data_disk_used_pct.toFixed(1)}% · ${snapshot.data_disk_free_gb?.toFixed(1) ?? '—'} GB free`
-                            : '—'}
-                        </td>
-                        <td>
-                          {snapshot ? new Date(snapshot.collected_at).toLocaleString() : '—'}
-                          {snapshot?.healthcheck_status ? (
-                            <span className="muted">
-                              <br />
-                              {snapshot.healthcheck_status}
-                            </span>
-                          ) : null}
-                          {snapshot?.collect_error &&
-                          snapshot.service_active !== true ? (
-                            <span className="backupvault-error" title={snapshot.collect_error}>
-                              {' '}
-                              · partial
-                            </span>
-                          ) : null}
-                        </td>
+      {tab !== 'hosts' ? (
+        <InventoryPortal
+          data={inventory}
+          loading={loadingInv}
+          onRefresh={() => void loadInventory()}
+          tab={tab}
+        />
+      ) : (
+        <>
+          {overview ? (
+            <>
+              <section className="panel">
+                <div className="stat-row backupvault-stat-row">
+                  <div className="stat-card">
+                    <span className="stat-label">Hosts collected</span>
+                    <span className="stat-value">
+                      {overview.collected_hosts}/{overview.total_hosts}
+                    </span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">Probe failed (overall)</span>
+                    <span className="stat-value warn">{overview.service_down}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">Storage ≥85%</span>
+                    <span className="stat-value warn">{overview.storage_warning}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">DB replication OK</span>
+                    <span className="stat-value accent">{overview.replication_healthy}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">DB replication issues</span>
+                    <span className="stat-value warn">{overview.replication_unhealthy}</span>
+                  </div>
+                </div>
+                <p className="muted backupvault-note">{overview.note}</p>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  disabled={loadingSsh}
+                  onClick={() => void loadSsh()}
+                >
+                  {loadingSsh ? 'Loading…' : 'Refresh SSH'}
+                </button>
+              </section>
+
+              <section className="panel">
+                <h2>Latest SSH snapshots</h2>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Server</th>
+                        <th>Type / role</th>
+                        <th>Services</th>
+                        <th>Replication</th>
+                        <th>DB / Redis</th>
+                        <th>Storage</th>
+                        <th>Collected</th>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                    </thead>
+                    <tbody>
+                      {overview.servers.map((server) => {
+                        const snapshot = server.snapshot
+                        return (
+                          <tr key={server.server_id}>
+                            <td>
+                              {server.server_name}
+                              <br />
+                              <span className="muted">{server.ip_address}</span>
+                            </td>
+                            <td>
+                              {server.server_type ?? '—'}
+                              {snapshot ? (
+                                <>
+                                  <br />
+                                  <strong>{snapshot.role}</strong>
+                                </>
+                              ) : null}
+                            </td>
+                            <td>{snapshot ? services(snapshot) : 'Run fleet collect'}</td>
+                            <td>{snapshot ? replication(snapshot) : '—'}</td>
+                            <td>
+                              {snapshot?.role === 'redis'
+                                ? formatBytes(snapshot.redis_used_memory_bytes)
+                                : snapshot?.db_connections != null
+                                  ? `${snapshot.db_connections} conn`
+                                  : '—'}
+                              {snapshot?.slow_queries != null
+                                ? ` · ${snapshot.slow_queries} slow`
+                                : ''}
+                            </td>
+                            <td>
+                              {snapshot?.data_disk_used_pct != null
+                                ? `${snapshot.data_mount ?? '/'} · ${snapshot.data_disk_used_pct.toFixed(1)}% · ${snapshot.data_disk_free_gb?.toFixed(1) ?? '—'} GB free`
+                                : '—'}
+                            </td>
+                            <td>
+                              {snapshot ? new Date(snapshot.collected_at).toLocaleString() : '—'}
+                              {snapshot?.healthcheck_status ? (
+                                <span className="muted">
+                                  <br />
+                                  {snapshot.healthcheck_status}
+                                </span>
+                              ) : null}
+                              {snapshot?.collect_error && snapshot.service_active !== true ? (
+                                <span className="backupvault-error" title={snapshot.collect_error}>
+                                  {' '}
+                                  · partial
+                                </span>
+                              ) : null}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          ) : loadingSsh ? (
+            <p className="muted">Loading SSH snapshots…</p>
+          ) : null}
 
           <LegacyMetricsSection
             domain="infrastructure"
@@ -243,7 +312,7 @@ export function InfrastructurePanel({ isAdmin = false }: Props) {
             isAdmin={isAdmin}
           />
         </>
-      ) : null}
-    </>
+      )}
+    </div>
   )
 }

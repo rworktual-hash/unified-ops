@@ -812,6 +812,124 @@ export async function fetchBackupVaultMonitoring(): Promise<BackupVaultMonitorin
   return res.json()
 }
 
+export type InventoryBaremetal = {
+  id: number
+  order_id: string | null
+  server_id: string | null
+  hostname: string | null
+  host_public_ip: string | null
+  ilo_private_ip: string | null
+  cluster: string | null
+  cluster_group: string | null
+  os: string | null
+  engineer: string | null
+  ram: string | null
+  cpu: string | null
+  location: string | null
+  status: string | null
+  notes: string | null
+}
+
+export type InventoryCluster = {
+  id: number
+  cluster_name: string
+  cluster_label: string | null
+  description: string | null
+  total_nodes: number
+  total_cpu: number | null
+  total_ram_gb: number | null
+  total_storage_gb: number | null
+  total_vms: number
+  used_cpu: number | null
+  used_ram_gb: number | null
+  used_storage_gb: number | null
+  cpu_pct: number | null
+  ram_pct: number | null
+  storage_pct: number | null
+}
+
+export type InventoryHost = {
+  id: number
+  node_name: string
+  cluster_id: number | null
+  cluster_name: string | null
+  cluster_label: string | null
+  host_public_ip: string | null
+  host_private_ip: string | null
+  total_cpu: number | null
+  used_cpu: number | null
+  total_ram_gb: number | null
+  used_ram_gb: number | null
+  total_storage_gb: number | null
+  used_storage_gb: number | null
+  cpu_pct: number | null
+  ram_pct: number | null
+  storage_pct: number | null
+  status: string | null
+  uptime_seconds: number | null
+  updated_at: string | null
+}
+
+export type InventoryVm = {
+  id: number
+  vm_id: string
+  node_name: string | null
+  cluster_name: string | null
+  guest_hostname: string | null
+  guest_ip_private: string | null
+  guest_ip_public: string | null
+  guest_ip_ipv6: string | null
+  services: string | null
+  team: string | null
+  status: string | null
+  cpu: number | null
+  ram_gb: number | null
+  disk_gb: number | null
+  cpu_util_pct: number | null
+  ram_used_gb: number | null
+  ram_total_gb: number | null
+  storage_used_gb: number | null
+  net_in_bps: number | null
+  net_out_bps: number | null
+  updated_at: string | null
+}
+
+export type InventoryDashboard = {
+  total_servers: number
+  online_servers: number
+  total_vms: number
+  active_vms: number
+  baremetal_count: number
+  host_count: number
+  cluster_count: number
+  cpu_total: number | null
+  cpu_used: number | null
+  cpu_pct: number | null
+  ram_total_gb: number | null
+  ram_used_gb: number | null
+  ram_pct: number | null
+  storage_total_gb: number | null
+  storage_used_gb: number | null
+  storage_pct: number | null
+}
+
+export type InventoryPortal = {
+  ok: boolean
+  database?: string | null
+  reason?: string | null
+  dashboard: InventoryDashboard
+  clusters: InventoryCluster[]
+  hosts: InventoryHost[]
+  baremetal: InventoryBaremetal[]
+  vms: InventoryVm[]
+}
+
+export async function fetchInventoryPortal(): Promise<InventoryPortal> {
+  const res = await apiFetch('/legacy-metrics/inventory')
+  if (!res.ok) throw new Error('Failed to load server inventory')
+  return res.json()
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })

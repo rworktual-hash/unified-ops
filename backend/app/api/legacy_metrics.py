@@ -11,12 +11,14 @@ from app.schemas.legacy_metrics import (
     BackupVaultNfsRead,
     BackupVaultRunHistoryRead,
     BackupVaultTargetsRead,
+    InventoryPortalRead,
     LegacyMetricPointRead,
     LegacyOverviewRead,
     LegacyStatusRead,
     LegacyStreamStatusRead,
     LegacySyncResultRead,
 )
+from app.services.inventory_portal import fetch_inventory_portal
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
     discover_legacy_schema,
@@ -74,6 +76,11 @@ def backupvault_nfs() -> BackupVaultNfsRead:
 @router.get("/backupvault/monitoring", response_model=BackupVaultMonitoringRead)
 def backupvault_monitoring() -> BackupVaultMonitoringRead:
     return BackupVaultMonitoringRead.model_validate(fetch_backupvault_monitoring())
+
+
+@router.get("/inventory", response_model=InventoryPortalRead)
+def inventory_portal() -> InventoryPortalRead:
+    return InventoryPortalRead.model_validate(fetch_inventory_portal())
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

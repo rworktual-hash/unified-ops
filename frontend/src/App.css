@@ -1420,3 +1420,27 @@ button.linkish {
   height: 100%;
   background: #16a34a;
 }
+
+.bv-bar-fill.warn {
+  background: #d97706;
+}
+
+.bv-bar-fill.crit {
+  background: #dc2626;
+}
+
+.bv-filters input {
+  min-width: 12rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.inv-services {
+  max-width: 16rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

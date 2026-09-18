@@ -178,6 +178,118 @@ class BackupVaultNfsRead(BaseModel):
     servers: list[BackupVaultNfsServerRead]
 
 
+class InventoryBaremetalRead(BaseModel):
+    id: int
+    order_id: str | None = None
+    server_id: str | None = None
+    hostname: str | None = None
+    host_public_ip: str | None = None
+    ilo_private_ip: str | None = None
+    cluster: str | None = None
+    cluster_group: str | None = None
+    os: str | None = None
+    engineer: str | None = None
+    ram: str | None = None
+    cpu: str | None = None
+    location: str | None = None
+    status: str | None = None
+    notes: str | None = None
+
+
+class InventoryClusterRead(BaseModel):
+    id: int
+    cluster_name: str
+    cluster_label: str | None = None
+    description: str | None = None
+    total_nodes: int = 0
+    total_cpu: float | None = None
+    total_ram_gb: float | None = None
+    total_storage_gb: float | None = None
+    total_vms: int = 0
+    used_cpu: float | None = None
+    used_ram_gb: float | None = None
+    used_storage_gb: float | None = None
+    cpu_pct: float | None = None
+    ram_pct: float | None = None
+    storage_pct: float | None = None
+
+
+class InventoryHostRead(BaseModel):
+    id: int
+    node_name: str
+    cluster_id: int | None = None
+    cluster_name: str | None = None
+    cluster_label: str | None = None
+    host_public_ip: str | None = None
+    host_private_ip: str | None = None
+    total_cpu: float | None = None
+    used_cpu: float | None = None
+    total_ram_gb: float | None = None
+    used_ram_gb: float | None = None
+    total_storage_gb: float | None = None
+    used_storage_gb: float | None = None
+    cpu_pct: float | None = None
+    ram_pct: float | None = None
+    storage_pct: float | None = None
+    status: str | None = None
+    uptime_seconds: int | None = None
+    updated_at: datetime | None = None
+
+
+class InventoryVmRead(BaseModel):
+    id: int
+    vm_id: str
+    node_name: str | None = None
+    cluster_name: str | None = None
+    guest_hostname: str | None = None
+    guest_ip_private: str | None = None
+    guest_ip_public: str | None = None
+    guest_ip_ipv6: str | None = None
+    services: str | None = None
+    team: str | None = None
+    status: str | None = None
+    cpu: int | None = None
+    ram_gb: float | None = None
+    disk_gb: float | None = None
+    cpu_util_pct: float | None = None
+    ram_used_gb: float | None = None
+    ram_total_gb: float | None = None
+    storage_used_gb: float | None = None
+    net_in_bps: float | None = None
+    net_out_bps: float | None = None
+    updated_at: datetime | None = None
+
+
+class InventoryDashboardRead(BaseModel):
+    total_servers: int = 0
+    online_servers: int = 0
+    total_vms: int = 0
+    active_vms: int = 0
+    baremetal_count: int = 0
+    host_count: int = 0
+    cluster_count: int = 0
+    cpu_total: float | None = None
+    cpu_used: float | None = None
+    cpu_pct: float | None = None
+    ram_total_gb: float | None = None
+    ram_used_gb: float | None = None
+    ram_pct: float | None = None
+    storage_total_gb: float | None = None
+    storage_used_gb: float | None = None
+    storage_pct: float | None = None
+
+
+class InventoryPortalRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    dashboard: InventoryDashboardRead
+    clusters: list[InventoryClusterRead]
+    hosts: list[InventoryHostRead]
+    baremetal: list[InventoryBaremetalRead]
+    vms: list[InventoryVmRead]
+
+
 class LegacyMetricPointRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
