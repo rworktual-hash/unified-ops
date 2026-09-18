@@ -83,6 +83,7 @@ Review `legacy-metrics-discovery.json`, then set `LEGACY_*_TABLE` and `LEGACY_*_
 | GET | `/api/legacy-metrics/backupvault/nfs` | NFS server list |
 | GET | `/api/legacy-metrics/backupvault/monitoring` | Latest `db_server_snapshots` + `nfs_monitoring_snapshots` + storage tiles |
 | GET | `/api/legacy-metrics/inventory` | Live `server_inventory` dashboard, baremetal, Proxmox hosts, VMs (no password columns) |
+| GET | `/api/legacy-metrics/ai-insights/extras` | Latest health / service tiles from `ai_insights_platform` (no new tabs; enriches existing cards) |
 | GET | `/api/legacy-metrics/points` | Raw synced points |
 | POST | `/api/legacy-metrics/sync` | Admin — all enabled streams |
 | POST | `/api/legacy-metrics/sync/{domain}` | Admin — one stream |

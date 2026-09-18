@@ -1,4 +1,6 @@
+import type { AiInsightExtra } from '../api'
 import type { ConnectionTestResult, GpuMetric, MetricsBundle, Server } from '../types'
+import { AiInsightExtras } from './AiInsightExtras'
 
 function uniqueGpusByIndex(rows: GpuMetric[]): GpuMetric[] {
   const byIndex = new Map<number, GpuMetric>()
@@ -13,6 +15,7 @@ import { ServerMetricsCharts } from './ServerMetricsCharts'
 type Props = {
   server: Server
   metrics: MetricsBundle | null
+  extra?: AiInsightExtra
   testResult: ConnectionTestResult | undefined
   testing: boolean
   collecting: boolean
@@ -26,6 +29,7 @@ type Props = {
 export function ServerCard({
   server,
   metrics,
+  extra,
   testResult,
   testing,
   collecting,
@@ -62,9 +66,20 @@ export function ServerCard({
             {server.ip_address}:{server.ssh_port} · {server.ssh_username}
           </p>
         </div>
-        <span className={`status-pill ${server.is_active ? 'live' : 'off'}`}>
-          {server.is_active ? 'Active' : 'Inactive'}
-        </span>
+        <div className="server-card-pills">
+          {extra?.health_score != null ? (
+            <span
+              className={`bv-pill bv-pill--${
+                extra.health_score >= 80 ? 'ok' : extra.health_score >= 60 ? 'partial' : 'fail'
+              }`}
+            >
+              {extra.health_score}
+            </span>
+          ) : null}
+          <span className={`status-pill ${server.is_active ? 'live' : 'off'}`}>
+            {server.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </div>
       </div>
 
       {server.is_active ? (
@@ -243,6 +258,8 @@ export function ServerCard({
               ) : null}
             </details>
           ) : null}
+
+          {extra ? <AiInsightExtras extra={extra} /> : null}
 
           {testResult ? (
             <p className={`ssh-line ${testResult.success ? 'ok' : 'fail'}`}>

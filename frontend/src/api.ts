@@ -930,6 +930,62 @@ export async function fetchInventoryPortal(): Promise<InventoryPortal> {
   return res.json()
 }
 
+export type AiInsightExtraTile = {
+  key: string
+  label: string
+  value: string
+}
+
+export type AiInsightExtra = {
+  id: number
+  server_name: string
+  ip_address: string
+  hostname: string | null
+  group: string | null
+  server_type: string | null
+  health_score: number | null
+  health_status: string | null
+  cpu_utilization: number | null
+  memory_utilization: number | null
+  storage_utilization: number | null
+  load_average: number | null
+  gpu_utilization: number | null
+  gpu_temperature: number | null
+  open_alerts: number
+  recorded_at: string | null
+  extras: AiInsightExtraTile[]
+}
+
+export type AiInsightExtras = {
+  ok: boolean
+  database?: string | null
+  reason?: string | null
+  servers: AiInsightExtra[]
+}
+
+export async function fetchAiInsightExtras(): Promise<AiInsightExtras> {
+  const res = await apiFetch('/legacy-metrics/ai-insights/extras')
+  if (!res.ok) throw new Error('Failed to load AI Insights extras')
+  return res.json()
+}
+
+export function matchAiInsightExtra(
+  extras: AiInsightExtra[] | undefined,
+  ip: string,
+  name?: string,
+): AiInsightExtra | undefined {
+  if (!extras?.length) return undefined
+  const ipMatch = extras.find((row) => row.ip_address && row.ip_address === ip)
+  if (ipMatch) return ipMatch
+  if (!name) return undefined
+  const needle = name.toLowerCase()
+  return extras.find(
+    (row) =>
+      row.server_name.toLowerCase() === needle ||
+      (row.hostname ?? '').toLowerCase() === needle,
+  )
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })

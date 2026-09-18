@@ -7,6 +7,7 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.legacy_metric_point import LegacyMetricPoint
 from app.schemas.legacy_metrics import (
+    AiInsightExtrasRead,
     BackupVaultMonitoringRead,
     BackupVaultNfsRead,
     BackupVaultRunHistoryRead,
@@ -18,6 +19,7 @@ from app.schemas.legacy_metrics import (
     LegacyStreamStatusRead,
     LegacySyncResultRead,
 )
+from app.services.ai_insights_portal import fetch_ai_insights_extras
 from app.services.inventory_portal import fetch_inventory_portal
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
@@ -81,6 +83,11 @@ def backupvault_monitoring() -> BackupVaultMonitoringRead:
 @router.get("/inventory", response_model=InventoryPortalRead)
 def inventory_portal() -> InventoryPortalRead:
     return InventoryPortalRead.model_validate(fetch_inventory_portal())
+
+
+@router.get("/ai-insights/extras", response_model=AiInsightExtrasRead)
+def ai_insights_extras() -> AiInsightExtrasRead:
+    return AiInsightExtrasRead.model_validate(fetch_ai_insights_extras())
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

@@ -290,6 +290,39 @@ class InventoryPortalRead(BaseModel):
     vms: list[InventoryVmRead]
 
 
+class AiInsightExtraTileRead(BaseModel):
+    key: str
+    label: str
+    value: str
+
+
+class AiInsightExtraRead(BaseModel):
+    id: int
+    server_name: str
+    ip_address: str
+    hostname: str | None = None
+    group: str | None = None
+    server_type: str | None = None
+    health_score: int | None = None
+    health_status: str | None = None
+    cpu_utilization: float | None = None
+    memory_utilization: float | None = None
+    storage_utilization: float | None = None
+    load_average: float | None = None
+    gpu_utilization: float | None = None
+    gpu_temperature: float | None = None
+    open_alerts: int = 0
+    recorded_at: datetime | None = None
+    extras: list[AiInsightExtraTileRead]
+
+
+class AiInsightExtrasRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    servers: list[AiInsightExtraRead]
+
+
 class LegacyMetricPointRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

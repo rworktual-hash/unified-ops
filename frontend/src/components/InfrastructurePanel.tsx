@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   fetchInfrastructureOverview,
   fetchInventoryPortal,
+  matchAiInsightExtra,
+  type AiInsightExtra,
   type InfrastructureOverview,
   type InfrastructureSnapshot,
   type InventoryPortal as InventoryPortalData,
 } from '../api'
+import { AiInsightExtras } from './AiInsightExtras'
 import { InventoryPortal } from './InventoryPortal'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
 
@@ -98,10 +101,11 @@ function formatBytes(value: number | null): string {
 }
 
 type Props = {
+  extras?: AiInsightExtra[]
   isAdmin?: boolean
 }
 
-export function InfrastructurePanel({ isAdmin = false }: Props) {
+export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
   const [tab, setTab] = useState<TabId>('dashboard')
   const [overview, setOverview] = useState<InfrastructureOverview | null>(null)
   const [inventory, setInventory] = useState<InventoryPortalData | null>(null)
@@ -240,6 +244,7 @@ export function InfrastructurePanel({ isAdmin = false }: Props) {
                         <th>Replication</th>
                         <th>DB / Redis</th>
                         <th>Storage</th>
+                        <th>Portal extras</th>
                         <th>Collected</th>
                       </tr>
                     </thead>
@@ -278,6 +283,16 @@ export function InfrastructurePanel({ isAdmin = false }: Props) {
                               {snapshot?.data_disk_used_pct != null
                                 ? `${snapshot.data_mount ?? '/'} · ${snapshot.data_disk_used_pct.toFixed(1)}% · ${snapshot.data_disk_free_gb?.toFixed(1) ?? '—'} GB free`
                                 : '—'}
+                            </td>
+                            <td>
+                              {(() => {
+                                const extra = matchAiInsightExtra(
+                                  extras,
+                                  server.ip_address,
+                                  server.server_name,
+                                )
+                                return extra ? <AiInsightExtras extra={extra} compact /> : '—'
+                              })()}
                             </td>
                             <td>
                               {snapshot ? new Date(snapshot.collected_at).toLocaleString() : '—'}

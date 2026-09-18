@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   fetchVoiceMgOverview,
+  matchAiInsightExtra,
+  type AiInsightExtra,
   type VoiceMgOverview,
   type VoiceMgSnapshot,
 } from '../api'
+import { AiInsightExtras } from './AiInsightExtras'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
 
 function probeState(value: boolean | null): string {
@@ -38,10 +41,11 @@ function services(snapshot: VoiceMgSnapshot): string {
 }
 
 type Props = {
+  extras?: AiInsightExtra[]
   isAdmin?: boolean
 }
 
-export function VoiceMgPanel({ isAdmin = false }: Props) {
+export function VoiceMgPanel({ extras = [], isAdmin = false }: Props) {
   const [overview, setOverview] = useState<VoiceMgOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -121,6 +125,7 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
                     <th>Workload</th>
                     <th>GPU (STT)</th>
                     <th>Storage</th>
+                    <th>Portal extras</th>
                     <th>Collected</th>
                   </tr>
                 </thead>
@@ -165,6 +170,16 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
                           {snapshot?.data_disk_used_pct != null
                             ? `${snapshot.data_mount ?? '/'} · ${snapshot.data_disk_used_pct.toFixed(1)}%`
                             : '—'}
+                        </td>
+                        <td>
+                          {(() => {
+                            const extra = matchAiInsightExtra(
+                              extras,
+                              server.ip_address,
+                              server.server_name,
+                            )
+                            return extra ? <AiInsightExtras extra={extra} compact /> : '—'
+                          })()}
                         </td>
                         <td>
                           {snapshot ? new Date(snapshot.collected_at).toLocaleString() : '—'}

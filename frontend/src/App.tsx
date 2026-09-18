@@ -8,7 +8,9 @@ import {
   fetchHealth,
   type FleetCollectStatus,
   fetchMe,
+  fetchAiInsightExtras,
   fetchServerMetrics,
+  matchAiInsightExtra,
   investigateAlert,
   investigateServer,
   listAgentActions,
@@ -19,6 +21,7 @@ import {
   resolveAlert,
   testServerConnection,
   UnauthorizedError,
+  type AiInsightExtra,
   type AppUser,
 } from './api'
 import { clearStoredToken } from './authStorage'
@@ -67,6 +70,7 @@ function App() {
   const [collectingAll, setCollectingAll] = useState(false)
   const [fleetStatus, setFleetStatus] = useState<FleetCollectStatus | null>(null)
   const [serverDomain, setServerDomain] = useState<DomainId>('ai')
+  const [aiExtras, setAiExtras] = useState<AiInsightExtra[]>([])
 
   const activeServers = useMemo(() => servers.filter((s) => s.is_active), [servers])
   const pendingServers = useMemo(() => servers.filter((s) => !s.is_active), [servers])
@@ -118,6 +122,12 @@ function App() {
           }),
       )
       setMetricsByServer(metrics)
+      try {
+        const extras = await fetchAiInsightExtras()
+        setAiExtras(extras.ok ? extras.servers : [])
+      } catch {
+        setAiExtras([])
+      }
       try {
         setFleetStatus(await fetchFleetCollectStatus())
       } catch {
@@ -317,6 +327,7 @@ function App() {
                   key={s.id}
                   server={s}
                   metrics={metricsByServer[s.id] ?? null}
+                  extra={matchAiInsightExtra(aiExtras, s.ip_address, s.server_name)}
                   testResult={testResults[s.id]}
                   testing={testingId === s.id}
                   collecting={collectingId === s.id}
@@ -404,7 +415,7 @@ function App() {
         )}
 
         {nav === 'infrastructure' && infrastructureServers.length > 0 && (
-          <InfrastructurePanel isAdmin={session?.role === 'admin'} />
+          <InfrastructurePanel extras={aiExtras} isAdmin={session?.role === 'admin'} />
         )}
 
         {nav === 'backupvault' && backupVaultServers.length > 0 && (
@@ -412,7 +423,7 @@ function App() {
         )}
 
         {nav === 'voicemg' && voiceMgServers.length > 0 && (
-          <VoiceMgPanel isAdmin={session?.role === 'admin'} />
+          <VoiceMgPanel extras={aiExtras} isAdmin={session?.role === 'admin'} />
         )}
 
         {nav === 'chat' && (
