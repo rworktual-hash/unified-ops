@@ -7,7 +7,9 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.legacy_metric_point import LegacyMetricPoint
 from app.schemas.legacy_metrics import (
+    BackupVaultNfsRead,
     BackupVaultRunHistoryRead,
+    BackupVaultTargetsRead,
     LegacyMetricPointRead,
     LegacyOverviewRead,
     LegacyStatusRead,
@@ -17,7 +19,9 @@ from app.schemas.legacy_metrics import (
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
     discover_legacy_schema,
+    fetch_backupvault_nfs,
     fetch_backupvault_run_history,
+    fetch_backupvault_targets,
     legacy_sync_status,
     sync_all_legacy_streams,
 )
@@ -53,6 +57,16 @@ def legacy_discovery(_admin=Depends(require_admin)) -> dict:
 @router.get("/backupvault/runs", response_model=BackupVaultRunHistoryRead)
 def backupvault_run_history() -> BackupVaultRunHistoryRead:
     return BackupVaultRunHistoryRead.model_validate(fetch_backupvault_run_history())
+
+
+@router.get("/backupvault/targets", response_model=BackupVaultTargetsRead)
+def backupvault_targets() -> BackupVaultTargetsRead:
+    return BackupVaultTargetsRead.model_validate(fetch_backupvault_targets())
+
+
+@router.get("/backupvault/nfs", response_model=BackupVaultNfsRead)
+def backupvault_nfs() -> BackupVaultNfsRead:
+    return BackupVaultNfsRead.model_validate(fetch_backupvault_nfs())
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

@@ -480,7 +480,8 @@ def fetch_backupvault_run_history() -> dict:
           r.file_path,
           r.error_message,
           TIMESTAMPDIFF(SECOND, r.started_at, r.completed_at) AS duration_seconds,
-          (SELECT COUNT(*) FROM backup_transfers x WHERE x.run_id = r.id) AS destination_count
+          (SELECT COUNT(*) FROM backup_transfers x WHERE x.run_id = r.id) AS destination_count,
+          (SELECT GROUP_CONCAT(DISTINCT x.dest_type SEPARATOR ',') FROM backup_transfers x WHERE x.run_id = r.id) AS dest_types
         FROM backup_runs r
         LEFT JOIN backup_targets t ON t.id = r.target_id
         ORDER BY r.id DESC
@@ -518,6 +519,7 @@ def fetch_backupvault_run_history() -> dict:
                     "error_message": row.get("error_message"),
                     "duration_seconds": int(duration) if duration is not None else None,
                     "destination_count": int(row.get("destination_count") or 0),
+                    "dest_types": row.get("dest_types"),
                 }
             )
         total = len(runs)
@@ -533,6 +535,109 @@ def fetch_backupvault_run_history() -> dict:
         }
     except Exception as exc:
         return {"ok": False, "reason": str(exc), "runs": []}
+
+
+def _backupvault_engine():
+    if not settings.legacy_metrics_database_url:
+        return None, "LEGACY_METRICS_DATABASE_URL not set"
+    database = settings.legacy_backupvault_database or "backupvault"
+    engine = get_legacy_metrics_engine(database)
+    if engine is None:
+        return None, "engine unavailable"
+    return engine, database
+
+
+def fetch_backupvault_targets() -> dict:
+    """Read-only backup_targets (no passwords)."""
+    engine, extra = _backupvault_engine()
+    if engine is None:
+        return {"ok": False, "reason": extra, "targets": []}
+    database = extra
+    sql = text(
+        """
+        SELECT
+          t.id,
+          t.name,
+          t.db_type,
+          t.host,
+          t.port,
+          t.database_name,
+          t.description,
+          t.is_active,
+          (
+            SELECT r.status FROM backup_runs r
+            WHERE r.target_id = t.id
+            ORDER BY r.id DESC LIMIT 1
+          ) AS last_status,
+          (
+            SELECT r.started_at FROM backup_runs r
+            WHERE r.target_id = t.id
+            ORDER BY r.id DESC LIMIT 1
+          ) AS last_started_at
+        FROM backup_targets t
+        ORDER BY t.db_type, t.name
+        """
+    )
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql).mappings().all()
+        targets = []
+        for row in rows:
+            targets.append(
+                {
+                    "id": int(row["id"]),
+                    "name": row.get("name") or f"target-{row['id']}",
+                    "db_type": row.get("db_type"),
+                    "host": row.get("host"),
+                    "port": int(row["port"]) if row.get("port") is not None else None,
+                    "database_name": row.get("database_name"),
+                    "description": row.get("description"),
+                    "is_active": bool(row.get("is_active")) if row.get("is_active") is not None else True,
+                    "last_status": str(row["last_status"]).lower() if row.get("last_status") else None,
+                    "last_started_at": row.get("last_started_at"),
+                }
+            )
+        return {"ok": True, "database": database, "targets": targets}
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc), "targets": []}
+
+
+def fetch_backupvault_nfs() -> dict:
+    engine, extra = _backupvault_engine()
+    if engine is None:
+        return {"ok": False, "reason": extra, "servers": []}
+    database = extra
+    sql = text(
+        """
+        SELECT id, name, host, export_path, mount_point, description, role,
+               is_active, status, disk_size, disk_used, disk_avail
+        FROM nfs_servers
+        ORDER BY name
+        """
+    )
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql).mappings().all()
+        servers = [
+            {
+                "id": int(row["id"]),
+                "name": row.get("name") or f"nfs-{row['id']}",
+                "host": row.get("host"),
+                "export_path": row.get("export_path"),
+                "mount_point": row.get("mount_point"),
+                "description": row.get("description"),
+                "role": row.get("role"),
+                "is_active": bool(row.get("is_active")) if row.get("is_active") is not None else True,
+                "status": row.get("status"),
+                "disk_size": row.get("disk_size"),
+                "disk_used": row.get("disk_used"),
+                "disk_avail": row.get("disk_avail"),
+            }
+            for row in rows
+        ]
+        return {"ok": True, "database": database, "servers": servers}
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc), "servers": []}
 
 
 def remote_table_exists(stream: LegacyStreamConfig) -> bool | None:

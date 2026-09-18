@@ -673,6 +673,35 @@ export type BackupVaultRun = {
   error_message: string | null
   duration_seconds: number | null
   destination_count: number
+  dest_types?: string | null
+}
+
+export type BackupVaultTarget = {
+  id: number
+  name: string
+  db_type: string | null
+  host: string | null
+  port: number | null
+  database_name: string | null
+  description: string | null
+  is_active: boolean
+  last_status: string | null
+  last_started_at: string | null
+}
+
+export type BackupVaultNfsServer = {
+  id: number
+  name: string
+  host: string | null
+  export_path: string | null
+  mount_point: string | null
+  description: string | null
+  role: string | null
+  is_active: boolean
+  status: string | null
+  disk_size: string | null
+  disk_used: string | null
+  disk_avail: string | null
 }
 
 export type BackupVaultRunHistory = {
@@ -693,6 +722,26 @@ export type BackupVaultRunHistory = {
 export async function fetchBackupVaultRuns(): Promise<BackupVaultRunHistory> {
   const res = await apiFetch('/legacy-metrics/backupvault/runs')
   if (!res.ok) throw new Error('Failed to load BackupVault run history')
+  return res.json()
+}
+
+export async function fetchBackupVaultTargets(): Promise<{
+  ok: boolean
+  reason?: string | null
+  targets: BackupVaultTarget[]
+}> {
+  const res = await apiFetch('/legacy-metrics/backupvault/targets')
+  if (!res.ok) throw new Error('Failed to load BackupVault targets')
+  return res.json()
+}
+
+export async function fetchBackupVaultNfs(): Promise<{
+  ok: boolean
+  reason?: string | null
+  servers: BackupVaultNfsServer[]
+}> {
+  const res = await apiFetch('/legacy-metrics/backupvault/nfs')
+  if (!res.ok) throw new Error('Failed to load BackupVault NFS servers')
   return res.json()
 }
 

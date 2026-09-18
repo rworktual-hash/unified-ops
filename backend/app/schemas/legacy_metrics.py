@@ -56,6 +56,7 @@ class BackupVaultRunRead(BaseModel):
     error_message: str | None
     duration_seconds: int | None
     destination_count: int
+    dest_types: str | None = None
 
 
 class BackupVaultRunHistoryRead(BaseModel):
@@ -71,6 +72,48 @@ class BackupVaultRunHistoryRead(BaseModel):
     running: int = 0
     pending: int = 0
     runs: list[BackupVaultRunRead]
+
+
+class BackupVaultTargetRead(BaseModel):
+    id: int
+    name: str
+    db_type: str | None
+    host: str | None
+    port: int | None
+    database_name: str | None
+    description: str | None
+    is_active: bool
+    last_status: str | None
+    last_started_at: datetime | None
+
+
+class BackupVaultTargetsRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    targets: list[BackupVaultTargetRead]
+
+
+class BackupVaultNfsServerRead(BaseModel):
+    id: int
+    name: str
+    host: str | None
+    export_path: str | None
+    mount_point: str | None
+    description: str | None
+    role: str | None
+    is_active: bool
+    status: str | None
+    disk_size: str | None
+    disk_used: str | None
+    disk_avail: str | None
+
+
+class BackupVaultNfsRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    servers: list[BackupVaultNfsServerRead]
 
 
 class LegacyMetricPointRead(BaseModel):

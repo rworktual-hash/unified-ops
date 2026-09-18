@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   fetchBackupVaultRuns,
-  fetchLegacyStatus,
-  syncLegacyMetrics,
   type BackupVaultRun,
   type BackupVaultRunHistory,
-  type LegacyStatus,
 } from '../api'
-
-type Props = {
-  isAdmin?: boolean
-}
 
 function formatDuration(seconds: number | null): string {
   if (seconds == null || seconds < 0) return '—'
@@ -23,188 +16,180 @@ function formatDuration(seconds: number | null): string {
   return mins ? `${hours}h ${mins}m` : `${hours}h`
 }
 
-function statusClass(status: string | null): string {
-  const value = (status || '').toLowerCase()
-  if (value === 'success') return 'bv-run-ok'
-  if (value === 'failed') return 'bv-run-fail'
-  if (value === 'partial') return 'bv-run-partial'
-  if (value === 'running') return 'bv-run-run'
-  return ''
+function StatusPill({ status }: { status: string | null }) {
+  const value = (status || 'unknown').toLowerCase()
+  return <span className={`bv-pill bv-pill--${value}`}>{value.toUpperCase()}</span>
 }
 
-export function BackupVaultRunHistory({ isAdmin = false }: Props) {
-  const [status, setStatus] = useState<LegacyStatus | null>(null)
+type Props = {
+  onLoaded?: (history: BackupVaultRunHistory) => void
+}
+
+export function BackupVaultRunHistory({ onLoaded }: Props) {
   const [history, setHistory] = useState<BackupVaultRunHistory | null>(null)
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const stream = status?.streams.find((s) => s.domain === 'backupvault')
+  const [targetFilter, setTargetFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [st, runs] = await Promise.all([fetchLegacyStatus(), fetchBackupVaultRuns()])
-      setStatus(st)
+      const runs = await fetchBackupVaultRuns()
       setHistory(runs)
-      if (!runs.ok && runs.reason) {
-        setError(runs.reason)
-      }
+      onLoaded?.(runs)
+      if (!runs.ok && runs.reason) setError(runs.reason)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load BackupVault run history')
+      setError(err instanceof Error ? err.message : 'Failed to load run history')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [onLoaded])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  if (!status?.configured) {
-    return (
-      <section className="panel legacy-metrics-panel">
-        <h2>BackupVault run history</h2>
-        <p className="muted">
-          Not configured. Set <code>LEGACY_METRICS_DATABASE_URL</code> and{' '}
-          <code>LEGACY_BACKUPVAULT_DATABASE=backupvault</code>.
-        </p>
-      </section>
-    )
+  const targets = useMemo(() => {
+    const names = new Set((history?.runs ?? []).map((r) => r.target_name).filter(Boolean))
+    return [...names].sort()
+  }, [history])
+
+  const filtered = useMemo(() => {
+    return (history?.runs ?? []).filter((run) => {
+      if (targetFilter !== 'all' && run.target_name !== targetFilter) return false
+      if (statusFilter !== 'all' && (run.status || '') !== statusFilter) return false
+      return true
+    })
+  }, [history, targetFilter, statusFilter])
+
+  if (loading && !history) {
+    return <p className="muted">Loading run history…</p>
   }
 
-  const runs: BackupVaultRun[] = history?.runs ?? []
+  if (error && !history?.ok) {
+    return <p className="banner error">{error}</p>
+  }
+
+  if (!history?.ok) {
+    return <p className="muted">No BackupVault runs available from the portal database.</p>
+  }
 
   return (
-    <section className="panel legacy-metrics-panel">
-      <div className="legacy-metrics-head">
-        <h2>BackupVault run history</h2>
-        {isAdmin ? (
+    <section className="bv-portal">
+      <div className="bv-portal-toolbar">
+        <div>
+          <h2>Run history</h2>
+          <p className="muted">
+            {history.total} runs · {history.success_rate}% success — same jobs as backupvault.worktual.tech
+          </p>
+        </div>
+        <button type="button" className="btn ghost" disabled={loading} onClick={() => void load()}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+
+      <div className="bv-chip-row">
+        <span className="bv-chip">
+          TOTAL <strong>{history.total}</strong>
+        </span>
+        <span className="bv-chip bv-chip--ok">
+          SUCCESS <strong>{history.success}</strong>
+        </span>
+        <span className="bv-chip bv-chip--fail">
+          FAILED <strong>{history.failed}</strong>
+        </span>
+        <span className="bv-chip bv-chip--partial">
+          PARTIAL <strong>{history.partial}</strong>
+        </span>
+        <span className="bv-chip bv-chip--run">
+          RUNNING <strong>{history.running}</strong>
+        </span>
+      </div>
+
+      <div className="bv-filters">
+        <label>
+          Target
+          <select value={targetFilter} onChange={(e) => setTargetFilter(e.target.value)}>
+            <option value="all">All targets</option>
+            {targets.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All statuses</option>
+            <option value="success">Success</option>
+            <option value="failed">Failed</option>
+            <option value="partial">Partial</option>
+            <option value="running">Running</option>
+          </select>
+        </label>
+        {(targetFilter !== 'all' || statusFilter !== 'all') && (
           <button
             type="button"
             className="btn ghost"
-            disabled={syncing || loading}
             onClick={() => {
-              setSyncing(true)
-              setError(null)
-              void syncLegacyMetrics('backupvault')
-                .then(() => load())
-                .catch((err) =>
-                  setError(err instanceof Error ? err.message : 'Legacy sync failed'),
-                )
-                .finally(() => setSyncing(false))
+              setTargetFilter('all')
+              setStatusFilter('all')
             }}
           >
-            {syncing ? 'Syncing…' : 'Refresh'}
-          </button>
-        ) : (
-          <button type="button" className="btn ghost" disabled={loading} onClick={() => void load()}>
-            {loading ? 'Loading…' : 'Refresh'}
+            Clear
           </button>
         )}
       </div>
 
-      {error ? <p className="banner error">{error}</p> : null}
-
-      <p className="muted legacy-metrics-meta">
-        Connection: {status.connection_ok ? 'OK' : `Failed — ${status.connection_error ?? 'unknown'}`}
-        {history?.ok ? ' · live from portal MariaDB' : ''}
-        {stream?.last_synced_at
-          ? ` · last point sync ${new Date(stream.last_synced_at).toLocaleString()}`
-          : ''}
-        {history && history.total > 0
-          ? ` · ${history.total} runs · ${history.success_rate}% success`
-          : ''}
-      </p>
-
-      {loading && !history ? <p className="muted">Loading run history…</p> : null}
-
-      {history && history.ok ? (
-        <>
-          <div className="stat-row backupvault-stat-row">
-            <div className="stat-card">
-              <span className="stat-label">Total</span>
-              <span className="stat-value">{history.total}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Success</span>
-              <span className="stat-value accent">{history.success}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Failed</span>
-              <span className="stat-value warn">{history.failed}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Partial</span>
-              <span className="stat-value">{history.partial}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Running</span>
-              <span className="stat-value">{history.running}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Success rate</span>
-              <span className="stat-value accent">{history.success_rate}%</span>
-            </div>
-          </div>
-
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Target</th>
-                  <th>DB</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Destinations</th>
-                  <th>Size</th>
-                  <th>Started</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id}>
-                    <td>#{run.id}</td>
-                    <td>
-                      {run.target_name}
-                      {run.target_host ? (
-                        <>
-                          <br />
-                          <span className="muted">{run.target_host}</span>
-                        </>
-                      ) : null}
-                    </td>
-                    <td>{run.db_type ?? '—'}</td>
-                    <td>{run.backup_type ?? '—'}</td>
-                    <td className={statusClass(run.status)}>
-                      {(run.status || '—').toUpperCase()}
-                      {run.error_message ? (
-                        <span className="muted" title={run.error_message}>
-                          <br />
-                          {run.error_message}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>{run.destination_count}</td>
-                    <td>{run.file_size_label ?? '—'}</td>
-                    <td>{run.started_at ? new Date(run.started_at).toLocaleString() : '—'}</td>
-                    <td>{formatDuration(run.duration_seconds)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="muted">
-            Same 89-run history as backupvault.worktual.tech. Newest job on the portal is 10 Sep 2026 —
-            the list is complete, not limited to 24 hours.
-          </p>
-        </>
-      ) : !loading ? (
-        <p className="muted">No BackupVault runs available from the portal database.</p>
-      ) : null}
+      <div className="table-wrap bv-runs-table">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Target</th>
+              <th>DB</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Destinations</th>
+              <th>Size</th>
+              <th>Started</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((run: BackupVaultRun) => (
+              <tr key={run.id}>
+                <td className="bv-mono">#{run.id}</td>
+                <td>
+                  <strong>{run.target_name}</strong>
+                  {run.target_host ? <div className="muted bv-sub">{run.target_host}</div> : null}
+                </td>
+                <td className="bv-upper">{run.db_type ?? '—'}</td>
+                <td>{run.backup_type ?? '—'}</td>
+                <td>
+                  <StatusPill status={run.status} />
+                  {run.error_message ? (
+                    <span className="bv-err-hint" title={run.error_message}>
+                      i
+                    </span>
+                  ) : null}
+                </td>
+                <td>
+                  {run.destination_count > 0
+                    ? `${run.destination_count}${run.dest_types ? ` · ${run.dest_types}` : ''}`
+                    : '—'}
+                </td>
+                <td>{run.file_size_label && run.file_size_bytes ? run.file_size_label : '—'}</td>
+                <td>{run.started_at ? new Date(run.started_at).toLocaleString() : '—'}</td>
+                <td>{formatDuration(run.duration_seconds)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   )
 }
