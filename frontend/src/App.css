@@ -876,6 +876,26 @@
   font-weight: 600;
 }
 
+.bv-run-ok {
+  color: var(--ok, #15803d);
+  font-weight: 600;
+}
+
+.bv-run-fail {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.bv-run-partial {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.bv-run-run {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
 .email-log-sample pre {
   font-size: 0.68rem;
   max-height: 12rem;

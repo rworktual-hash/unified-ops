@@ -3,12 +3,20 @@ from unittest.mock import MagicMock, patch
 
 from app.services.legacy_metrics_sync import (
     LegacyStreamConfig,
+    _format_bytes,
     _metric_value,
     _parse_remote_time,
     _resolve_server_id,
     compute_legacy_overview,
     sync_legacy_stream,
 )
+
+
+def test_format_bytes():
+    assert _format_bytes(None) is None
+    assert _format_bytes(0) == "0.0 B"
+    assert _format_bytes(1024) == "1.0 KB"
+    assert _format_bytes(78 * 1024 * 1024) == "78.0 MB"
 
 
 def test_metric_value_numeric_and_text():

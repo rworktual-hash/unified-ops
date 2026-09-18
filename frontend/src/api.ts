@@ -656,6 +656,46 @@ export async function fetchLegacyOverview(
   return res.json()
 }
 
+export type BackupVaultRun = {
+  id: number
+  target_id: number | null
+  target_name: string
+  db_type: string | null
+  target_host: string | null
+  backup_type: string | null
+  trigger_type: string | null
+  status: string | null
+  started_at: string | null
+  completed_at: string | null
+  file_size_bytes: number | null
+  file_size_label: string | null
+  file_path: string | null
+  error_message: string | null
+  duration_seconds: number | null
+  destination_count: number
+}
+
+export type BackupVaultRunHistory = {
+  ok: boolean
+  source?: string | null
+  database?: string | null
+  reason?: string | null
+  total: number
+  success_rate: number
+  success: number
+  failed: number
+  partial: number
+  running: number
+  pending: number
+  runs: BackupVaultRun[]
+}
+
+export async function fetchBackupVaultRuns(): Promise<BackupVaultRunHistory> {
+  const res = await apiFetch('/legacy-metrics/backupvault/runs')
+  if (!res.ok) throw new Error('Failed to load BackupVault run history')
+  return res.json()
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })

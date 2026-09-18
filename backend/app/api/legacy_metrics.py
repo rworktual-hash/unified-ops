@@ -7,6 +7,7 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.legacy_metric_point import LegacyMetricPoint
 from app.schemas.legacy_metrics import (
+    BackupVaultRunHistoryRead,
     LegacyMetricPointRead,
     LegacyOverviewRead,
     LegacyStatusRead,
@@ -16,6 +17,7 @@ from app.schemas.legacy_metrics import (
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
     discover_legacy_schema,
+    fetch_backupvault_run_history,
     legacy_sync_status,
     sync_all_legacy_streams,
 )
@@ -46,6 +48,11 @@ def legacy_discovery(_admin=Depends(require_admin)) -> dict:
             detail=result.get("error") or result.get("reason") or "Discovery failed",
         )
     return result
+
+
+@router.get("/backupvault/runs", response_model=BackupVaultRunHistoryRead)
+def backupvault_run_history() -> BackupVaultRunHistoryRead:
+    return BackupVaultRunHistoryRead.model_validate(fetch_backupvault_run_history())
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

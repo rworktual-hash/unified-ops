@@ -441,6 +441,100 @@ def compute_legacy_overview(db: Session, *, domain: str, hours: int = 24) -> dic
     }
 
 
+def _format_bytes(value: int | None) -> str | None:
+    if value is None:
+        return None
+    amount = float(value)
+    units = ("B", "KB", "MB", "GB", "TB")
+    index = 0
+    while amount >= 1024 and index < len(units) - 1:
+        amount /= 1024
+        index += 1
+    digits = 2 if index > 2 else 1
+    return f"{amount:.{digits}f} {units[index]}"
+
+
+def fetch_backupvault_run_history() -> dict:
+    """Read-only Run History from BackupVault portal MariaDB (all jobs, not 24h)."""
+    if not settings.legacy_metrics_database_url:
+        return {"ok": False, "reason": "LEGACY_METRICS_DATABASE_URL not set", "runs": []}
+    database = settings.legacy_backupvault_database or "backupvault"
+    engine = get_legacy_metrics_engine(database)
+    if engine is None:
+        return {"ok": False, "reason": "engine unavailable", "runs": []}
+
+    sql = text(
+        """
+        SELECT
+          r.id,
+          r.target_id,
+          t.name AS target_name,
+          t.db_type,
+          t.host AS target_host,
+          r.backup_type,
+          r.trigger_type,
+          r.status,
+          r.started_at,
+          r.completed_at,
+          r.file_size_bytes,
+          r.file_path,
+          r.error_message,
+          TIMESTAMPDIFF(SECOND, r.started_at, r.completed_at) AS duration_seconds,
+          (SELECT COUNT(*) FROM backup_transfers x WHERE x.run_id = r.id) AS destination_count
+        FROM backup_runs r
+        LEFT JOIN backup_targets t ON t.id = r.target_id
+        ORDER BY r.id DESC
+        """
+    )
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql).mappings().all()
+        runs: list[dict] = []
+        counts = {"success": 0, "failed": 0, "partial": 0, "running": 0, "pending": 0}
+        for row in rows:
+            status = str(row.get("status") or "").lower()
+            if status in counts:
+                counts[status] += 1
+            started = row.get("started_at")
+            completed = row.get("completed_at")
+            size = row.get("file_size_bytes")
+            size_int = int(size) if size is not None else None
+            duration = row.get("duration_seconds")
+            runs.append(
+                {
+                    "id": int(row["id"]),
+                    "target_id": int(row["target_id"]) if row.get("target_id") is not None else None,
+                    "target_name": row.get("target_name") or f"target-{row.get('target_id')}",
+                    "db_type": row.get("db_type"),
+                    "target_host": row.get("target_host"),
+                    "backup_type": row.get("backup_type"),
+                    "trigger_type": row.get("trigger_type"),
+                    "status": status or None,
+                    "started_at": started,
+                    "completed_at": completed,
+                    "file_size_bytes": size_int,
+                    "file_size_label": _format_bytes(size_int),
+                    "file_path": row.get("file_path"),
+                    "error_message": row.get("error_message"),
+                    "duration_seconds": int(duration) if duration is not None else None,
+                    "destination_count": int(row.get("destination_count") or 0),
+                }
+            )
+        total = len(runs)
+        success_rate = round((counts["success"] / total) * 100) if total else 0
+        return {
+            "ok": True,
+            "source": "legacy_readonly",
+            "database": database,
+            "total": total,
+            "success_rate": success_rate,
+            **counts,
+            "runs": runs,
+        }
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc), "runs": []}
+
+
 def remote_table_exists(stream: LegacyStreamConfig) -> bool | None:
     database = _resolve_database(stream)
     if not database or not settings.legacy_metrics_database_url:

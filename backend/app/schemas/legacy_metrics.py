@@ -39,6 +39,40 @@ class LegacyOverviewRead(BaseModel):
     latest_by_server: list[dict]
 
 
+class BackupVaultRunRead(BaseModel):
+    id: int
+    target_id: int | None
+    target_name: str
+    db_type: str | None
+    target_host: str | None
+    backup_type: str | None
+    trigger_type: str | None
+    status: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    file_size_bytes: int | None
+    file_size_label: str | None
+    file_path: str | None
+    error_message: str | None
+    duration_seconds: int | None
+    destination_count: int
+
+
+class BackupVaultRunHistoryRead(BaseModel):
+    ok: bool
+    source: str | None = None
+    database: str | None = None
+    reason: str | None = None
+    total: int = 0
+    success_rate: int = 0
+    success: int = 0
+    failed: int = 0
+    partial: int = 0
+    running: int = 0
+    pending: int = 0
+    runs: list[BackupVaultRunRead]
+
+
 class LegacyMetricPointRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

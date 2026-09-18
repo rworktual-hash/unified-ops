@@ -4,7 +4,7 @@ import {
   type BackupVaultOverview,
   type BackupVaultSnapshot,
 } from '../api'
-import { LegacyMetricsSection } from './LegacyMetricsSection'
+import { BackupVaultRunHistory } from './BackupVaultRunHistory'
 
 function state(value: boolean | null): string {
   return value == null ? '—' : value ? 'Running' : 'Check failed'
@@ -229,11 +229,7 @@ export function BackupVaultPanel({ isAdmin = false }: Props) {
             </p>
           </section>
 
-          <LegacyMetricsSection
-            domain="backupvault"
-            title="Legacy BackupVault portal (MariaDB sync)"
-            isAdmin={isAdmin}
-          />
+          <BackupVaultRunHistory isAdmin={isAdmin} />
         </>
       ) : null}
     </>
