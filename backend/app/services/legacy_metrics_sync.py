@@ -640,6 +640,187 @@ def fetch_backupvault_nfs() -> dict:
         return {"ok": False, "reason": str(exc), "servers": []}
 
 
+_SECRET_COL_HINTS = (
+    "password",
+    "passwd",
+    "secret",
+    "token",
+    "api_key",
+    "ssh_pass",
+)
+
+
+def _safe_columns(conn, table: str) -> list[str]:
+    rows = conn.execute(
+        text(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :tbl "
+            "ORDER BY ORDINAL_POSITION"
+        ),
+        {"tbl": table},
+    ).all()
+    out: list[str] = []
+    for (name,) in rows:
+        lowered = name.lower()
+        if any(hint in lowered for hint in _SECRET_COL_HINTS):
+            continue
+        out.append(name)
+    return out
+
+
+def _num(value) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first(row, *names):
+    for name in names:
+        if name in row and row[name] is not None:
+            return row[name]
+    return None
+
+
+def fetch_backupvault_monitoring() -> dict:
+    """Latest DB + NFS snapshots and NFS storage tiles (portal Monitoring / Primary DB)."""
+    engine, extra = _backupvault_engine()
+    if engine is None:
+        return {"ok": False, "reason": extra, "db_servers": [], "nfs_servers": [], "storage": []}
+    database = extra
+    try:
+        with engine.connect() as conn:
+            db_cols = _safe_columns(conn, "db_servers")
+            snap_cols = _safe_columns(conn, "db_server_snapshots")
+            nfs_cols = _safe_columns(conn, "nfs_servers")
+            nfs_snap_cols = _safe_columns(conn, "nfs_monitoring_snapshots")
+
+            db_select = ", ".join(f"s.`{c}` AS `{c}`" for c in db_cols)
+            snap_select = ", ".join(f"snap.`{c}` AS `snap_{c}`" for c in snap_cols if c != "id")
+            db_sql = text(
+                f"SELECT {db_select}"
+                + (f", {snap_select}" if snap_select else "")
+                + """
+                FROM db_servers s
+                LEFT JOIN db_server_snapshots snap
+                  ON snap.id = (
+                    SELECT x.id FROM db_server_snapshots x
+                    WHERE x.server_id = s.id
+                    ORDER BY x.snapshot_at DESC, x.id DESC
+                    LIMIT 1
+                  )
+                ORDER BY s.name
+                """
+            )
+            db_rows = conn.execute(db_sql).mappings().all() if db_cols else []
+
+            nfs_select = ", ".join(f"n.`{c}` AS `{c}`" for c in nfs_cols)
+            nfs_snap_select = ", ".join(
+                f"ns.`{c}` AS `snap_{c}`" for c in nfs_snap_cols if c != "id"
+            )
+            nfs_sql = text(
+                f"SELECT {nfs_select}"
+                + (f", {nfs_snap_select}" if nfs_snap_select else "")
+                + """
+                FROM nfs_servers n
+                LEFT JOIN nfs_monitoring_snapshots ns
+                  ON ns.id = (
+                    SELECT x.id FROM nfs_monitoring_snapshots x
+                    WHERE x.server_id = n.id
+                    ORDER BY x.snapshot_at DESC, x.id DESC
+                    LIMIT 1
+                  )
+                ORDER BY n.name
+                """
+            )
+            nfs_rows = conn.execute(nfs_sql).mappings().all() if nfs_cols else []
+
+        db_servers = []
+        for row in db_rows:
+            db_servers.append(
+                {
+                    "id": int(row["id"]),
+                    "name": row.get("name") or f"db-{row['id']}",
+                    "host": row.get("host"),
+                    "port": int(row["port"]) if row.get("port") is not None else None,
+                    "db_type": row.get("db_type"),
+                    "environment": row.get("environment"),
+                    "ha_role": row.get("ha_role"),
+                    "ha_group": row.get("ha_group"),
+                    "snapshot_at": _first(row, "snap_snapshot_at"),
+                    "cpu_pct": _num(_first(row, "snap_cpu_pct")),
+                    "mem_pct": _num(_first(row, "snap_mem_pct")),
+                    "disk_pct": _num(_first(row, "snap_disk_pct")),
+                    "load_avg_1": _num(_first(row, "snap_load_avg_1", "snap_load1")),
+                    "connections": _num(
+                        _first(row, "snap_connections", "snap_db_connections", "snap_threads_connected")
+                    ),
+                    "active_queries": _num(
+                        _first(row, "snap_active_queries", "snap_active_query", "snap_running_queries")
+                    ),
+                    "qps": _num(_first(row, "snap_qps", "snap_queries_per_sec")),
+                    "disk_used": None if row.get("snap_disk_used") is None else str(row.get("snap_disk_used")),
+                    "mem_used_mb": _num(_first(row, "snap_mem_used_mb")),
+                    "mem_total_mb": _num(_first(row, "snap_mem_total_mb")),
+                }
+            )
+
+        nfs_servers = []
+        storage = []
+        for row in nfs_rows:
+            item = {
+                "id": int(row["id"]),
+                "name": row.get("name") or f"nfs-{row['id']}",
+                "host": row.get("host"),
+                "export_path": row.get("export_path"),
+                "mount_point": row.get("mount_point"),
+                "role": row.get("role"),
+                "status": row.get("status") or row.get("snap_status"),
+                "disk_size": row.get("disk_size"),
+                "disk_used": row.get("disk_used") or row.get("snap_disk_used"),
+                "disk_avail": row.get("disk_avail") or row.get("snap_disk_avail"),
+                "disk_pct": _num(_first(row, "snap_disk_pct")),
+                "inode_pct": _num(_first(row, "snap_inode_pct")),
+                "snapshot_at": _first(row, "snap_snapshot_at"),
+            }
+            nfs_servers.append(item)
+            storage.append(
+                {
+                    "id": item["id"],
+                    "name": item["name"],
+                    "role": item["role"],
+                    "host": item["host"],
+                    "path": item["export_path"] or item["mount_point"],
+                    "disk_size": item["disk_size"],
+                    "disk_used": item["disk_used"],
+                    "disk_avail": item["disk_avail"],
+                    "disk_pct": item["disk_pct"],
+                }
+            )
+
+        ok_db = sum(1 for s in db_servers if s["snapshot_at"])
+        return {
+            "ok": True,
+            "database": database,
+            "db_count": len(db_servers),
+            "nfs_count": len(nfs_servers),
+            "db_with_snapshot": ok_db,
+            "db_servers": db_servers,
+            "nfs_servers": nfs_servers,
+            "storage": storage,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "reason": str(exc),
+            "db_servers": [],
+            "nfs_servers": [],
+            "storage": [],
+        }
+
+
 def remote_table_exists(stream: LegacyStreamConfig) -> bool | None:
     database = _resolve_database(stream)
     if not database or not settings.legacy_metrics_database_url:

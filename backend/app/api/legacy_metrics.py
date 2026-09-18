@@ -7,6 +7,7 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.models.legacy_metric_point import LegacyMetricPoint
 from app.schemas.legacy_metrics import (
+    BackupVaultMonitoringRead,
     BackupVaultNfsRead,
     BackupVaultRunHistoryRead,
     BackupVaultTargetsRead,
@@ -19,6 +20,7 @@ from app.schemas.legacy_metrics import (
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
     discover_legacy_schema,
+    fetch_backupvault_monitoring,
     fetch_backupvault_nfs,
     fetch_backupvault_run_history,
     fetch_backupvault_targets,
@@ -67,6 +69,11 @@ def backupvault_targets() -> BackupVaultTargetsRead:
 @router.get("/backupvault/nfs", response_model=BackupVaultNfsRead)
 def backupvault_nfs() -> BackupVaultNfsRead:
     return BackupVaultNfsRead.model_validate(fetch_backupvault_nfs())
+
+
+@router.get("/backupvault/monitoring", response_model=BackupVaultMonitoringRead)
+def backupvault_monitoring() -> BackupVaultMonitoringRead:
+    return BackupVaultMonitoringRead.model_validate(fetch_backupvault_monitoring())
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

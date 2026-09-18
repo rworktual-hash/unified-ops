@@ -109,6 +109,68 @@ class BackupVaultNfsServerRead(BaseModel):
     disk_avail: str | None
 
 
+class BackupVaultMonDbRead(BaseModel):
+    id: int
+    name: str
+    host: str | None
+    port: int | None
+    db_type: str | None
+    environment: str | None
+    ha_role: str | None
+    ha_group: str | None
+    snapshot_at: datetime | None
+    cpu_pct: float | None
+    mem_pct: float | None
+    disk_pct: float | None
+    load_avg_1: float | None
+    connections: float | None
+    active_queries: float | None
+    qps: float | None
+    disk_used: str | None
+    mem_used_mb: float | None
+    mem_total_mb: float | None
+
+
+class BackupVaultMonNfsRead(BaseModel):
+    id: int
+    name: str
+    host: str | None
+    export_path: str | None
+    mount_point: str | None
+    role: str | None
+    status: str | None
+    disk_size: str | None
+    disk_used: str | None
+    disk_avail: str | None
+    disk_pct: float | None
+    inode_pct: float | None
+    snapshot_at: datetime | None
+
+
+class BackupVaultStorageTileRead(BaseModel):
+    id: int
+    name: str
+    role: str | None
+    host: str | None
+    path: str | None
+    disk_size: str | None
+    disk_used: str | None
+    disk_avail: str | None
+    disk_pct: float | None
+
+
+class BackupVaultMonitoringRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    db_count: int = 0
+    nfs_count: int = 0
+    db_with_snapshot: int = 0
+    db_servers: list[BackupVaultMonDbRead]
+    nfs_servers: list[BackupVaultMonNfsRead]
+    storage: list[BackupVaultStorageTileRead]
+
+
 class BackupVaultNfsRead(BaseModel):
     ok: bool
     database: str | None = None

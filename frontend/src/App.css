@@ -1399,3 +1399,24 @@ button.linkish {
   color: var(--muted);
   font-weight: 600;
 }
+
+.bv-storage-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.bv-storage-card .stat-row {
+  margin-top: 0.65rem;
+}
+
+.bv-bar {
+  margin-top: 0.7rem;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.bv-bar-fill {
+  height: 100%;
+  background: #16a34a;
+}

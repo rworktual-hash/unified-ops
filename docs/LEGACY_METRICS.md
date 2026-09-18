@@ -79,6 +79,9 @@ Review `legacy-metrics-discovery.json`, then set `LEGACY_*_TABLE` and `LEGACY_*_
 | GET | `/api/legacy-metrics/status` | Connection + per-stream sync state |
 | GET | `/api/legacy-metrics/overview/{domain}` | Aggregated synced data (`ai_insights`, `backupvault`, `voicemg`, `infrastructure`) |
 | GET | `/api/legacy-metrics/backupvault/runs` | Full BackupVault Run History (all jobs, live SELECT from portal DB) |
+| GET | `/api/legacy-metrics/backupvault/targets` | Backup targets (no passwords) |
+| GET | `/api/legacy-metrics/backupvault/nfs` | NFS server list |
+| GET | `/api/legacy-metrics/backupvault/monitoring` | Latest `db_server_snapshots` + `nfs_monitoring_snapshots` + storage tiles |
 | GET | `/api/legacy-metrics/points` | Raw synced points |
 | POST | `/api/legacy-metrics/sync` | Admin — all enabled streams |
 | POST | `/api/legacy-metrics/sync/{domain}` | Admin — one stream |

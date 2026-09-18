@@ -745,6 +745,73 @@ export async function fetchBackupVaultNfs(): Promise<{
   return res.json()
 }
 
+export type BackupVaultMonDb = {
+  id: number
+  name: string
+  host: string | null
+  port: number | null
+  db_type: string | null
+  environment: string | null
+  ha_role: string | null
+  ha_group: string | null
+  snapshot_at: string | null
+  cpu_pct: number | null
+  mem_pct: number | null
+  disk_pct: number | null
+  load_avg_1: number | null
+  connections: number | null
+  active_queries: number | null
+  qps: number | null
+  disk_used: string | null
+  mem_used_mb: number | null
+  mem_total_mb: number | null
+}
+
+export type BackupVaultMonNfs = {
+  id: number
+  name: string
+  host: string | null
+  export_path: string | null
+  mount_point: string | null
+  role: string | null
+  status: string | null
+  disk_size: string | null
+  disk_used: string | null
+  disk_avail: string | null
+  disk_pct: number | null
+  inode_pct: number | null
+  snapshot_at: string | null
+}
+
+export type BackupVaultStorageTile = {
+  id: number
+  name: string
+  role: string | null
+  host: string | null
+  path: string | null
+  disk_size: string | null
+  disk_used: string | null
+  disk_avail: string | null
+  disk_pct: number | null
+}
+
+export type BackupVaultMonitoring = {
+  ok: boolean
+  reason?: string | null
+  db_count: number
+  nfs_count: number
+  db_with_snapshot: number
+  db_servers: BackupVaultMonDb[]
+  nfs_servers: BackupVaultMonNfs[]
+  storage: BackupVaultStorageTile[]
+}
+
+export async function fetchBackupVaultMonitoring(): Promise<BackupVaultMonitoring> {
+  const res = await apiFetch('/legacy-metrics/backupvault/monitoring')
+  if (!res.ok) throw new Error('Failed to load BackupVault monitoring')
+  return res.json()
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })
