@@ -137,38 +137,40 @@ class Settings(BaseSettings):
     # AI Insights / server fleet metrics (enable after inspect-legacy-metrics-db.py).
     legacy_ai_insights_sync_enabled: bool = False
     legacy_ai_insights_database: str | None = None
-    legacy_ai_insights_table: str = "server_metrics"
+    legacy_ai_insights_table: str = "ai_server_metrics"
     legacy_ai_insights_col_id: str = "id"
-    legacy_ai_insights_col_time: str = "collected_at"
-    legacy_ai_insights_col_host: str = "ip_address"
-    legacy_ai_insights_metric_cols: str = "cpu_pct,mem_used_pct,disk_used_pct,load_1m"
+    legacy_ai_insights_col_time: str = "timestamp"
+    legacy_ai_insights_col_host: str = "server_id"
+    legacy_ai_insights_metric_cols: str = (
+        "cpu_utilization,memory_utilization,storage_utilization,load_average,gpu_utilization"
+    )
 
     # BackupVault job/history metrics from legacy portal DB.
     legacy_backupvault_sync_enabled: bool = False
     legacy_backupvault_database: str | None = None
-    legacy_backupvault_table: str = "backup_jobs"
+    legacy_backupvault_table: str = "backup_runs"
     legacy_backupvault_col_id: str = "id"
     legacy_backupvault_col_time: str = "started_at"
-    legacy_backupvault_col_host: str = "host"
-    legacy_backupvault_metric_cols: str = "status,size_bytes,duration_seconds"
+    legacy_backupvault_col_host: str = "target_id"
+    legacy_backupvault_metric_cols: str = "status,file_size_bytes"
 
     # VoiceMG portal metrics.
     legacy_voicemg_sync_enabled: bool = False
     legacy_voicemg_database: str | None = None
-    legacy_voicemg_table: str = "vmg_metrics"
+    legacy_voicemg_table: str = "metrics_system"
     legacy_voicemg_col_id: str = "id"
-    legacy_voicemg_col_time: str = "recorded_at"
-    legacy_voicemg_col_host: str = "host"
-    legacy_voicemg_metric_cols: str = "active_calls,error_count,latency_ms"
+    legacy_voicemg_col_time: str = "ts"
+    legacy_voicemg_col_host: str = "server_id"
+    legacy_voicemg_metric_cols: str = "cpu_pct,load1,mem_used_mb,mem_total_mb"
 
-    # Infrastructure / server-inventory style metrics.
+    # Infrastructure / server-inventory style metrics (server_inventory DB).
     legacy_infrastructure_sync_enabled: bool = False
     legacy_infrastructure_database: str | None = None
-    legacy_infrastructure_table: str = "server_metrics"
-    legacy_infrastructure_col_id: str = "id"
-    legacy_infrastructure_col_time: str = "collected_at"
-    legacy_infrastructure_col_host: str = "ip_address"
-    legacy_infrastructure_metric_cols: str = "cpu_pct,mem_used_pct,disk_used_pct"
+    legacy_infrastructure_table: str = "ai_server_metrics_history"
+    legacy_infrastructure_col_id: str = "history_id"
+    legacy_infrastructure_col_time: str = "timestamp"
+    legacy_infrastructure_col_host: str = "server_id"
+    legacy_infrastructure_metric_cols: str = "cpu_util,mem_util,io_wait,tcp_established"
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -320,6 +322,37 @@ class Settings(BaseSettings):
             self.voicemg_local_health_urls,
             pattern=r"^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?(/[A-Za-z0-9._~/%+\-]*)?$",
         )
+
+    @property
+    def legacy_metrics_host_map(self) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for part in self.legacy_metrics_host_server_map.split(","):
+            part = part.strip()
+            if not part or ":" not in part:
+                continue
+            host, name = part.split(":", 1)
+            out[host.strip()] = name.strip()
+        return out
+
+    @staticmethod
+    def _metric_cols(raw: str) -> list[str]:
+        return [c.strip() for c in raw.split(",") if c.strip()]
+
+    @property
+    def legacy_ai_insights_metric_cols_list(self) -> list[str]:
+        return Settings._metric_cols(self.legacy_ai_insights_metric_cols)
+
+    @property
+    def legacy_backupvault_metric_cols_list(self) -> list[str]:
+        return Settings._metric_cols(self.legacy_backupvault_metric_cols)
+
+    @property
+    def legacy_voicemg_metric_cols_list(self) -> list[str]:
+        return Settings._metric_cols(self.legacy_voicemg_metric_cols)
+
+    @property
+    def legacy_infrastructure_metric_cols_list(self) -> list[str]:
+        return Settings._metric_cols(self.legacy_infrastructure_metric_cols)
 
     @staticmethod
     def _validated_csv(raw: str, *, pattern: str) -> list[str]:

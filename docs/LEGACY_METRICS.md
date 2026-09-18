@@ -39,13 +39,18 @@ python scripts/discover-legacy-mysql-via-ssh.py --from-inventory
 LEGACY_METRICS_DATABASE_URL=mysql+pymysql://readonly:URL_ENCODED_PASSWORD@10.180.1.222:3306/information_schema
 
 # After inspect — one database per stream, e.g.:
-# LEGACY_AI_INSIGHTS_DATABASE=ai_servers
+# LEGACY_AI_INSIGHTS_DATABASE=ai_insights_platform
 # LEGACY_AI_INSIGHTS_SYNC_ENABLED=true
-# LEGACY_AI_INSIGHTS_TABLE=server_metrics
+# LEGACY_AI_INSIGHTS_TABLE=ai_server_metrics
 # LEGACY_AI_INSIGHTS_COL_ID=id
-# LEGACY_AI_INSIGHTS_COL_TIME=collected_at
-# LEGACY_AI_INSIGHTS_COL_HOST=ip_address
-# LEGACY_AI_INSIGHTS_METRIC_COLS=cpu_pct,mem_used_pct,disk_used_pct,load_1m
+# LEGACY_AI_INSIGHTS_COL_TIME=timestamp
+# LEGACY_AI_INSIGHTS_COL_HOST=server_id
+# LEGACY_AI_INSIGHTS_METRIC_COLS=cpu_utilization,memory_utilization,storage_utilization,load_average
+
+# LEGACY_INFRASTRUCTURE_DATABASE=server_inventory
+# LEGACY_INFRASTRUCTURE_TABLE=ai_server_metrics_history
+# LEGACY_INFRASTRUCTURE_COL_ID=history_id
+# (resource_metrics is empty on prod — use ai_server_metrics_history)
 
 # LEGACY_BACKUPVAULT_DATABASE=backupvault
 # LEGACY_BACKUPVAULT_SYNC_ENABLED=true
