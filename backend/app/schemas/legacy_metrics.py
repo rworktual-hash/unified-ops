@@ -351,6 +351,7 @@ class VoiceMgExtraRead(BaseModel):
     stall: int | None = None
     udp_active: int | None = None
     udp_inactive: int | None = None
+    quality_source: str | None = None
     rtcp: str | None = None
     disk_used_pct: float | None = None
     disk_mount: str | None = None

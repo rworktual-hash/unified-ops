@@ -23,6 +23,14 @@ function rtpMbps(row: VoiceMgExtra): number | null {
   return (row.rtp_mbps_out ?? 0) + (row.rtp_mbps_in ?? 0)
 }
 
+function qualityBadge(row: VoiceMgExtra): string | null {
+  const raw = (row.quality_source || row.rtcp || '').toLowerCase()
+  if (!raw) return null
+  if (raw.includes('rtcp')) return 'RTCP'
+  if (raw.includes('estim')) return 'ESTIMATE'
+  return raw.toUpperCase()
+}
+
 function mosLabel(value: number | null | undefined): string {
   if (value == null) return 'n/a'
   if (value >= 4.0) return 'excellent'
@@ -141,7 +149,7 @@ function HostMini({ row }: { row: VoiceMgExtra }) {
         {row.active_calls ?? 0} calls
         {row.stall != null ? ` · ${row.stall} stall` : ''}
         {row.mos != null ? ` · ${fmt(row.mos, 2)} MOS` : ' · MOS n/a'}
-        {row.rtcp ? ` · RTCP` : ''}
+        {qualityBadge(row) ? ` · ${qualityBadge(row)}` : ''}
       </span>
     </div>
   )
@@ -155,7 +163,7 @@ function HostCard({ row }: { row: VoiceMgExtra }) {
         <strong>{row.hostname}</strong>
         <span className="bv-pill bv-pill--ok">
           {(row.role || (row.hostname.toLowerCase().includes('stt') ? 'stt' : 'vmg')).toUpperCase()}
-          {row.rtcp ? ' · RTCP' : ''}
+          {qualityBadge(row) ? ` · ${qualityBadge(row)}` : ''}
         </span>
       </div>
       <p className="muted bv-sub">

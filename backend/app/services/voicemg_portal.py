@@ -252,7 +252,9 @@ def _map_server(row) -> dict:
     sent = _num(_first(row, "c_pkts_sent_ps", "pkts_sent_ps"))
     recv = _num(_first(row, "c_pkts_recv_ps", "pkts_recv_ps"))
     lost = _num(_first(row, "c_pkts_lost_delta", "pkts_lost_delta"))
-    loss = _find_num(row, "loss_pct", "packet_loss", "loss_percent")
+    loss = _num(_first(row, "c_pkt_loss_pct", "pkt_loss_pct")) or _find_num(
+        row, "loss_pct", "packet_loss", "loss_percent"
+    )
     if loss is None and lost is not None:
         denom = (sent or 0) + (recv or 0)
         if denom > 0:
@@ -262,7 +264,11 @@ def _map_server(row) -> dict:
         if _find_num(row, "stall") is not None
         else _first(row, "p_udp_inactive", "udp_inactive")
     )
-    mos = _find_num(row, "mos")
+    mos = _num(_first(row, "c_mos", "mos")) or _find_num(row, "mos")
+    quality_source = _str(_first(row, "c_quality_source", "quality_source"))
+    rtcp = quality_source or _str(_first(row, "c_rtcp", "rtcp"))
+    if not rtcp and (_find_num(row, "rtcp") or 0) > 0:
+        rtcp = "rtcp"
     return {
         "id": server_id,
         "hostname": hostname,
@@ -291,8 +297,8 @@ def _map_server(row) -> dict:
         "stall": stall,
         "udp_active": _int(_first(row, "p_udp_active", "udp_active")),
         "udp_inactive": _int(_first(row, "p_udp_inactive", "udp_inactive")),
-        "rtcp": _str(_first(row, "c_rtcp", "rtcp"))
-        or ("yes" if (_find_num(row, "rtcp") or 0) > 0 else None),
+        "quality_source": quality_source,
+        "rtcp": rtcp,
         "disk_used_pct": _num(_first(row, "d_used_pct", "d_disk_used_pct", "used_pct")),
         "disk_mount": _str(_first(row, "d_mount", "d_mountpoint", "mount")),
         "recorded_at": _first(row, "c_ts", "sys_ts", "p_ts", "d_ts", "ts"),

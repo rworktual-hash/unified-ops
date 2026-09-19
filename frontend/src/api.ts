@@ -1014,6 +1014,7 @@ export type VoiceMgExtra = {
   stall: number | null
   udp_active: number | null
   udp_inactive: number | null
+  quality_source: string | null
   rtcp: string | null
   disk_used_pct: number | null
   disk_mount: string | null

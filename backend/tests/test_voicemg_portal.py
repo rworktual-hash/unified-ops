@@ -69,6 +69,8 @@ def test_map_server_quality_fields():
         "product": "ai_ccaas",
         "c_active_calls": 6,
         "c_mos": 4.37,
+        "c_pkt_loss_pct": 0.0,
+        "c_quality_source": "rtcp",
         "c_stalled_udp": 2,
         "c_pkts_sent_ps": 100,
         "c_pkts_recv_ps": 100,
@@ -82,6 +84,8 @@ def test_map_server_quality_fields():
     assert out["stall"] == 2
     assert out["udp_active"] == 324
     assert out["packet_loss_pct"] == 0.0
+    assert out["quality_source"] == "rtcp"
+    assert out["rtcp"] == "rtcp"
 
 
 @patch("app.services.voicemg_portal.settings")
