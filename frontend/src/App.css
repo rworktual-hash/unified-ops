@@ -1499,3 +1499,44 @@ button.linkish {
   border-radius: 12px;
   padding: 0.8rem 0.9rem;
 }
+
+.ai-group-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.ai-group-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.85rem 0.95rem;
+}
+
+.ai-group-card h3 {
+  margin: 0.2rem 0 0.15rem;
+  font-size: 1rem;
+}
+
+.ai-group-score {
+  margin: 0.15rem 0;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.ai-group-score--ok {
+  color: #15803d;
+}
+
+.ai-group-score--partial {
+  color: #b45309;
+}
+
+.ai-group-score--fail {
+  color: #b91c1c;
+}
+
+.ai-group-score--unknown {
+  color: var(--muted);
+}

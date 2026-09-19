@@ -26,6 +26,62 @@ _SECRET_HINTS = (
     "hash",
     "webhook",
 )
+_GROUP_DEFS: tuple[tuple[str, str], ...] = (
+    ("ai", "AI-Servers"),
+    ("nginx", "Nginx"),
+    ("kong", "Kong Gateway"),
+    ("redis", "Redis"),
+    ("mysql", "MySQL"),
+    ("postgres", "PostgreSQL"),
+    ("mail", "Mail Servers"),
+    ("voicemg", "VoiceMG Servers"),
+    ("pbx", "PBX Signaling"),
+    ("sip", "SIP Gateway"),
+    ("cpu", "CPU Servers"),
+)
+
+
+def _norm_key(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+def normalize_ai_group(name: str, raw_group: str | None, server_type: str | None = None) -> tuple[str, str]:
+    """Map portal group / hostname onto aiservers.worktual.tech sidebar groups."""
+    candidates = [raw_group or "", server_type or ""]
+    for cand in candidates:
+        key = _norm_key(cand)
+        if not key:
+            continue
+        for gid, label in _GROUP_DEFS:
+            if key in {_norm_key(gid), _norm_key(label)} or _norm_key(gid) in key or key in _norm_key(label):
+                return gid, label
+
+    text = f"{name} {raw_group or ''} {server_type or ''}".lower()
+    if any(part in text for part in ("gpu", "nvidia", "h100", "ai-server", "ai_server")):
+        return "ai", "AI-Servers"
+    if "kong" in text:
+        return "kong", "Kong Gateway"
+    if "nginx" in text or "kafka" in text:
+        return "nginx", "Nginx"
+    if "redis" in text:
+        return "redis", "Redis"
+    if any(part in text for part in ("postgres", "postgresql", "ontology")):
+        return "postgres", "PostgreSQL"
+    if any(part in text for part in ("mysql", "ur-db", "ccaas-db", "campaign-db", "crm-db")):
+        return "mysql", "MySQL"
+    if any(part in text for part in ("mail", "email", "mta")):
+        return "mail", "Mail Servers"
+    if any(part in text for part in ("vmg", "stt", "voicemg")):
+        return "voicemg", "VoiceMG Servers"
+    if "pbx" in text or "ippbx" in text:
+        return "pbx", "PBX Signaling"
+    if any(part in text for part in ("sip", "sgw", "kamailio")):
+        return "sip", "SIP Gateway"
+    if "cpu" in text:
+        return "cpu", "CPU Servers"
+    return "other", raw_group or "Other"
+
+
 _PRIORITY_KEYS = (
     "qps",
     "queries_per_sec",
@@ -243,15 +299,25 @@ def fetch_ai_insights_extras() -> dict:
                 if service_cols
                 else ""
             )
+            group_cols = _safe_columns(conn, "ai_groups") if _table_exists(conn, "ai_groups") else []
+            join_col = next((c for c in ("group_id", "server_group", "group") if c in server_cols), None)
+            group_select = ""
+            group_join = ""
+            if group_cols and "id" in group_cols and join_col:
+                label_cols = [c for c in ("label", "description", "id") if c in group_cols]
+                group_select = ", " + _select("g", label_cols, "g_")
+                group_join = f" LEFT JOIN ai_groups g ON g.id = s.`{join_col}` "
 
             sql = text(
                 f"SELECT {_select('s', server_cols)}"
                 + metric_select
                 + health_select
                 + service_select
+                + group_select
                 + """
                 FROM ai_servers s
                 """
+                + group_join
                 + (
                     """
                 LEFT JOIN ai_server_metrics m
@@ -317,13 +383,18 @@ def _map_server(row, alerts: dict[int, int]) -> dict:
     extras = flatten_service_payload(_first(row, "svc_payload", "payload"))
     health_score = _int(_first(row, "h_overall_score", "overall_score"))
     health_status = _str(_first(row, "h_status", "status"))
+    server_name = _str(_first(row, "server_name", "hostname")) or f"ai-{server_id}"
+    server_type = _str(_first(row, "svc_server_type", "server_type", "g_collector_kind"))
+    raw_group = _str(_first(row, "g_label", "g_id", "server_group", "group_id", "group"))
+    group_id, group_label = normalize_ai_group(server_name, raw_group, server_type)
     return {
         "id": server_id,
-        "server_name": _str(_first(row, "server_name", "hostname")) or f"ai-{server_id}",
+        "server_name": server_name,
         "ip_address": _str(_first(row, "ip_address")) or "",
         "hostname": _str(_first(row, "hostname")),
-        "group": _str(_first(row, "server_group", "group_id", "group", "server_type")),
-        "server_type": _str(_first(row, "svc_server_type", "server_type")),
+        "group": group_label,
+        "group_id": group_id,
+        "server_type": server_type,
         "health_score": health_score,
         "health_status": health_status,
         "cpu_utilization": _num(_first(row, "m_cpu_utilization", "cpu_utilization")),

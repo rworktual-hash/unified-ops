@@ -942,6 +942,7 @@ export type AiInsightExtra = {
   ip_address: string
   hostname: string | null
   group: string | null
+  group_id: string | null
   server_type: string | null
   health_score: number | null
   health_status: string | null

@@ -28,6 +28,7 @@ import {
   type VoiceMgExtra,
 } from './api'
 import { clearStoredToken } from './authStorage'
+import { AiInsightsGroups } from './components/AiInsightsGroups'
 import { BackupVaultPanel } from './components/BackupVaultPanel'
 import { ChatPanel } from './components/ChatPanel'
 import { LoginPage } from './components/LoginPage'
@@ -327,6 +328,8 @@ function App() {
                 </button>
               )}
             </header>
+
+            <AiInsightsGroups extras={aiExtras} />
 
             <ServersByDomain
               servers={monitoredServers}

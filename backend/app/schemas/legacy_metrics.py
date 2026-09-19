@@ -302,6 +302,7 @@ class AiInsightExtraRead(BaseModel):
     ip_address: str
     hostname: str | None = None
     group: str | None = None
+    group_id: str | None = None
     server_type: str | None = None
     health_score: int | None = None
     health_status: str | None = None
