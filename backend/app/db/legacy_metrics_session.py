@@ -20,4 +20,9 @@ def get_legacy_metrics_engine(database: str | None = None) -> Engine | None:
     url = settings.legacy_metrics_database_url
     if not url:
         return None
-    return create_engine(_with_database(url, database), pool_pre_ping=True, pool_recycle=3600)
+    return create_engine(
+        _with_database(url, database),
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        connect_args={"connect_timeout": 8},
+    )

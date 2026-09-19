@@ -70,17 +70,27 @@ def _select(alias: str, cols: list[str], prefix: str = "") -> str:
 
 
 def _latest_join(alias: str, table: str, cols: list[str], prefix: str) -> tuple[str, str]:
-    if not cols or not _IDENT.match(table) or not _IDENT.match(alias):
+    if (
+        not cols
+        or "id" not in cols
+        or "server_id" not in cols
+        or not _IDENT.match(table)
+        or not _IDENT.match(alias)
+    ):
         return "", ""
     select_cols = [c for c in cols if c != "id"]
     select = ", " + _select(alias, select_cols, prefix) if select_cols else ""
+    latest = f"{alias}_latest"
     join = f"""
-                LEFT JOIN `{table}` {alias}
-                  ON {alias}.id = (
-                    SELECT x.id FROM `{table}` x
-                    WHERE x.server_id = s.id
-                    ORDER BY x.id DESC LIMIT 1
-                  )
+                LEFT JOIN (
+                  SELECT t.*
+                  FROM `{table}` t
+                  INNER JOIN (
+                    SELECT server_id, MAX(id) AS max_id
+                    FROM `{table}`
+                    GROUP BY server_id
+                  ) {latest} ON {latest}.max_id = t.id
+                ) {alias} ON {alias}.server_id = s.id
     """
     return select, join
 
@@ -149,6 +159,10 @@ def fetch_voicemg_extras() -> dict:
     database = extra
     try:
         with engine.connect() as conn:
+            try:
+                conn.execute(text("SET SESSION max_execution_time = 10000"))
+            except Exception:
+                pass
             if not _table_exists(conn, "servers"):
                 return _empty("servers table not found", database)
 

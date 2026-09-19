@@ -48,24 +48,28 @@ type Props = {
 export function VoiceMgPanel({ isAdmin = false }: Props) {
   const [overview, setOverview] = useState<VoiceMgOverview | null>(null)
   const [extras, setExtras] = useState<VoiceMgExtra[]>([])
+  const [extrasLoading, setExtrasLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setExtrasLoading(true)
     setError(null)
+    const extrasPromise = fetchVoiceMgExtras().catch(() => ({
+      ok: false,
+      servers: [] as VoiceMgExtra[],
+    }))
     try {
-      const [ssh, portal] = await Promise.all([
-        fetchVoiceMgOverview(),
-        fetchVoiceMgExtras().catch(() => ({ ok: false, servers: [] as VoiceMgExtra[] })),
-      ])
-      setOverview(ssh)
-      setExtras(portal.ok ? portal.servers : [])
+      setOverview(await fetchVoiceMgOverview())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load VoiceMG metrics')
     } finally {
       setLoading(false)
     }
+    const portal = await extrasPromise
+    setExtras(portal.ok ? portal.servers : [])
+    setExtrasLoading(false)
   }, [])
 
   useEffect(() => {
@@ -184,7 +188,8 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
                               server.ip_address,
                               server.server_name,
                             )
-                            return extra ? <VoiceMgExtras extra={extra} compact /> : '—'
+                            if (extra) return <VoiceMgExtras extra={extra} compact />
+                            return extrasLoading ? <span className="muted">…</span> : '—'
                           })()}
                         </td>
                         <td>
