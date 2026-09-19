@@ -1098,6 +1098,43 @@ export async function fetchVoiceMgExtras(): Promise<VoiceMgExtras> {
   return res.json()
 }
 
+export type VoiceMgHistoryRange = '5m' | 'today'
+export type VoiceMgHistoryGroup = 'all' | 'ai_ccaas' | 'ccaas'
+
+export type VoiceMgHistoryPoint = {
+  ts: string
+  active_calls: number | null
+  mos: number | null
+  jitter_ms: number | null
+  packet_loss_pct: number | null
+  rtp_mbps: number | null
+  cpu_pct: number | null
+}
+
+export type VoiceMgHistory = {
+  ok: boolean
+  database?: string | null
+  reason?: string | null
+  range: VoiceMgHistoryRange | string
+  group: VoiceMgHistoryGroup | string
+  since: string | null
+  bucket_seconds: number
+  host_count: number
+  point_count: number
+  points: VoiceMgHistoryPoint[]
+}
+
+export async function fetchVoiceMgHistory(
+  range: VoiceMgHistoryRange,
+  group: VoiceMgHistoryGroup,
+): Promise<VoiceMgHistory> {
+  const res = await apiFetch(`/legacy-metrics/voicemg/history?range=${range}&group=${group}`, {
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) throw new Error('Failed to load VoiceMG history')
+  return res.json()
+}
+
 export function matchVoiceMgExtra(
   extras: VoiceMgExtra[] | undefined,
   ip: string,

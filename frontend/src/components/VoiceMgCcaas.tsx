@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import type { VoiceMgExtra } from '../api'
+import type { VoiceMgExtra, VoiceMgHistoryGroup, VoiceMgHistoryRange } from '../api'
 import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
+import { VoiceMgHistory } from './VoiceMgHistory'
 
-type FilterId = 'all' | 'ai_ccaas' | 'ccaas'
+type FilterId = VoiceMgHistoryGroup
 
 function avg(values: Array<number | null | undefined>): number | null {
   const nums = values.filter((v): v is number => v != null && !Number.isNaN(v))
@@ -47,6 +48,7 @@ type Props = {
 
 export function VoiceMgCcaas({ servers, loading = false }: Props) {
   const [filter, setFilter] = useState<FilterId>('ai_ccaas')
+  const [range, setRange] = useState<VoiceMgHistoryRange>('5m')
   const rows = useMemo(() => {
     if (filter === 'all') return servers
     return servers.filter((row) => (row.group || 'ccaas') === filter)
@@ -70,7 +72,7 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
           <h2>Live CCaaS / AI-CCaaS</h2>
           <p className="muted">
             Latest MariaDB <code>voicemg</code> row per host — updates every {LIVE_EXTRAS_INTERVAL_MS / 1000}s.
-            Same live numbers as voicemg.worktual.tech.
+            History is a live SELECT for 5m / today (not the incremental sync at the bottom).
           </p>
         </div>
         <div className="bv-tabs">
@@ -125,6 +127,28 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
         <Kpi label="RTP Mbps" value={fmt(kpis.rtp, 1)} />
         <Kpi label="Avg CPU %" value={kpis.cpu == null ? '—' : `${fmt(kpis.cpu, 0)}%`} />
       </div>
+
+      <div className="chart-toolbar">
+        <span className="muted">History from MariaDB</span>
+        <div className="bv-tabs">
+          {(
+            [
+              ['5m', 'Last 5 min'],
+              ['today', 'Today'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`bv-tab ${range === id ? 'active' : ''}`}
+              onClick={() => setRange(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <VoiceMgHistory range={range} group={filter} />
 
       <div className="vmg-ccaas-cards">
         {rows.map((row) => (

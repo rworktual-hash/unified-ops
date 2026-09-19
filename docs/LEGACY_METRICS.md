@@ -86,6 +86,7 @@ Review `legacy-metrics-discovery.json`, then set `LEGACY_*_TABLE` and `LEGACY_*_
 | GET | `/api/legacy-metrics/inventory/catalog` | Read-only DID / SSL / domain lists from the same `server_inventory` DB (no add / edit / upload). UI polls every 5s on those tabs; API caches 2s. |
 | GET | `/api/legacy-metrics/ai-insights/extras` | Latest health / service tiles from `ai_insights_platform` (no new sidebar app; Servers page group cards + existing extras). UI polls every 5s; API caches 2s. |
 | GET | `/api/legacy-metrics/voicemg/extras` | Latest system + call/RTP tiles from `voicemg` (no new tabs; enriches VoiceMG SSH table + Server cards). UI polls every 5s; API caches 2s. |
+| GET | `/api/legacy-metrics/voicemg/history` | Live 5m / today series from `voicemg.metrics_calls` + `metrics_system` (read-only, not `legacy_metric_points`). |
 | GET | `/api/legacy-metrics/points` | Raw synced points |
 | POST | `/api/legacy-metrics/sync` | Admin — all enabled streams |
 | POST | `/api/legacy-metrics/sync/{domain}` | Admin — one stream |

@@ -1540,3 +1540,11 @@ button.linkish {
 .ai-group-score--unknown {
   color: var(--muted);
 }
+
+.vmg-history {
+  margin: 0.85rem 0 0.25rem;
+}
+
+.vmg-history .charts-grid {
+  margin-top: 0.5rem;
+}

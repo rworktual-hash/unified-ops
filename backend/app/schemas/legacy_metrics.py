@@ -434,6 +434,29 @@ class VoiceMgExtrasRead(BaseModel):
     servers: list[VoiceMgExtraRead]
 
 
+class VoiceMgHistoryPointRead(BaseModel):
+    ts: datetime
+    active_calls: float | None = None
+    mos: float | None = None
+    jitter_ms: float | None = None
+    packet_loss_pct: float | None = None
+    rtp_mbps: float | None = None
+    cpu_pct: float | None = None
+
+
+class VoiceMgHistoryRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    range: str
+    group: str
+    since: datetime | None = None
+    bucket_seconds: int = 10
+    host_count: int = 0
+    point_count: int = 0
+    points: list[VoiceMgHistoryPointRead]
+
+
 class LegacyMetricPointRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

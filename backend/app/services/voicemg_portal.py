@@ -7,6 +7,8 @@ Never selects password / secret / token columns.
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -313,3 +315,275 @@ def _map_server(row) -> dict:
         "disk_mount": _str(_first(row, "d_mount", "d_mountpoint", "mount")),
         "recorded_at": _first(row, "c_ts", "sys_ts", "p_ts", "d_ts", "ts"),
     }
+
+
+HISTORY_RANGES = {"5m", "today"}
+HISTORY_GROUPS = {"all", "ai_ccaas", "ccaas"}
+_CALL_METRICS = (
+    "active_calls",
+    "rtp_sessions",
+    "rtp_mbps_out",
+    "rtp_mbps_in",
+    "jitter_ms",
+    "pkt_loss_pct",
+    "mos",
+    "pkts_lost_delta",
+    "pkts_sent_ps",
+    "pkts_recv_ps",
+)
+_SYS_METRICS = ("cpu_pct", "load1", "mem_used_mb", "mem_total_mb")
+
+
+def _empty_history(
+    reason: str,
+    range_id: str = "5m",
+    group: str = "all",
+    database: str | None = None,
+) -> dict:
+    return {
+        "ok": False,
+        "reason": reason,
+        "database": database,
+        "range": range_id,
+        "group": group,
+        "since": None,
+        "bucket_seconds": 10 if range_id == "5m" else 60,
+        "host_count": 0,
+        "point_count": 0,
+        "points": [],
+    }
+
+
+def _as_dt(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    return None
+
+
+def downsample_rows(rows: list[dict], max_points: int) -> list[dict]:
+    if max_points <= 0 or len(rows) <= max_points:
+        return rows
+    if max_points == 1:
+        return [rows[-1]]
+    last_idx = len(rows) - 1
+    out: list[dict] = []
+    seen: set[int] = set()
+    for i in range(max_points):
+        idx = round(i * last_idx / (max_points - 1))
+        if idx in seen:
+            continue
+        seen.add(idx)
+        out.append(rows[idx])
+    return out
+
+
+def _bucket_key(ts: Any, seconds: int) -> datetime | None:
+    dt = _as_dt(ts)
+    if dt is None or seconds <= 0:
+        return None
+    epoch = int(dt.replace(tzinfo=None).timestamp())
+    snapped = epoch - (epoch % seconds)
+    return datetime.fromtimestamp(snapped)
+
+
+def map_history_sample(row: dict) -> dict:
+    sent = _num(_first(row, "pkts_sent_ps"))
+    recv = _num(_first(row, "pkts_recv_ps"))
+    lost = _num(_first(row, "pkts_lost_delta"))
+    loss = _num(_first(row, "pkt_loss_pct"))
+    if loss is None and lost is not None:
+        denom = (sent or 0) + (recv or 0)
+        if denom > 0:
+            loss = 100.0 * lost / denom
+    rtp_out = _num(_first(row, "rtp_mbps_out"))
+    rtp_in = _num(_first(row, "rtp_mbps_in"))
+    rtp = None
+    if rtp_out is not None or rtp_in is not None:
+        rtp = (rtp_out or 0) + (rtp_in or 0)
+    return {
+        "ts": _as_dt(_first(row, "ts")),
+        "active_calls": _num(_first(row, "active_calls")),
+        "mos": _num(_first(row, "mos")),
+        "jitter_ms": _num(_first(row, "jitter_ms")),
+        "packet_loss_pct": loss,
+        "rtp_mbps": rtp,
+        "cpu_pct": _num(_first(row, "cpu_pct")),
+    }
+
+
+def merge_host_series(
+    call_rows: list[dict],
+    sys_rows: list[dict],
+    bucket_seconds: int,
+    max_points: int = 120,
+) -> list[dict]:
+    by_ts: dict[datetime, dict] = {}
+    for raw in call_rows + sys_rows:
+        sample = map_history_sample(raw)
+        key = _bucket_key(sample["ts"], bucket_seconds)
+        if key is None:
+            continue
+        prev = by_ts.get(key, {"ts": key})
+        for field in (
+            "active_calls",
+            "mos",
+            "jitter_ms",
+            "packet_loss_pct",
+            "rtp_mbps",
+            "cpu_pct",
+        ):
+            if sample.get(field) is not None:
+                prev[field] = sample[field]
+        by_ts[key] = prev
+    ordered = [by_ts[key] for key in sorted(by_ts)]
+    return downsample_rows(ordered, max_points)
+
+
+def _avg_num(values) -> float | None:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    return round(sum(nums) / len(nums), 3)
+
+
+def _sum_num(values) -> float | None:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    return round(sum(nums), 3)
+
+
+def fleet_points(host_series: list[list[dict]]) -> list[dict]:
+    buckets: dict[datetime, list[dict]] = defaultdict(list)
+    for series in host_series:
+        for point in series:
+            ts = point.get("ts")
+            if isinstance(ts, datetime):
+                buckets[ts].append(point)
+    out = []
+    for ts in sorted(buckets):
+        samples = buckets[ts]
+        out.append(
+            {
+                "ts": ts,
+                "active_calls": _sum_num(s.get("active_calls") for s in samples),
+                "mos": _avg_num(s.get("mos") for s in samples),
+                "jitter_ms": _avg_num(s.get("jitter_ms") for s in samples),
+                "packet_loss_pct": _avg_num(s.get("packet_loss_pct") for s in samples),
+                "rtp_mbps": _sum_num(s.get("rtp_mbps") for s in samples),
+                "cpu_pct": _avg_num(s.get("cpu_pct") for s in samples),
+            }
+        )
+    return out
+
+
+def fetch_voicemg_history(range_id: str = "5m", group: str = "all") -> dict:
+    range_id = range_id if range_id in HISTORY_RANGES else "5m"
+    group = group if group in HISTORY_GROUPS else "all"
+    cache_key = f"voicemg_history:{range_id}:{group}"
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+    out = _fetch_voicemg_history(range_id, group)
+    set_cached(cache_key, out)
+    return out
+
+
+def _fetch_voicemg_history(range_id: str, group: str) -> dict:
+    engine, extra = _engine()
+    if engine is None:
+        return _empty_history(extra, range_id, group)
+    database = extra
+    bucket_seconds = 10 if range_id == "5m" else 60
+    row_limit = 400 if range_id == "5m" else 800
+    try:
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("SET SESSION max_execution_time = 10000"))
+            except Exception:
+                pass
+            clock = conn.execute(text("SELECT NOW() AS now, CURDATE() AS today")).mappings().first()
+            now = clock["now"] if clock else datetime.now()
+            today = clock["today"] if clock else now.date()
+            since = (
+                now - timedelta(minutes=5)
+                if range_id == "5m"
+                else datetime.combine(today, datetime.min.time())
+            )
+            if not _table_exists(conn, "servers"):
+                return _empty_history("servers table not found", range_id, group, database)
+            server_cols = _safe_columns(conn, "servers")
+            if "id" not in server_cols:
+                return _empty_history("servers.id missing", range_id, group, database)
+            system_cols = (
+                _safe_columns(conn, "metrics_system") if _table_exists(conn, "metrics_system") else []
+            )
+            calls_cols = (
+                _safe_columns(conn, "metrics_calls") if _table_exists(conn, "metrics_calls") else []
+            )
+            order_col = "hostname" if "hostname" in server_cols else "id"
+            host_rows = (
+                conn.execute(
+                    text(
+                        f"SELECT {_select('s', server_cols)} FROM servers s "
+                        f"ORDER BY s.`{order_col}` LIMIT 40"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            series: list[list[dict]] = []
+            host_count = 0
+            for host in host_rows:
+                server_id = _int(host.get("id"))
+                if server_id is None:
+                    continue
+                hostname = _str(_first(host, "hostname", "server_name", "name")) or ""
+                if group != "all" and product_group(hostname, _str(host.get("product"))) != group:
+                    continue
+                host_count += 1
+                call_rows = _window_rows(conn, "metrics_calls", calls_cols, server_id, since, row_limit)
+                sys_rows = _window_rows(conn, "metrics_system", system_cols, server_id, since, row_limit)
+                series.append(merge_host_series(call_rows, sys_rows, bucket_seconds))
+        points = fleet_points(series)
+        return {
+            "ok": True,
+            "reason": None,
+            "database": database,
+            "range": range_id,
+            "group": group,
+            "since": since,
+            "bucket_seconds": bucket_seconds,
+            "host_count": host_count,
+            "point_count": len(points),
+            "points": points,
+        }
+    except Exception as exc:
+        return _empty_history(str(exc), range_id, group, database)
+
+
+def _window_rows(conn, table: str, cols: list[str], server_id: int, since: datetime, limit: int) -> list[dict]:
+    if not cols or "ts" not in cols or "server_id" not in cols or "id" not in cols:
+        return []
+    if not _IDENT.match(table):
+        return []
+    wanted = ["ts"]
+    for name in _CALL_METRICS + _SYS_METRICS:
+        if name in cols:
+            wanted.append(name)
+    quoted = ", ".join(f"`{c}`" for c in wanted if _IDENT.match(c))
+    rows = (
+        conn.execute(
+            text(
+                f"SELECT {quoted} FROM `{table}` "
+                "WHERE server_id = :sid AND ts >= :since "
+                "ORDER BY id DESC LIMIT :lim"
+            ),
+            {"sid": server_id, "since": since, "lim": limit},
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(row) for row in reversed(list(rows))]

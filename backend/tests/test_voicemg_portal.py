@@ -1,10 +1,17 @@
+from datetime import datetime
+
 from unittest.mock import patch
 
 from app.services.voicemg_portal import (
     _map_server,
     _prefixed,
+    downsample_rows,
     fetch_voicemg_extras,
+    fetch_voicemg_history,
+    fleet_points,
+    map_history_sample,
     mem_label,
+    merge_host_series,
     product_group,
 )
 
@@ -94,4 +101,62 @@ def test_fetch_skips_without_url(mock_settings):
     out = fetch_voicemg_extras()
     assert out["ok"] is False
     assert out["servers"] == []
+    assert "LEGACY_METRICS_DATABASE_URL" in (out["reason"] or "")
+
+
+def test_downsample_rows_keeps_ends():
+    rows = [{"i": n} for n in range(10)]
+    out = downsample_rows(rows, 3)
+    assert out[0]["i"] == 0
+    assert out[-1]["i"] == 9
+    assert len(out) == 3
+
+
+def test_map_history_sample_derives_loss_and_rtp():
+    out = map_history_sample(
+        {
+            "ts": datetime(2026, 9, 19, 12, 0, 0),
+            "active_calls": 4,
+            "mos": 4.1,
+            "rtp_mbps_out": 1.5,
+            "rtp_mbps_in": 0.5,
+            "pkts_sent_ps": 100,
+            "pkts_recv_ps": 100,
+            "pkts_lost_delta": 2,
+        }
+    )
+    assert out["rtp_mbps"] == 2.0
+    assert out["packet_loss_pct"] == 1.0
+    assert out["active_calls"] == 4
+
+
+def test_merge_and_fleet_history():
+    ts = datetime(2026, 9, 19, 12, 0, 10)
+    host_a = merge_host_series(
+        [{"ts": ts, "active_calls": 3, "mos": 4.0, "rtp_mbps_out": 1, "rtp_mbps_in": 1}],
+        [{"ts": ts, "cpu_pct": 20}],
+        bucket_seconds=10,
+    )
+    host_b = merge_host_series(
+        [{"ts": ts, "active_calls": 5, "mos": 4.4, "rtp_mbps_out": 2, "rtp_mbps_in": 0}],
+        [{"ts": ts, "cpu_pct": 40}],
+        bucket_seconds=10,
+    )
+    fleet = fleet_points([host_a, host_b])
+    assert len(fleet) == 1
+    assert fleet[0]["active_calls"] == 8
+    assert fleet[0]["mos"] == 4.2
+    assert fleet[0]["rtp_mbps"] == 4
+    assert fleet[0]["cpu_pct"] == 30
+
+
+@patch("app.services.voicemg_portal.get_cached", return_value=None)
+@patch("app.services.voicemg_portal.settings")
+def test_history_skips_without_url(mock_settings, _cache):
+    mock_settings.legacy_metrics_database_url = None
+    out = fetch_voicemg_history("5m", "ai_ccaas")
+    assert out["ok"] is False
+    assert out["points"] == []
+    assert out["range"] == "5m"
+    assert out["group"] == "ai_ccaas"
     assert "LEGACY_METRICS_DATABASE_URL" in (out["reason"] or "")

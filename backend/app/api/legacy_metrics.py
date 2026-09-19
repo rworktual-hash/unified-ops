@@ -16,6 +16,7 @@ from app.schemas.legacy_metrics import (
     InventoryPortalRead,
     LegacyMetricPointRead,
     VoiceMgExtrasRead,
+    VoiceMgHistoryRead,
     LegacyOverviewRead,
     LegacyStatusRead,
     LegacyStreamStatusRead,
@@ -23,7 +24,7 @@ from app.schemas.legacy_metrics import (
 )
 from app.services.ai_insights_portal import fetch_ai_insights_extras
 from app.services.inventory_portal import fetch_inventory_catalog, fetch_inventory_portal
-from app.services.voicemg_portal import fetch_voicemg_extras
+from app.services.voicemg_portal import fetch_voicemg_extras, fetch_voicemg_history
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
     discover_legacy_schema,
@@ -101,6 +102,14 @@ def ai_insights_extras() -> AiInsightExtrasRead:
 @router.get("/voicemg/extras", response_model=VoiceMgExtrasRead)
 def voicemg_extras() -> VoiceMgExtrasRead:
     return VoiceMgExtrasRead.model_validate(fetch_voicemg_extras())
+
+
+@router.get("/voicemg/history", response_model=VoiceMgHistoryRead)
+def voicemg_history(
+    range_id: str = Query(default="5m", alias="range"),
+    group: str = Query(default="all"),
+) -> VoiceMgHistoryRead:
+    return VoiceMgHistoryRead.model_validate(fetch_voicemg_history(range_id, group))
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)
