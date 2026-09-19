@@ -19,8 +19,8 @@ Optional `.env` lists extend probes safely (allowlisted commands only):
 ## API & UI
 
 - `GET /api/voicemg/ssh-overview` — SSH snapshots (keep this)
-- `GET /api/legacy-metrics/voicemg/extras` — live MariaDB `voicemg` extras (CPU, load, mem, active calls, RTP, jitter). Match by IP then hostname. No new tabs.
-- Sidebar **VoiceMG** panel: SSH table **Portal extras** column + optional Server-card tiles when `project=voicemg`
+- `GET /api/legacy-metrics/voicemg/extras` — live MariaDB `voicemg` extras (CPU, load, mem, active calls, MOS, stall, RTP, jitter, UDP). Match by IP then hostname. No new sidebar tabs.
+- Sidebar **VoiceMG** panel: **Live CCaaS / AI-CCaaS** cards (same live numbers as voicemg.worktual.tech) + SSH table **Portal extras** + optional Server-card tiles when `project=voicemg`
 
 ## Guardrails
 

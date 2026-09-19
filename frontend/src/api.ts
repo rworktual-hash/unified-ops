@@ -993,17 +993,28 @@ export type VoiceMgExtra = {
   ip_address: string
   product: string | null
   role: string | null
+  group: string | null
   cpu_pct: number | null
   load1: number | null
   mem_used_mb: number | null
   mem_total_mb: number | null
   mem: string | null
+  mem_pct: number | null
   active_calls: number | null
   rtp_sessions: number | null
   rtp_mbps_out: number | null
   rtp_mbps_in: number | null
+  rtp_mbps_exp: number | null
   jitter_ms: number | null
   pkts_lost_delta: number | null
+  pkts_sent_ps: number | null
+  pkts_recv_ps: number | null
+  packet_loss_pct: number | null
+  mos: number | null
+  stall: number | null
+  udp_active: number | null
+  udp_inactive: number | null
+  rtcp: string | null
   disk_used_pct: number | null
   disk_mount: string | null
   recorded_at: string | null

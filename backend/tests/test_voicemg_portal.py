@@ -1,6 +1,12 @@
 from unittest.mock import patch
 
-from app.services.voicemg_portal import _map_server, _prefixed, fetch_voicemg_extras, mem_label
+from app.services.voicemg_portal import (
+    _map_server,
+    _prefixed,
+    fetch_voicemg_extras,
+    mem_label,
+    product_group,
+)
 
 
 def test_prefixed_skips_id():
@@ -46,6 +52,36 @@ def test_map_server_skips_missing_metrics():
     assert out["rtp_mbps_out"] == 1.25
     assert "password" not in out
     assert "api_token" not in out
+    assert out["group"] == "ccaas"
+
+
+def test_product_group_ai_ccaas():
+    assert product_group("ai-vmg1", "ccaas") == "ai_ccaas"
+    assert product_group("QA-NewAIVMG", None) == "ai_ccaas"
+    assert product_group("ccaas-stt1", "ccaas") == "ccaas"
+
+
+def test_map_server_quality_fields():
+    row = {
+        "id": 2,
+        "hostname": "ai-vmg1",
+        "ip_address": "10.180.0.83",
+        "product": "ai_ccaas",
+        "c_active_calls": 6,
+        "c_mos": 4.37,
+        "c_stalled_udp": 2,
+        "c_pkts_sent_ps": 100,
+        "c_pkts_recv_ps": 100,
+        "c_pkts_lost_delta": 0,
+        "p_udp_active": 324,
+        "p_udp_inactive": 2,
+    }
+    out = _map_server(row)
+    assert out["group"] == "ai_ccaas"
+    assert out["mos"] == 4.37
+    assert out["stall"] == 2
+    assert out["udp_active"] == 324
+    assert out["packet_loss_pct"] == 0.0
 
 
 @patch("app.services.voicemg_portal.settings")

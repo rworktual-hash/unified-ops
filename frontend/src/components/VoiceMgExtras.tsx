@@ -27,6 +27,8 @@ function compactBits(extra: VoiceMgExtra): string[] {
     extra.load1 != null ? `load ${extra.load1.toFixed(2)}` : null,
     extra.mem ? `mem ${extra.mem}` : null,
     extra.active_calls != null ? `calls ${extra.active_calls}` : null,
+    extra.mos != null ? `MOS ${extra.mos.toFixed(2)}` : null,
+    extra.stall != null ? `stall ${extra.stall}` : null,
     rtpLabel(extra) ? `RTP ${rtpLabel(extra)}` : null,
     extra.jitter_ms != null ? `jitter ${fmtNum(extra.jitter_ms)}ms` : null,
   ].filter((bit): bit is string => Boolean(bit))

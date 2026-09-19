@@ -8,6 +8,7 @@ import {
   type VoiceMgSnapshot,
 } from '../api'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
+import { VoiceMgCcaas } from './VoiceMgCcaas'
 import { VoiceMgExtras } from './VoiceMgExtras'
 
 function probeState(value: boolean | null): string {
@@ -96,6 +97,8 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
 
       {overview ? (
         <>
+          <VoiceMgCcaas servers={extras} loading={extrasLoading} />
+
           <section className="panel">
             <div className="stat-row backupvault-stat-row">
               <div className="stat-card">

@@ -137,6 +137,52 @@ def _fmt_mb(value: float) -> str:
     return f"{value:.1f}"
 
 
+def product_group(hostname: str, product: str | None) -> str:
+    name = hostname.lower().replace("_", "-")
+    prod = (product or "").lower()
+    if "ai" in prod or name.startswith("ai-") or "aivmg" in name.replace("-", ""):
+        return "ai_ccaas"
+    return "ccaas"
+
+
+def _find_num(row, *needles: str, exclude: tuple[str, ...] = ()) -> float | None:
+    for key, val in row.items():
+        lowered = str(key).lower()
+        if any(part in lowered for part in exclude):
+            continue
+        if any(needle in lowered for needle in needles):
+            number = _num(val)
+            if number is not None:
+                return number
+    return None
+
+
+def _latest_process_udp(conn, cols: list[str], server_id: int) -> dict:
+    if "ts" not in cols or not _IDENT.match("metrics_process"):
+        return {}
+    latest = conn.execute(
+        text("SELECT ts FROM metrics_process WHERE server_id = :sid ORDER BY id DESC LIMIT 1"),
+        {"sid": server_id},
+    ).first()
+    if not latest:
+        return {}
+    parts: list[str] = []
+    if "udp_active" in cols:
+        parts.append("SUM(udp_active) AS udp_active")
+    if "udp_inactive" in cols:
+        parts.append("SUM(udp_inactive) AS udp_inactive")
+    if not parts:
+        return {}
+    row = conn.execute(
+        text(
+            f"SELECT {', '.join(parts)} FROM metrics_process "
+            "WHERE server_id = :sid AND ts = :ts"
+        ),
+        {"sid": server_id, "ts": latest[0]},
+    ).mappings().first()
+    return _prefixed(dict(row), "p_") if row else {}
+
+
 def mem_label(used: float | None, total: float | None) -> str | None:
     if used is None and total is None:
         return None
@@ -167,6 +213,9 @@ def fetch_voicemg_extras() -> dict:
 
             system_cols = _safe_columns(conn, "metrics_system") if _table_exists(conn, "metrics_system") else []
             calls_cols = _safe_columns(conn, "metrics_calls") if _table_exists(conn, "metrics_calls") else []
+            process_cols = (
+                _safe_columns(conn, "metrics_process") if _table_exists(conn, "metrics_process") else []
+            )
 
             order_col = "hostname" if "hostname" in server_cols else "id"
             host_rows = conn.execute(
@@ -183,6 +232,8 @@ def fetch_voicemg_extras() -> dict:
                     merged.update(_prefixed(_latest_row(conn, "metrics_system", system_cols, server_id), "sys_"))
                 if calls_cols:
                     merged.update(_prefixed(_latest_row(conn, "metrics_calls", calls_cols, server_id), "c_"))
+                if process_cols:
+                    merged.update(_latest_process_udp(conn, process_cols, server_id))
                 rows.append(merged)
 
         servers = [_map_server(row) for row in rows]
@@ -195,27 +246,54 @@ def _map_server(row) -> dict:
     server_id = int(row["id"])
     hostname = _str(_first(row, "hostname", "server_name", "name")) or f"voicemg-{server_id}"
     ip = _str(_first(row, "ip_address", "ip", "host")) or ""
+    product = _str(_first(row, "product"))
     used = _num(_first(row, "sys_mem_used_mb", "mem_used_mb"))
     total = _num(_first(row, "sys_mem_total_mb", "mem_total_mb"))
+    sent = _num(_first(row, "c_pkts_sent_ps", "pkts_sent_ps"))
+    recv = _num(_first(row, "c_pkts_recv_ps", "pkts_recv_ps"))
+    lost = _num(_first(row, "c_pkts_lost_delta", "pkts_lost_delta"))
+    loss = _find_num(row, "loss_pct", "packet_loss", "loss_percent")
+    if loss is None and lost is not None:
+        denom = (sent or 0) + (recv or 0)
+        if denom > 0:
+            loss = 100.0 * lost / denom
+    stall = _int(
+        _find_num(row, "stall")
+        if _find_num(row, "stall") is not None
+        else _first(row, "p_udp_inactive", "udp_inactive")
+    )
+    mos = _find_num(row, "mos")
     return {
         "id": server_id,
         "hostname": hostname,
         "ip": ip,
         "ip_address": ip,
-        "product": _str(_first(row, "product")),
+        "product": product,
         "role": _str(_first(row, "role")),
+        "group": product_group(hostname, product),
         "cpu_pct": _num(_first(row, "sys_cpu_pct", "cpu_pct")),
         "load1": _num(_first(row, "sys_load1", "load1")),
         "mem_used_mb": used,
         "mem_total_mb": total,
         "mem": mem_label(used, total),
+        "mem_pct": (100.0 * used / total) if used is not None and total else None,
         "active_calls": _int(_first(row, "c_active_calls", "active_calls")),
         "rtp_sessions": _int(_first(row, "c_rtp_sessions", "rtp_sessions")),
         "rtp_mbps_out": _num(_first(row, "c_rtp_mbps_out", "rtp_mbps_out")),
         "rtp_mbps_in": _num(_first(row, "c_rtp_mbps_in", "rtp_mbps_in")),
+        "rtp_mbps_exp": _find_num(row, "rtp_mbps_exp", "expected_rtp", "rtp_exp"),
         "jitter_ms": _num(_first(row, "c_jitter_ms", "jitter_ms")),
-        "pkts_lost_delta": _num(_first(row, "c_pkts_lost_delta", "pkts_lost_delta")),
+        "pkts_lost_delta": lost,
+        "pkts_sent_ps": sent,
+        "pkts_recv_ps": recv,
+        "packet_loss_pct": loss,
+        "mos": mos,
+        "stall": stall,
+        "udp_active": _int(_first(row, "p_udp_active", "udp_active")),
+        "udp_inactive": _int(_first(row, "p_udp_inactive", "udp_inactive")),
+        "rtcp": _str(_first(row, "c_rtcp", "rtcp"))
+        or ("yes" if (_find_num(row, "rtcp") or 0) > 0 else None),
         "disk_used_pct": _num(_first(row, "d_used_pct", "d_disk_used_pct", "used_pct")),
         "disk_mount": _str(_first(row, "d_mount", "d_mountpoint", "mount")),
-        "recorded_at": _first(row, "c_ts", "sys_ts", "d_ts", "ts"),
+        "recorded_at": _first(row, "c_ts", "sys_ts", "p_ts", "d_ts", "ts"),
     }
