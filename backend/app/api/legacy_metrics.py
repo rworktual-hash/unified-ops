@@ -12,6 +12,7 @@ from app.schemas.legacy_metrics import (
     BackupVaultNfsRead,
     BackupVaultRunHistoryRead,
     BackupVaultTargetsRead,
+    InventoryCatalogRead,
     InventoryPortalRead,
     LegacyMetricPointRead,
     VoiceMgExtrasRead,
@@ -21,7 +22,7 @@ from app.schemas.legacy_metrics import (
     LegacySyncResultRead,
 )
 from app.services.ai_insights_portal import fetch_ai_insights_extras
-from app.services.inventory_portal import fetch_inventory_portal
+from app.services.inventory_portal import fetch_inventory_catalog, fetch_inventory_portal
 from app.services.voicemg_portal import fetch_voicemg_extras
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
@@ -85,6 +86,11 @@ def backupvault_monitoring() -> BackupVaultMonitoringRead:
 @router.get("/inventory", response_model=InventoryPortalRead)
 def inventory_portal() -> InventoryPortalRead:
     return InventoryPortalRead.model_validate(fetch_inventory_portal())
+
+
+@router.get("/inventory/catalog", response_model=InventoryCatalogRead)
+def inventory_catalog() -> InventoryCatalogRead:
+    return InventoryCatalogRead.model_validate(fetch_inventory_catalog())
 
 
 @router.get("/ai-insights/extras", response_model=AiInsightExtrasRead)

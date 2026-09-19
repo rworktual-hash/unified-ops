@@ -307,7 +307,7 @@ cd /opt/unified-ops/frontend && npm ci && npm run build
 # pkill -f "celery.*app.celery_app" ; ./scripts/run-celery-worker.sh &
 ```
 
-Then hard-refresh the browser (Ctrl+Shift+R). Open **Infrastructure** in the left sidebar (not only the Infrastructure domain tab on Servers). Inventory tabs (Dashboard / Baremetal / Proxmox / VMs) read MariaDB `server_inventory` live; **Host SSH** is unchanged. Run **Collect all** once so SSH snapshots appear.
+Then hard-refresh the browser (Ctrl+Shift+R). Open **Infrastructure** in the left sidebar (not only the Infrastructure domain tab on Servers). Inventory tabs (Dashboard / Baremetal / Proxmox / VMs / DID / SSL / Domains) read MariaDB `server_inventory` live; **Host SSH** is unchanged. DID / SSL / Domain tabs are view-only lists (no add / edit / upload). Run **Collect all** once so SSH snapshots appear.
 
 Step-by-step SSH/nginx/auth: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_PORTS_AND_PRODUCTION.md).
 

@@ -6,12 +6,14 @@ Never selects password / secret / token columns.
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import text
 
 from app.config import settings
 from app.db.legacy_metrics_session import get_legacy_metrics_engine
+from app.services.live_cache import get_cached, set_cached
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SECRET_HINTS = (
@@ -456,3 +458,215 @@ def _build_dashboard(clusters, hosts, baremetal, vms, live_nodes, live_vms) -> d
         "storage_used_gb": storage_used,
         "storage_pct": _pct(storage_used, storage_total),
     }
+
+
+def _empty_catalog(reason: str, database: str | None = None) -> dict:
+    return {
+        "ok": False,
+        "reason": reason,
+        "database": database,
+        "did_total": 0,
+        "did_allocated": 0,
+        "ssl_total": 0,
+        "ssl_expiring": 0,
+        "domain_total": 0,
+        "dids": [],
+        "ssl": [],
+        "domains": [],
+        "providers": [],
+        "clients": [],
+    }
+
+
+def fetch_inventory_catalog() -> dict:
+    cached = get_cached("inventory_catalog")
+    if cached is not None:
+        return cached
+    out = _fetch_inventory_catalog()
+    set_cached("inventory_catalog", out)
+    return out
+
+
+def _fetch_inventory_catalog() -> dict:
+    """Read-only DID / SSL / domain lists from server_inventory. No writes."""
+    engine, extra = _inventory_engine()
+    if engine is None:
+        return _empty_catalog(extra)
+    database = extra
+    try:
+        with engine.connect() as conn:
+            dids = _load_dids(conn)
+            ssl_rows = _load_ssl(conn)
+            domains = _load_domains(conn)
+            providers = _load_simple(
+                conn,
+                "did_providers",
+                ("id", "provider_name", "contact_person", "support_email", "support_phone"),
+            )
+            clients = _load_simple(
+                conn,
+                "did_clients",
+                ("id", "company_name", "company_id", "contact_name", "contact_email", "status"),
+            )
+        allocated = sum(1 for row in dids if (row.get("status") or "").lower() in {"allocated", "active", "in_use"})
+        expiring = sum(1 for row in ssl_rows if (row.get("remaining_days") or 999) <= 30)
+        return {
+            "ok": True,
+            "reason": None,
+            "database": database,
+            "did_total": len(dids),
+            "did_allocated": allocated,
+            "ssl_total": len(ssl_rows),
+            "ssl_expiring": expiring,
+            "domain_total": len(domains),
+            "dids": dids,
+            "ssl": ssl_rows,
+            "domains": domains,
+            "providers": providers,
+            "clients": clients,
+        }
+    except Exception as exc:
+        return _empty_catalog(str(exc), database)
+
+
+def _load_simple(conn, table: str, keys: tuple[str, ...]) -> list[dict]:
+    if not _table_exists(conn, table):
+        return []
+    cols = _safe_columns(conn, table)
+    if "id" not in cols:
+        return []
+    rows = conn.execute(text(f"SELECT {_select('t', cols)} FROM `{table}` t ORDER BY t.id")).mappings().all()
+    out = []
+    for row in rows:
+        item = {"id": int(row["id"])}
+        for key in keys:
+            if key == "id":
+                continue
+            item[key] = _str(_first(row, key))
+        out.append(item)
+    return out
+
+
+def _load_dids(conn) -> list[dict]:
+    if not _table_exists(conn, "did_numbers"):
+        return []
+    num_cols = _safe_columns(conn, "did_numbers")
+    if "id" not in num_cols:
+        return []
+    prov_cols = _safe_columns(conn, "did_providers") if _table_exists(conn, "did_providers") else []
+    alloc_cols = _safe_columns(conn, "did_allocations") if _table_exists(conn, "did_allocations") else []
+    client_cols = _safe_columns(conn, "did_clients") if _table_exists(conn, "did_clients") else []
+    sql = f"SELECT {_select('n', num_cols)}"
+    joins = " FROM did_numbers n "
+    if prov_cols:
+        sql += ", " + _select("p", [c for c in prov_cols if c != "id"], "p_")
+        joins += " LEFT JOIN did_providers p ON p.id = n.provider_id "
+    if alloc_cols and "did_number_id" in alloc_cols:
+        sql += ", " + _select("a", [c for c in alloc_cols if c != "id"], "a_")
+        joins += """
+            LEFT JOIN did_allocations a ON a.id = (
+              SELECT x.id FROM did_allocations x
+              WHERE x.did_number_id = n.id
+              ORDER BY x.id DESC LIMIT 1
+            )
+        """
+        if client_cols:
+            sql += ", " + _select("c", [c for c in client_cols if c != "id"], "c_")
+            joins += " LEFT JOIN did_clients c ON c.id = a.client_id "
+    rows = conn.execute(text(sql + joins + " ORDER BY n.id LIMIT 500")).mappings().all()
+    out = []
+    for row in rows:
+        status = _str(_first(row, "did_status", "a_status", "status"))
+        out.append(
+            {
+                "id": int(row["id"]),
+                "did_number": _str(_first(row, "did_number")) or "",
+                "country_code": _str(_first(row, "country_code")),
+                "area_code": _str(_first(row, "area_code")),
+                "number_type": _str(_first(row, "number_type")),
+                "status": status,
+                "provider": _str(_first(row, "p_provider_name", "provider_name")),
+                "client": _str(_first(row, "c_company_name", "kyc_for_company", "kyc_name")),
+                "use_case": _str(_first(row, "a_use_case", "use_case")),
+                "application": _str(_first(row, "a_application_name", "application_name")),
+                "monthly_cost": _num(_first(row, "monthly_cost")),
+                "purchase_date": _as_dt(_first(row, "purchase_date")),
+                "allocated_date": _as_dt(_first(row, "a_allocated_date")),
+            }
+        )
+    return out
+
+
+def _load_ssl(conn) -> list[dict]:
+    if not _table_exists(conn, "ssl_certificates"):
+        return []
+    cols = _safe_columns(conn, "ssl_certificates")
+    if "id" not in cols:
+        return []
+    domain_cols = _safe_columns(conn, "domains") if _table_exists(conn, "domains") else []
+    sql = f"SELECT {_select('s', cols)}"
+    joins = " FROM ssl_certificates s "
+    if domain_cols:
+        sql += ", " + _select("d", [c for c in domain_cols if c != "id"], "d_")
+        joins += " LEFT JOIN domains d ON d.id = s.domain_id "
+    rows = conn.execute(text(sql + joins + " ORDER BY s.id")).mappings().all()
+    out = []
+    for row in rows:
+        out.append(
+            {
+                "id": int(row["id"]),
+                "hostname": _str(_first(row, "hostname", "common_name", "d_domain_name")) or "",
+                "domain": _str(_first(row, "d_domain_name")),
+                "issuer": _str(_first(row, "issuer")),
+                "valid_from": _as_dt(_first(row, "valid_from")),
+                "valid_to": _as_dt(_first(row, "valid_to")),
+                "remaining_days": _remaining_days(
+                    _first(row, "remaining_days"), _first(row, "valid_to")
+                ),
+                "status": _str(_first(row, "status")),
+                "serial_number": _str(_first(row, "serial_number")),
+                "last_checked": _as_dt(_first(row, "last_checked")),
+            }
+        )
+    return out
+
+
+def _load_domains(conn) -> list[dict]:
+    if not _table_exists(conn, "domains"):
+        return []
+    cols = _safe_columns(conn, "domains")
+    if "id" not in cols:
+        return []
+    rows = conn.execute(text(f"SELECT {_select('d', cols)} FROM domains d ORDER BY d.id")).mappings().all()
+    return [
+        {
+            "id": int(row["id"]),
+            "domain_name": _str(_first(row, "domain_name")) or "",
+            "registrar": _str(_first(row, "registrar")),
+            "renewal_date": _as_dt(_first(row, "renewal_date")),
+            "team": _str(_first(row, "team")),
+            "status": _str(_first(row, "status")),
+            "notes": _str(_first(row, "notes")),
+        }
+        for row in rows
+    ]
+
+
+def _as_dt(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    return None
+
+
+def _remaining_days(stored: Any, valid_to: Any) -> int | None:
+    remaining = _int(stored)
+    if remaining is not None:
+        return remaining
+    expiry = valid_to.date() if isinstance(valid_to, datetime) else valid_to
+    if isinstance(expiry, date):
+        return (expiry - date.today()).days
+    return None

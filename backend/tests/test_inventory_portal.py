@@ -1,11 +1,16 @@
 from unittest.mock import MagicMock, patch
 
+from datetime import date, datetime, timedelta
+
 from app.services.inventory_portal import (
+    _as_dt,
     _as_gb,
     _build_dashboard,
     _is_online,
     _map_baremetal,
+    _remaining_days,
     _safe_columns,
+    fetch_inventory_catalog,
     fetch_inventory_portal,
 )
 
@@ -102,3 +107,25 @@ def test_fetch_skips_without_url(mock_settings):
     assert out["ok"] is False
     assert out["baremetal"] == []
     assert "LEGACY_METRICS_DATABASE_URL" in (out["reason"] or "")
+
+
+@patch("app.services.inventory_portal.get_cached", return_value=None)
+@patch("app.services.inventory_portal.settings")
+def test_catalog_skips_without_url(mock_settings, _cache):
+    mock_settings.legacy_metrics_database_url = None
+    out = fetch_inventory_catalog()
+    assert out["ok"] is False
+    assert out["dids"] == []
+    assert out["ssl"] == []
+    assert out["domains"] == []
+    assert "LEGACY_METRICS_DATABASE_URL" in (out["reason"] or "")
+
+
+def test_as_dt_promotes_date():
+    assert _as_dt(None) is None
+    assert _as_dt(date(2026, 1, 15)) == datetime(2026, 1, 15)
+
+
+def test_remaining_days_uses_valid_to():
+    assert _remaining_days(12, None) == 12
+    assert _remaining_days(None, date.today() + timedelta(days=7)) == 7

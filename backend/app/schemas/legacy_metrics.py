@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -288,6 +288,74 @@ class InventoryPortalRead(BaseModel):
     hosts: list[InventoryHostRead]
     baremetal: list[InventoryBaremetalRead]
     vms: list[InventoryVmRead]
+
+
+class InventoryDidRead(BaseModel):
+    id: int
+    did_number: str
+    country_code: str | None = None
+    area_code: str | None = None
+    number_type: str | None = None
+    status: str | None = None
+    provider: str | None = None
+    client: str | None = None
+    use_case: str | None = None
+    application: str | None = None
+    monthly_cost: float | None = None
+    purchase_date: datetime | date | None = None
+    allocated_date: datetime | date | None = None
+
+
+class InventorySslRead(BaseModel):
+    id: int
+    hostname: str
+    domain: str | None = None
+    issuer: str | None = None
+    valid_from: datetime | date | None = None
+    valid_to: datetime | date | None = None
+    remaining_days: int | None = None
+    status: str | None = None
+    serial_number: str | None = None
+    last_checked: datetime | date | None = None
+
+
+class InventoryDomainRead(BaseModel):
+    id: int
+    domain_name: str
+    registrar: str | None = None
+    renewal_date: datetime | date | None = None
+    team: str | None = None
+    status: str | None = None
+    notes: str | None = None
+
+
+class InventoryNamedRead(BaseModel):
+    id: int
+    provider_name: str | None = None
+    company_name: str | None = None
+    company_id: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_person: str | None = None
+    support_email: str | None = None
+    support_phone: str | None = None
+    status: str | None = None
+
+
+class InventoryCatalogRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    did_total: int = 0
+    did_allocated: int = 0
+    ssl_total: int = 0
+    ssl_expiring: int = 0
+    domain_total: int = 0
+    dids: list[InventoryDidRead]
+    ssl: list[InventorySslRead]
+    domains: list[InventoryDomainRead]
+    providers: list[InventoryNamedRead]
+    clients: list[InventoryNamedRead]
 
 
 class AiInsightExtraTileRead(BaseModel):

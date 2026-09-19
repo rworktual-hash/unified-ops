@@ -1,18 +1,47 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   fetchInfrastructureOverview,
+  fetchInventoryCatalog,
   fetchInventoryPortal,
   matchAiInsightExtra,
   type AiInsightExtra,
   type InfrastructureOverview,
   type InfrastructureSnapshot,
+  type InventoryCatalog as InventoryCatalogData,
   type InventoryPortal as InventoryPortalData,
 } from '../api'
+import { useLivePoll } from '../useLivePoll'
 import { AiInsightExtras } from './AiInsightExtras'
+import { InventoryCatalog } from './InventoryCatalog'
 import { InventoryPortal } from './InventoryPortal'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
 
-type TabId = 'dashboard' | 'baremetal' | 'proxmox' | 'vms' | 'hosts'
+type InventoryTab = 'dashboard' | 'baremetal' | 'proxmox' | 'vms'
+type CatalogTab = 'did' | 'ssl' | 'domains'
+type TabId = InventoryTab | CatalogTab | 'hosts'
+
+function isInventoryTab(tab: TabId): tab is InventoryTab {
+  return tab === 'dashboard' || tab === 'baremetal' || tab === 'proxmox' || tab === 'vms'
+}
+
+function isCatalogTab(tab: TabId): tab is CatalogTab {
+  return tab === 'did' || tab === 'ssl' || tab === 'domains'
+}
+
+const emptyCatalog = (): InventoryCatalogData => ({
+  ok: false,
+  reason: 'Catalog not loaded',
+  did_total: 0,
+  did_allocated: 0,
+  ssl_total: 0,
+  ssl_expiring: 0,
+  domain_total: 0,
+  dids: [],
+  ssl: [],
+  domains: [],
+  providers: [],
+  clients: [],
+})
 
 function state(value: boolean | null): string {
   return value == null ? 'Unknown' : value ? 'Running' : 'Check failed'
@@ -109,8 +138,10 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
   const [tab, setTab] = useState<TabId>('dashboard')
   const [overview, setOverview] = useState<InfrastructureOverview | null>(null)
   const [inventory, setInventory] = useState<InventoryPortalData | null>(null)
+  const [catalog, setCatalog] = useState<InventoryCatalogData | null>(null)
   const [loadingSsh, setLoadingSsh] = useState(true)
   const [loadingInv, setLoadingInv] = useState(true)
+  const [loadingCat, setLoadingCat] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const loadSsh = useCallback(async () => {
@@ -137,10 +168,35 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
     }
   }, [])
 
+  const loadCatalog = useCallback(async (silent = false) => {
+    if (!silent) setLoadingCat(true)
+    try {
+      const data = await fetchInventoryCatalog()
+      setCatalog(data)
+    } catch (err) {
+      setCatalog((prev) =>
+        prev
+          ? prev
+          : {
+              ...emptyCatalog(),
+              reason: err instanceof Error ? err.message : 'Failed to load DID / SSL / domains',
+            },
+      )
+    } finally {
+      if (!silent) setLoadingCat(false)
+    }
+  }, [])
+
   useEffect(() => {
     void loadSsh()
     void loadInventory()
-  }, [loadInventory, loadSsh])
+    void loadCatalog()
+  }, [loadCatalog, loadInventory, loadSsh])
+
+  const pollCatalog = useCallback(async () => {
+    await loadCatalog(true)
+  }, [loadCatalog])
+  useLivePoll(pollCatalog, isCatalogTab(tab))
 
   const counts = inventory?.ok
     ? {
@@ -156,8 +212,8 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
         <div>
           <h1>Infrastructure</h1>
           <p>
-            servers.worktual.tech inventory from MariaDB, plus existing SSH snapshots. Read-only —
-            no passwords, restarts, or control actions.
+            servers.worktual.tech inventory from MariaDB on 10.180.1.222 — servers, DID, SSL, and
+            domains — plus existing SSH snapshots. Read-only view lists only; no add / edit / upload.
           </p>
         </div>
       </header>
@@ -171,6 +227,9 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
             ['baremetal', `Baremetal${counts.baremetal ? ` (${counts.baremetal})` : ''}`],
             ['proxmox', `Proxmox${counts.hosts ? ` (${counts.hosts})` : ''}`],
             ['vms', `VMs${counts.vms ? ` (${counts.vms})` : ''}`],
+            ['did', `DID${catalog?.did_total ? ` (${catalog.did_total})` : ''}`],
+            ['ssl', `SSL${catalog?.ssl_total ? ` (${catalog.ssl_total})` : ''}`],
+            ['domains', `Domains${catalog?.domain_total ? ` (${catalog.domain_total})` : ''}`],
             ['hosts', 'Host SSH'],
           ] as const
         ).map(([id, label]) => (
@@ -185,12 +244,19 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
         ))}
       </nav>
 
-      {tab !== 'hosts' ? (
+      {isInventoryTab(tab) ? (
         <InventoryPortal
           data={inventory}
           loading={loadingInv}
           onRefresh={() => void loadInventory()}
           tab={tab}
+        />
+      ) : isCatalogTab(tab) ? (
+        <InventoryCatalog
+          data={catalog}
+          loading={loadingCat}
+          tab={tab}
+          onRefresh={() => void loadCatalog()}
         />
       ) : (
         <>

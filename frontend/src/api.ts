@@ -930,6 +930,67 @@ export async function fetchInventoryPortal(): Promise<InventoryPortal> {
   return res.json()
 }
 
+export type InventoryDid = {
+  id: number
+  did_number: string
+  country_code: string | null
+  area_code: string | null
+  number_type: string | null
+  status: string | null
+  provider: string | null
+  client: string | null
+  use_case: string | null
+  application: string | null
+  monthly_cost: number | null
+  purchase_date: string | null
+  allocated_date: string | null
+}
+
+export type InventorySsl = {
+  id: number
+  hostname: string
+  domain: string | null
+  issuer: string | null
+  valid_from: string | null
+  valid_to: string | null
+  remaining_days: number | null
+  status: string | null
+  serial_number: string | null
+  last_checked: string | null
+}
+
+export type InventoryDomain = {
+  id: number
+  domain_name: string
+  registrar: string | null
+  renewal_date: string | null
+  team: string | null
+  status: string | null
+  notes: string | null
+}
+
+export type InventoryCatalog = {
+  ok: boolean
+  database?: string | null
+  reason?: string | null
+  did_total: number
+  did_allocated: number
+  ssl_total: number
+  ssl_expiring: number
+  domain_total: number
+  dids: InventoryDid[]
+  ssl: InventorySsl[]
+  domains: InventoryDomain[]
+  providers: Array<{ id: number; provider_name?: string | null; support_email?: string | null }>
+  clients: Array<{ id: number; company_name?: string | null; contact_email?: string | null; status?: string | null }>
+}
+
+export async function fetchInventoryCatalog(): Promise<InventoryCatalog> {
+  const res = await apiFetch('/legacy-metrics/inventory/catalog')
+  if (!res.ok) throw new Error('Failed to load DID / SSL / domain catalog')
+  return res.json()
+}
+
 export type AiInsightExtraTile = {
   key: string
   label: string
