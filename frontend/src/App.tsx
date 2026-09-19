@@ -29,6 +29,7 @@ import {
 } from './api'
 import { clearStoredToken } from './authStorage'
 import { AiInsightsGroups } from './components/AiInsightsGroups'
+import { useLivePoll } from './useLivePoll'
 import { BackupVaultPanel } from './components/BackupVaultPanel'
 import { ChatPanel } from './components/ChatPanel'
 import { LoginPage } from './components/LoginPage'
@@ -171,6 +172,26 @@ function App() {
   useEffect(() => {
     if (session && session !== 'pending') void load()
   }, [session, load])
+
+  const pollAiExtras = useCallback(async () => {
+    try {
+      const extras = await fetchAiInsightExtras()
+      if (extras.ok) setAiExtras(extras.servers)
+    } catch {
+      /* keep last extras */
+    }
+  }, [])
+  const pollVoiceMgExtras = useCallback(async () => {
+    try {
+      const extras = await fetchVoiceMgExtras()
+      if (extras.ok) setVoiceMgExtras(extras.servers)
+    } catch {
+      /* keep last extras */
+    }
+  }, [])
+  const loggedIn = Boolean(session && session !== 'pending')
+  useLivePoll(pollAiExtras, loggedIn && (nav === 'servers' || nav === 'infrastructure'))
+  useLivePoll(pollVoiceMgExtras, loggedIn && nav === 'servers')
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },

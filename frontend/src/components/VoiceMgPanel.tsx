@@ -7,6 +7,7 @@ import {
   type VoiceMgOverview,
   type VoiceMgSnapshot,
 } from '../api'
+import { useLivePoll } from '../useLivePoll'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
 import { VoiceMgCcaas } from './VoiceMgCcaas'
 import { VoiceMgExtras } from './VoiceMgExtras'
@@ -76,6 +77,15 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
   useEffect(() => {
     void load()
   }, [load])
+
+  const pollExtras = useCallback(async () => {
+    const portal = await fetchVoiceMgExtras().catch(() => ({
+      ok: false,
+      servers: [] as VoiceMgExtra[],
+    }))
+    if (portal.ok) setExtras(portal.servers)
+  }, [])
+  useLivePoll(pollExtras, true)
 
   return (
     <>

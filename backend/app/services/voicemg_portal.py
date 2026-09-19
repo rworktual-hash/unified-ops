@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db.legacy_metrics_session import get_legacy_metrics_engine
+from app.services.live_cache import get_cached, set_cached
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SECRET_HINTS = (
@@ -194,6 +195,15 @@ def mem_label(used: float | None, total: float | None) -> str | None:
 
 
 def fetch_voicemg_extras() -> dict:
+    cached = get_cached("voicemg_extras")
+    if cached is not None:
+        return cached
+    out = _fetch_voicemg_extras()
+    set_cached("voicemg_extras", out)
+    return out
+
+
+def _fetch_voicemg_extras() -> dict:
     engine, extra = _engine()
     if engine is None:
         return _empty(extra)

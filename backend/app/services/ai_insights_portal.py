@@ -14,6 +14,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db.legacy_metrics_session import get_legacy_metrics_engine
+from app.services.live_cache import get_cached, set_cached
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SECRET_HINTS = (
@@ -272,6 +273,15 @@ def flatten_service_payload(raw: Any, limit: int = 10) -> list[dict]:
 
 
 def fetch_ai_insights_extras() -> dict:
+    cached = get_cached("ai_insights_extras")
+    if cached is not None:
+        return cached
+    out = _fetch_ai_insights_extras()
+    set_cached("ai_insights_extras", out)
+    return out
+
+
+def _fetch_ai_insights_extras() -> dict:
     engine, extra = _engine()
     if engine is None:
         return _empty(extra)

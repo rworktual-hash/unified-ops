@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { AiInsightExtra } from '../api'
+import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
 
 const GROUP_ORDER = [
   'ai',
@@ -78,7 +79,8 @@ export function AiInsightsGroups({ extras }: Props) {
         <div>
           <h2>AI Insights groups</h2>
           <p className="muted">
-            Live from MariaDB <code>ai_insights_platform</code> — same groups as aiservers.worktual.tech.
+            Live from MariaDB <code>ai_insights_platform</code> — updates every{' '}
+            {LIVE_EXTRAS_INTERVAL_MS / 1000}s (no refresh). Same groups as aiservers.worktual.tech.
           </p>
         </div>
       </div>

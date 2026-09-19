@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { VoiceMgExtra } from '../api'
+import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
 
 type FilterId = 'all' | 'ai_ccaas' | 'ccaas'
 
@@ -67,7 +68,10 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
       <div className="panel-head">
         <div>
           <h2>Live CCaaS / AI-CCaaS</h2>
-          <p className="muted">Latest MariaDB <code>voicemg</code> row per host — same live numbers as voicemg.worktual.tech.</p>
+          <p className="muted">
+            Latest MariaDB <code>voicemg</code> row per host — updates every {LIVE_EXTRAS_INTERVAL_MS / 1000}s.
+            Same live numbers as voicemg.worktual.tech.
+          </p>
         </div>
         <div className="bv-tabs">
           {(
