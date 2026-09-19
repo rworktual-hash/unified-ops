@@ -1548,3 +1548,30 @@ button.linkish {
 .vmg-history .charts-grid {
   margin-top: 0.5rem;
 }
+
+.vmg-range-toolbar {
+  align-items: flex-start;
+}
+
+.vmg-custom-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.vmg-custom-range label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.vmg-custom-range input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.3rem 0.45rem;
+  background: var(--panel, #fff);
+  color: var(--text);
+}

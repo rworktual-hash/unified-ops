@@ -317,7 +317,19 @@ def _map_server(row) -> dict:
     }
 
 
-HISTORY_RANGES = {"5m", "today"}
+HISTORY_RANGES = {
+    "5m",
+    "30m",
+    "1h",
+    "2h",
+    "6h",
+    "12h",
+    "today",
+    "yesterday",
+    "2d",
+    "week",
+    "custom",
+}
 HISTORY_GROUPS = {"all", "ai_ccaas", "ccaas"}
 _CALL_METRICS = (
     "active_calls",
@@ -347,11 +359,60 @@ def _empty_history(
         "range": range_id,
         "group": group,
         "since": None,
-        "bucket_seconds": 10 if range_id == "5m" else 60,
+        "until": None,
+        "bucket_seconds": 60,
         "host_count": 0,
         "point_count": 0,
         "points": [],
     }
+
+
+def history_window(
+    range_id: str,
+    now: datetime,
+    today,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> tuple[datetime, datetime, int]:
+    """Return (since, until, bucket_seconds) using MariaDB clock values."""
+    start_of_today = datetime.combine(today, datetime.min.time())
+    if range_id == "5m":
+        return now - timedelta(minutes=5), now, 10
+    if range_id == "30m":
+        return now - timedelta(minutes=30), now, 30
+    if range_id == "1h":
+        return now - timedelta(hours=1), now, 60
+    if range_id == "2h":
+        return now - timedelta(hours=2), now, 60
+    if range_id == "6h":
+        return now - timedelta(hours=6), now, 120
+    if range_id == "12h":
+        return now - timedelta(hours=12), now, 300
+    if range_id == "today":
+        return start_of_today, now, 300
+    if range_id == "yesterday":
+        return start_of_today - timedelta(days=1), start_of_today - timedelta(seconds=1), 300
+    if range_id == "2d":
+        return now - timedelta(days=2), now, 600
+    if range_id == "week":
+        return now - timedelta(days=7), now, 1800
+    if range_id == "custom" and start:
+        until = end or now
+        if until <= start:
+            until = start + timedelta(minutes=5)
+        span = max((until - start).total_seconds(), 300)
+        bucket = 10 if span <= 900 else 60 if span <= 7200 else 300 if span <= 86400 else 1800
+        return start, until, bucket
+    return now - timedelta(minutes=5), now, 10
+
+
+def parse_history_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00").replace("+00:00", ""))
+    except ValueError:
+        return None
 
 
 def _as_dt(value: Any) -> datetime | None:
@@ -479,39 +540,43 @@ def fleet_points(host_series: list[list[dict]]) -> list[dict]:
     return out
 
 
-def fetch_voicemg_history(range_id: str = "5m", group: str = "all") -> dict:
+def fetch_voicemg_history(
+    range_id: str = "5m",
+    group: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+) -> dict:
     range_id = range_id if range_id in HISTORY_RANGES else "5m"
     group = group if group in HISTORY_GROUPS else "all"
-    cache_key = f"voicemg_history:{range_id}:{group}"
+    cache_key = f"voicemg_history:{range_id}:{group}:{start or ''}:{end or ''}"
     cached = get_cached(cache_key)
     if cached is not None:
         return cached
-    out = _fetch_voicemg_history(range_id, group)
+    out = _fetch_voicemg_history(range_id, group, parse_history_dt(start), parse_history_dt(end))
     set_cached(cache_key, out)
     return out
 
 
-def _fetch_voicemg_history(range_id: str, group: str) -> dict:
+def _fetch_voicemg_history(
+    range_id: str,
+    group: str,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> dict:
     engine, extra = _engine()
     if engine is None:
         return _empty_history(extra, range_id, group)
     database = extra
-    bucket_seconds = 10 if range_id == "5m" else 60
-    row_limit = 400 if range_id == "5m" else 800
     try:
         with engine.connect() as conn:
             try:
-                conn.execute(text("SET SESSION max_execution_time = 10000"))
+                conn.execute(text("SET SESSION max_execution_time = 15000"))
             except Exception:
                 pass
             clock = conn.execute(text("SELECT NOW() AS now, CURDATE() AS today")).mappings().first()
             now = clock["now"] if clock else datetime.now()
             today = clock["today"] if clock else now.date()
-            since = (
-                now - timedelta(minutes=5)
-                if range_id == "5m"
-                else datetime.combine(today, datetime.min.time())
-            )
+            since, until, bucket_seconds = history_window(range_id, now, today, start, end)
             if not _table_exists(conn, "servers"):
                 return _empty_history("servers table not found", range_id, group, database)
             server_cols = _safe_columns(conn, "servers")
@@ -544,8 +609,12 @@ def _fetch_voicemg_history(range_id: str, group: str) -> dict:
                 if group != "all" and product_group(hostname, _str(host.get("product"))) != group:
                     continue
                 host_count += 1
-                call_rows = _window_rows(conn, "metrics_calls", calls_cols, server_id, since, row_limit)
-                sys_rows = _window_rows(conn, "metrics_system", system_cols, server_id, since, row_limit)
+                call_rows = _window_rows(
+                    conn, "metrics_calls", calls_cols, server_id, since, until, bucket_seconds
+                )
+                sys_rows = _window_rows(
+                    conn, "metrics_system", system_cols, server_id, since, until, bucket_seconds
+                )
                 series.append(merge_host_series(call_rows, sys_rows, bucket_seconds))
         points = fleet_points(series)
         return {
@@ -555,6 +624,7 @@ def _fetch_voicemg_history(range_id: str, group: str) -> dict:
             "range": range_id,
             "group": group,
             "since": since,
+            "until": until,
             "bucket_seconds": bucket_seconds,
             "host_count": host_count,
             "point_count": len(points),
@@ -564,26 +634,37 @@ def _fetch_voicemg_history(range_id: str, group: str) -> dict:
         return _empty_history(str(exc), range_id, group, database)
 
 
-def _window_rows(conn, table: str, cols: list[str], server_id: int, since: datetime, limit: int) -> list[dict]:
-    if not cols or "ts" not in cols or "server_id" not in cols or "id" not in cols:
+def _window_rows(
+    conn,
+    table: str,
+    cols: list[str],
+    server_id: int,
+    since: datetime,
+    until: datetime,
+    bucket_seconds: int,
+) -> list[dict]:
+    if not cols or "ts" not in cols or "server_id" not in cols:
         return []
-    if not _IDENT.match(table):
+    if not _IDENT.match(table) or bucket_seconds <= 0:
         return []
-    wanted = ["ts"]
-    for name in _CALL_METRICS + _SYS_METRICS:
-        if name in cols:
-            wanted.append(name)
-    quoted = ", ".join(f"`{c}`" for c in wanted if _IDENT.match(c))
+    avgs = [
+        f"AVG(`{name}`) AS `{name}`"
+        for name in _CALL_METRICS + _SYS_METRICS
+        if name in cols and _IDENT.match(name)
+    ]
+    if not avgs:
+        return []
     rows = (
         conn.execute(
             text(
-                f"SELECT {quoted} FROM `{table}` "
-                "WHERE server_id = :sid AND ts >= :since "
-                "ORDER BY id DESC LIMIT :lim"
+                f"SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(ts) / :b) * :b) AS ts, "
+                f"{', '.join(avgs)} FROM `{table}` "
+                "WHERE server_id = :sid AND ts >= :since AND ts <= :until "
+                "GROUP BY 1 ORDER BY 1 LIMIT 400"
             ),
-            {"sid": server_id, "since": since, "lim": limit},
+            {"sid": server_id, "since": since, "until": until, "b": bucket_seconds},
         )
         .mappings()
         .all()
     )
-    return [dict(row) for row in reversed(list(rows))]
+    return [dict(row) for row in rows]

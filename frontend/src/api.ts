@@ -1098,7 +1098,19 @@ export async function fetchVoiceMgExtras(): Promise<VoiceMgExtras> {
   return res.json()
 }
 
-export type VoiceMgHistoryRange = '5m' | 'today'
+export type VoiceMgHistoryRange =
+  | 'live'
+  | '5m'
+  | '30m'
+  | '1h'
+  | '2h'
+  | '6h'
+  | '12h'
+  | 'today'
+  | 'yesterday'
+  | '2d'
+  | 'week'
+  | 'custom'
 export type VoiceMgHistoryGroup = 'all' | 'ai_ccaas' | 'ccaas'
 
 export type VoiceMgHistoryPoint = {
@@ -1118,6 +1130,7 @@ export type VoiceMgHistory = {
   range: VoiceMgHistoryRange | string
   group: VoiceMgHistoryGroup | string
   since: string | null
+  until?: string | null
   bucket_seconds: number
   host_count: number
   point_count: number
@@ -1127,9 +1140,14 @@ export type VoiceMgHistory = {
 export async function fetchVoiceMgHistory(
   range: VoiceMgHistoryRange,
   group: VoiceMgHistoryGroup,
+  start?: string,
+  end?: string,
 ): Promise<VoiceMgHistory> {
-  const res = await apiFetch(`/legacy-metrics/voicemg/history?range=${range}&group=${group}`, {
-    signal: AbortSignal.timeout(10000),
+  const params = new URLSearchParams({ range, group })
+  if (start) params.set('start', start)
+  if (end) params.set('end', end)
+  const res = await apiFetch(`/legacy-metrics/voicemg/history?${params}`, {
+    signal: AbortSignal.timeout(15000),
   })
   if (!res.ok) throw new Error('Failed to load VoiceMG history')
   return res.json()

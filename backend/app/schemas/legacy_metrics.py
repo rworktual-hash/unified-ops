@@ -451,6 +451,7 @@ class VoiceMgHistoryRead(BaseModel):
     range: str
     group: str
     since: datetime | None = None
+    until: datetime | None = None
     bucket_seconds: int = 10
     host_count: int = 0
     point_count: int = 0

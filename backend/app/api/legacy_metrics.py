@@ -108,8 +108,10 @@ def voicemg_extras() -> VoiceMgExtrasRead:
 def voicemg_history(
     range_id: str = Query(default="5m", alias="range"),
     group: str = Query(default="all"),
+    start: str | None = Query(default=None),
+    end: str | None = Query(default=None),
 ) -> VoiceMgHistoryRead:
-    return VoiceMgHistoryRead.model_validate(fetch_voicemg_history(range_id, group))
+    return VoiceMgHistoryRead.model_validate(fetch_voicemg_history(range_id, group, start, end))
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

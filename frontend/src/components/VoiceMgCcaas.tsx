@@ -5,6 +5,26 @@ import { VoiceMgHistory } from './VoiceMgHistory'
 
 type FilterId = VoiceMgHistoryGroup
 
+const HISTORY_RANGES: Array<[VoiceMgHistoryRange, string]> = [
+  ['live', 'Live'],
+  ['5m', '5m'],
+  ['30m', '30m'],
+  ['1h', '1h'],
+  ['2h', '2h'],
+  ['6h', '6h'],
+  ['12h', '12h'],
+  ['today', 'Today'],
+  ['yesterday', 'Yesterday'],
+  ['2d', '2 days'],
+  ['week', 'Week'],
+  ['custom', 'Range…'],
+]
+
+function localInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 function avg(values: Array<number | null | undefined>): number | null {
   const nums = values.filter((v): v is number => v != null && !Number.isNaN(v))
   if (!nums.length) return null
@@ -49,6 +69,13 @@ type Props = {
 export function VoiceMgCcaas({ servers, loading = false }: Props) {
   const [filter, setFilter] = useState<FilterId>('ai_ccaas')
   const [range, setRange] = useState<VoiceMgHistoryRange>('5m')
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    d.setHours(0, 0, 0, 0)
+    return localInputValue(d)
+  })
+  const [customEnd, setCustomEnd] = useState(() => localInputValue(new Date()))
   const rows = useMemo(() => {
     if (filter === 'all') return servers
     return servers.filter((row) => (row.group || 'ccaas') === filter)
@@ -72,7 +99,7 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
           <h2>Live CCaaS / AI-CCaaS</h2>
           <p className="muted">
             Latest MariaDB <code>voicemg</code> row per host — updates every {LIVE_EXTRAS_INTERVAL_MS / 1000}s.
-            History is a live SELECT for 5m / today (not the incremental sync at the bottom).
+            History windows match voicemg.worktual.tech — live SELECT from MariaDB, not the sync at the bottom.
           </p>
         </div>
         <div className="bv-tabs">
@@ -128,15 +155,10 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
         <Kpi label="Avg CPU %" value={kpis.cpu == null ? '—' : `${fmt(kpis.cpu, 0)}%`} />
       </div>
 
-      <div className="chart-toolbar">
+      <div className="chart-toolbar vmg-range-toolbar">
         <span className="muted">History from MariaDB</span>
         <div className="bv-tabs">
-          {(
-            [
-              ['5m', 'Last 5 min'],
-              ['today', 'Today'],
-            ] as const
-          ).map(([id, label]) => (
+          {HISTORY_RANGES.map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -148,7 +170,36 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
           ))}
         </div>
       </div>
-      <VoiceMgHistory range={range} group={filter} />
+      {range === 'custom' ? (
+        <div className="vmg-custom-range">
+          <label>
+            From
+            <input
+              type="datetime-local"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+            />
+          </label>
+          <label>
+            To
+            <input
+              type="datetime-local"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+            />
+          </label>
+        </div>
+      ) : null}
+      {range === 'live' ? (
+        <p className="muted">Live tiles above are the current MariaDB row, same as the old Live view.</p>
+      ) : (
+        <VoiceMgHistory
+          range={range}
+          group={filter}
+          start={range === 'custom' ? customStart : undefined}
+          end={range === 'custom' ? customEnd : undefined}
+        />
+      )}
 
       <div className="vmg-ccaas-cards">
         {rows.map((row) => (

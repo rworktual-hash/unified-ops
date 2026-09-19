@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from unittest.mock import patch
 
@@ -8,6 +8,7 @@ from app.services.voicemg_portal import (
     downsample_rows,
     fetch_voicemg_extras,
     fetch_voicemg_history,
+    history_window,
     fleet_points,
     map_history_sample,
     mem_label,
@@ -148,6 +149,28 @@ def test_merge_and_fleet_history():
     assert fleet[0]["mos"] == 4.2
     assert fleet[0]["rtp_mbps"] == 4
     assert fleet[0]["cpu_pct"] == 30
+
+
+def test_history_window_matches_old_portal():
+    now = datetime(2026, 9, 19, 18, 30, 0)
+    today = date(2026, 9, 19)
+    since, until, bucket = history_window("yesterday", now, today)
+    assert since == datetime(2026, 9, 18, 0, 0, 0)
+    assert until == datetime(2026, 9, 18, 23, 59, 59)
+    assert bucket == 300
+    week_since, week_until, week_bucket = history_window("week", now, today)
+    assert week_until == now
+    assert week_since == now - timedelta(days=7)
+    assert week_bucket == 1800
+    custom_since, custom_until, _ = history_window(
+        "custom",
+        now,
+        today,
+        start=datetime(2026, 9, 10, 8, 0, 0),
+        end=datetime(2026, 9, 12, 8, 0, 0),
+    )
+    assert custom_since == datetime(2026, 9, 10, 8, 0, 0)
+    assert custom_until == datetime(2026, 9, 12, 8, 0, 0)
 
 
 @patch("app.services.voicemg_portal.get_cached", return_value=None)
