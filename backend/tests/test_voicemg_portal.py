@@ -1,6 +1,13 @@
 from unittest.mock import patch
 
-from app.services.voicemg_portal import _map_server, fetch_voicemg_extras, mem_label
+from app.services.voicemg_portal import _map_server, _prefixed, fetch_voicemg_extras, mem_label
+
+
+def test_prefixed_skips_id():
+    assert _prefixed({"id": 3, "cpu_pct": 10, "load1": 0.2}, "sys_") == {
+        "sys_cpu_pct": 10,
+        "sys_load1": 0.2,
+    }
 
 
 def test_mem_label():

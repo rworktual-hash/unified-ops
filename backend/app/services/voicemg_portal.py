@@ -69,30 +69,25 @@ def _select(alias: str, cols: list[str], prefix: str = "") -> str:
     return ", ".join(parts)
 
 
-def _latest_join(alias: str, table: str, cols: list[str], prefix: str) -> tuple[str, str]:
-    if (
-        not cols
-        or "id" not in cols
-        or "server_id" not in cols
-        or not _IDENT.match(table)
-        or not _IDENT.match(alias)
-    ):
-        return "", ""
-    select_cols = [c for c in cols if c != "id"]
-    select = ", " + _select(alias, select_cols, prefix) if select_cols else ""
-    latest = f"{alias}_latest"
-    join = f"""
-                LEFT JOIN (
-                  SELECT t.*
-                  FROM `{table}` t
-                  INNER JOIN (
-                    SELECT server_id, MAX(id) AS max_id
-                    FROM `{table}`
-                    GROUP BY server_id
-                  ) {latest} ON {latest}.max_id = t.id
-                ) {alias} ON {alias}.server_id = s.id
-    """
-    return select, join
+def _latest_row(conn, table: str, cols: list[str], server_id: int) -> dict:
+    if not cols or "id" not in cols or not _IDENT.match(table):
+        return {}
+    select_cols = [c for c in cols if _IDENT.match(c)]
+    if not select_cols:
+        return {}
+    quoted = ", ".join(f"`{c}`" for c in select_cols)
+    row = conn.execute(
+        text(
+            f"SELECT {quoted} FROM `{table}` "
+            "WHERE server_id = :sid ORDER BY id DESC LIMIT 1"
+        ),
+        {"sid": server_id},
+    ).mappings().first()
+    return dict(row) if row else {}
+
+
+def _prefixed(row: dict, prefix: str) -> dict:
+    return {f"{prefix}{key}": value for key, value in row.items() if key != "id"}
 
 
 def _num(value: Any) -> float | None:
@@ -172,27 +167,23 @@ def fetch_voicemg_extras() -> dict:
 
             system_cols = _safe_columns(conn, "metrics_system") if _table_exists(conn, "metrics_system") else []
             calls_cols = _safe_columns(conn, "metrics_calls") if _table_exists(conn, "metrics_calls") else []
-            disk_cols = _safe_columns(conn, "metrics_disk") if _table_exists(conn, "metrics_disk") else []
-
-            system_select, system_join = _latest_join("sys", "metrics_system", system_cols, "sys_")
-            calls_select, calls_join = _latest_join("c", "metrics_calls", calls_cols, "c_")
-            disk_select, disk_join = _latest_join("d", "metrics_disk", disk_cols, "d_")
 
             order_col = "hostname" if "hostname" in server_cols else "id"
-            sql = text(
-                f"SELECT {_select('s', server_cols)}"
-                + system_select
-                + calls_select
-                + disk_select
-                + """
-                FROM servers s
-                """
-                + system_join
-                + calls_join
-                + disk_join
-                + f" ORDER BY s.`{order_col}`"
-            )
-            rows = conn.execute(sql).mappings().all()
+            host_rows = conn.execute(
+                text(f"SELECT {_select('s', server_cols)} FROM servers s ORDER BY s.`{order_col}` LIMIT 40")
+            ).mappings().all()
+
+            rows = []
+            for host in host_rows:
+                server_id = _int(host.get("id"))
+                if server_id is None:
+                    continue
+                merged = dict(host)
+                if system_cols:
+                    merged.update(_prefixed(_latest_row(conn, "metrics_system", system_cols, server_id), "sys_"))
+                if calls_cols:
+                    merged.update(_prefixed(_latest_row(conn, "metrics_calls", calls_cols, server_id), "c_"))
+                rows.append(merged)
 
         servers = [_map_server(row) for row in rows]
         return {"ok": True, "database": database, "reason": None, "servers": servers}

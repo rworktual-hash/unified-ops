@@ -1017,7 +1017,9 @@ export type VoiceMgExtras = {
 }
 
 export async function fetchVoiceMgExtras(): Promise<VoiceMgExtras> {
-  const res = await apiFetch('/legacy-metrics/voicemg/extras')
+  const res = await apiFetch('/legacy-metrics/voicemg/extras', {
+    signal: AbortSignal.timeout(8000),
+  })
   if (!res.ok) throw new Error('Failed to load VoiceMG extras')
   return res.json()
 }
