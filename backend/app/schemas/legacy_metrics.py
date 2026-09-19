@@ -323,6 +323,36 @@ class AiInsightExtrasRead(BaseModel):
     servers: list[AiInsightExtraRead]
 
 
+class VoiceMgExtraRead(BaseModel):
+    id: int
+    hostname: str
+    ip: str
+    ip_address: str
+    product: str | None = None
+    role: str | None = None
+    cpu_pct: float | None = None
+    load1: float | None = None
+    mem_used_mb: float | None = None
+    mem_total_mb: float | None = None
+    mem: str | None = None
+    active_calls: int | None = None
+    rtp_sessions: int | None = None
+    rtp_mbps_out: float | None = None
+    rtp_mbps_in: float | None = None
+    jitter_ms: float | None = None
+    pkts_lost_delta: float | None = None
+    disk_used_pct: float | None = None
+    disk_mount: str | None = None
+    recorded_at: datetime | None = None
+
+
+class VoiceMgExtrasRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    servers: list[VoiceMgExtraRead]
+
+
 class LegacyMetricPointRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

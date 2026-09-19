@@ -232,7 +232,7 @@ UI: **Collect metrics** on a pilot GPU host shows per-GPU tiles, **Host & networ
 
 **Metrics history charts:** **Metrics history** on each server card (`GET /api/servers/{id}/metrics/history?hours=1|6|24`); needs multiple collects (scheduled or manual).
 
-**Legacy portal metrics:** Read-only MySQL sync from **server-management** (`10.180.1.222` — SSH **4204**, MySQL usually **3306**) — see `docs/LEGACY_METRICS.md`, `scripts/discover-legacy-mysql-via-ssh.py`, `scripts/inspect-legacy-metrics-db.py`.
+**Legacy portal metrics:** Read-only MySQL sync from **server-management** (`10.180.1.222` — SSH **4204**, MySQL usually **3306**) — see `docs/LEGACY_METRICS.md`, `scripts/discover-legacy-mysql-via-ssh.py`, `scripts/inspect-legacy-metrics-db.py`. Live extras (no new tabs): `GET /api/legacy-metrics/ai-insights/extras` and `GET /api/legacy-metrics/voicemg/extras`.
 
 ### AI-GPU 165 / 166 (later — password / sshpass)
 

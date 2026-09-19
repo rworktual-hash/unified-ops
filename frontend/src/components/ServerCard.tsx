@@ -1,6 +1,7 @@
-import type { AiInsightExtra } from '../api'
+import type { AiInsightExtra, VoiceMgExtra } from '../api'
 import type { ConnectionTestResult, GpuMetric, MetricsBundle, Server } from '../types'
 import { AiInsightExtras } from './AiInsightExtras'
+import { VoiceMgExtras } from './VoiceMgExtras'
 
 function uniqueGpusByIndex(rows: GpuMetric[]): GpuMetric[] {
   const byIndex = new Map<number, GpuMetric>()
@@ -16,6 +17,7 @@ type Props = {
   server: Server
   metrics: MetricsBundle | null
   extra?: AiInsightExtra
+  voicemgExtra?: VoiceMgExtra
   testResult: ConnectionTestResult | undefined
   testing: boolean
   collecting: boolean
@@ -30,6 +32,7 @@ export function ServerCard({
   server,
   metrics,
   extra,
+  voicemgExtra,
   testResult,
   testing,
   collecting,
@@ -259,7 +262,8 @@ export function ServerCard({
             </details>
           ) : null}
 
-          {extra ? <AiInsightExtras extra={extra} /> : null}
+          {voicemgExtra ? <VoiceMgExtras extra={voicemgExtra} /> : null}
+          {extra && !voicemgExtra ? <AiInsightExtras extra={extra} /> : null}
 
           {testResult ? (
             <p className={`ssh-line ${testResult.success ? 'ok' : 'fail'}`}>

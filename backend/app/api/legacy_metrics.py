@@ -14,6 +14,7 @@ from app.schemas.legacy_metrics import (
     BackupVaultTargetsRead,
     InventoryPortalRead,
     LegacyMetricPointRead,
+    VoiceMgExtrasRead,
     LegacyOverviewRead,
     LegacyStatusRead,
     LegacyStreamStatusRead,
@@ -21,6 +22,7 @@ from app.schemas.legacy_metrics import (
 )
 from app.services.ai_insights_portal import fetch_ai_insights_extras
 from app.services.inventory_portal import fetch_inventory_portal
+from app.services.voicemg_portal import fetch_voicemg_extras
 from app.services.legacy_metrics_sync import (
     compute_legacy_overview,
     discover_legacy_schema,
@@ -88,6 +90,11 @@ def inventory_portal() -> InventoryPortalRead:
 @router.get("/ai-insights/extras", response_model=AiInsightExtrasRead)
 def ai_insights_extras() -> AiInsightExtrasRead:
     return AiInsightExtrasRead.model_validate(fetch_ai_insights_extras())
+
+
+@router.get("/voicemg/extras", response_model=VoiceMgExtrasRead)
+def voicemg_extras() -> VoiceMgExtrasRead:
+    return VoiceMgExtrasRead.model_validate(fetch_voicemg_extras())
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

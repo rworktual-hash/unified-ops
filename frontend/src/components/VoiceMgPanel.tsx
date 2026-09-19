@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  fetchVoiceMgExtras,
   fetchVoiceMgOverview,
-  matchAiInsightExtra,
-  type AiInsightExtra,
+  matchVoiceMgExtra,
+  type VoiceMgExtra,
   type VoiceMgOverview,
   type VoiceMgSnapshot,
 } from '../api'
-import { AiInsightExtras } from './AiInsightExtras'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
+import { VoiceMgExtras } from './VoiceMgExtras'
 
 function probeState(value: boolean | null): string {
   if (value == null) return 'Unknown'
@@ -41,12 +42,12 @@ function services(snapshot: VoiceMgSnapshot): string {
 }
 
 type Props = {
-  extras?: AiInsightExtra[]
   isAdmin?: boolean
 }
 
-export function VoiceMgPanel({ extras = [], isAdmin = false }: Props) {
+export function VoiceMgPanel({ isAdmin = false }: Props) {
   const [overview, setOverview] = useState<VoiceMgOverview | null>(null)
+  const [extras, setExtras] = useState<VoiceMgExtra[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,7 +55,12 @@ export function VoiceMgPanel({ extras = [], isAdmin = false }: Props) {
     setLoading(true)
     setError(null)
     try {
-      setOverview(await fetchVoiceMgOverview())
+      const [ssh, portal] = await Promise.all([
+        fetchVoiceMgOverview(),
+        fetchVoiceMgExtras().catch(() => ({ ok: false, servers: [] as VoiceMgExtra[] })),
+      ])
+      setOverview(ssh)
+      setExtras(portal.ok ? portal.servers : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load VoiceMG metrics')
     } finally {
@@ -73,8 +79,8 @@ export function VoiceMgPanel({ extras = [], isAdmin = false }: Props) {
           <h1>VoiceMG</h1>
           <p>
             Read-only SSH for VMG and STT hosts: Docker, optional systemd units, process samples, and
-            GPU summary on STT. “Check failed” means our probe failed, not necessarily that the host is
-            offline.
+            GPU summary on STT. Portal extras are live from MariaDB <code>voicemg</code> (CPU, calls,
+            RTP). “Check failed” means our probe failed, not necessarily that the host is offline.
           </p>
         </div>
         <button type="button" className="btn ghost" disabled={loading} onClick={() => void load()}>
@@ -173,12 +179,12 @@ export function VoiceMgPanel({ extras = [], isAdmin = false }: Props) {
                         </td>
                         <td>
                           {(() => {
-                            const extra = matchAiInsightExtra(
+                            const extra = matchVoiceMgExtra(
                               extras,
                               server.ip_address,
                               server.server_name,
                             )
-                            return extra ? <AiInsightExtras extra={extra} compact /> : '—'
+                            return extra ? <VoiceMgExtras extra={extra} compact /> : '—'
                           })()}
                         </td>
                         <td>

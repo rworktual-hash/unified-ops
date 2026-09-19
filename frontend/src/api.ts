@@ -986,6 +986,55 @@ export function matchAiInsightExtra(
   )
 }
 
+export type VoiceMgExtra = {
+  id: number
+  hostname: string
+  ip: string
+  ip_address: string
+  product: string | null
+  role: string | null
+  cpu_pct: number | null
+  load1: number | null
+  mem_used_mb: number | null
+  mem_total_mb: number | null
+  mem: string | null
+  active_calls: number | null
+  rtp_sessions: number | null
+  rtp_mbps_out: number | null
+  rtp_mbps_in: number | null
+  jitter_ms: number | null
+  pkts_lost_delta: number | null
+  disk_used_pct: number | null
+  disk_mount: string | null
+  recorded_at: string | null
+}
+
+export type VoiceMgExtras = {
+  ok: boolean
+  database?: string | null
+  reason?: string | null
+  servers: VoiceMgExtra[]
+}
+
+export async function fetchVoiceMgExtras(): Promise<VoiceMgExtras> {
+  const res = await apiFetch('/legacy-metrics/voicemg/extras')
+  if (!res.ok) throw new Error('Failed to load VoiceMG extras')
+  return res.json()
+}
+
+export function matchVoiceMgExtra(
+  extras: VoiceMgExtra[] | undefined,
+  ip: string,
+  name?: string,
+): VoiceMgExtra | undefined {
+  if (!extras?.length) return undefined
+  const ipMatch = extras.find((row) => (row.ip_address || row.ip) === ip)
+  if (ipMatch) return ipMatch
+  if (!name) return undefined
+  const needle = name.toLowerCase()
+  return extras.find((row) => row.hostname.toLowerCase() === needle)
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })

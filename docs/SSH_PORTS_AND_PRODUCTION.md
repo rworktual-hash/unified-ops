@@ -187,6 +187,7 @@ nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> /var/log/unified-ops-ap
 - Nav copy is still GPU-oriented; inventory includes infra, email, backupvault, VoiceMG.
 - Host metrics (RAM, disk, load) work for any reachable Linux SSH host; GPU tiles only when `server_type` is `gpu` and `nvidia-smi` succeeds.
 - **GPU product + AI insights (pilot):** read-only SSH for IPs in `GPU_PRODUCT_COLLECT_IPS` (default **81.17.61.148**). Tables: `gpu_product_snapshots`, `gpu_insights_snapshots`; extended `gpu_metrics` (power, clock). After pull run `python scripts/migrate-gpu-ai-insights.py` and restart uvicorn. Set `*` for all GPU hosts after pilot.
+- **VoiceMG extras (no new tabs):** live `GET /api/legacy-metrics/voicemg/extras` from MariaDB `voicemg` on server-management. Enriches the existing VoiceMG SSH **Portal extras** column and Server cards when `project=voicemg`. SSH collect stays.
 
 ---
 

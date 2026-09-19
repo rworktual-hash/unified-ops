@@ -9,8 +9,10 @@ import {
   type FleetCollectStatus,
   fetchMe,
   fetchAiInsightExtras,
+  fetchVoiceMgExtras,
   fetchServerMetrics,
   matchAiInsightExtra,
+  matchVoiceMgExtra,
   investigateAlert,
   investigateServer,
   listAgentActions,
@@ -23,6 +25,7 @@ import {
   UnauthorizedError,
   type AiInsightExtra,
   type AppUser,
+  type VoiceMgExtra,
 } from './api'
 import { clearStoredToken } from './authStorage'
 import { BackupVaultPanel } from './components/BackupVaultPanel'
@@ -71,6 +74,7 @@ function App() {
   const [fleetStatus, setFleetStatus] = useState<FleetCollectStatus | null>(null)
   const [serverDomain, setServerDomain] = useState<DomainId>('ai')
   const [aiExtras, setAiExtras] = useState<AiInsightExtra[]>([])
+  const [voiceMgExtras, setVoiceMgExtras] = useState<VoiceMgExtra[]>([])
 
   const activeServers = useMemo(() => servers.filter((s) => s.is_active), [servers])
   const pendingServers = useMemo(() => servers.filter((s) => !s.is_active), [servers])
@@ -127,6 +131,12 @@ function App() {
         setAiExtras(extras.ok ? extras.servers : [])
       } catch {
         setAiExtras([])
+      }
+      try {
+        const extras = await fetchVoiceMgExtras()
+        setVoiceMgExtras(extras.ok ? extras.servers : [])
+      } catch {
+        setVoiceMgExtras([])
       }
       try {
         setFleetStatus(await fetchFleetCollectStatus())
@@ -327,7 +337,16 @@ function App() {
                   key={s.id}
                   server={s}
                   metrics={metricsByServer[s.id] ?? null}
-                  extra={matchAiInsightExtra(aiExtras, s.ip_address, s.server_name)}
+                  extra={
+                    s.project === 'voicemg'
+                      ? undefined
+                      : matchAiInsightExtra(aiExtras, s.ip_address, s.server_name)
+                  }
+                  voicemgExtra={
+                    s.project === 'voicemg'
+                      ? matchVoiceMgExtra(voiceMgExtras, s.ip_address, s.server_name)
+                      : undefined
+                  }
                   testResult={testResults[s.id]}
                   testing={testingId === s.id}
                   collecting={collectingId === s.id}
@@ -423,7 +442,7 @@ function App() {
         )}
 
         {nav === 'voicemg' && voiceMgServers.length > 0 && (
-          <VoiceMgPanel extras={aiExtras} isAdmin={session?.role === 'admin'} />
+          <VoiceMgPanel isAdmin={session?.role === 'admin'} />
         )}
 
         {nav === 'chat' && (
