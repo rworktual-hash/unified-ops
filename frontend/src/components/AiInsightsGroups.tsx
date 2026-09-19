@@ -1,21 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { AiInsightExtra } from '../api'
 import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
-
-const GROUP_ORDER = [
-  'ai',
-  'nginx',
-  'kong',
-  'redis',
-  'mysql',
-  'postgres',
-  'mail',
-  'voicemg',
-  'pbx',
-  'sip',
-  'cpu',
-  'other',
-]
+import { AiInsightsCharts, buildGroupRows } from './AiInsightsCharts'
 
 function healthClass(score: number | null): string {
   if (score == null) return 'unknown'
@@ -43,19 +29,7 @@ type Props = {
 
 export function AiInsightsGroups({ extras }: Props) {
   const [filter, setFilter] = useState('all')
-  const groups = useMemo(() => {
-    const byId = new Map<string, { id: string; label: string; servers: AiInsightExtra[] }>()
-    for (const row of extras) {
-      const id = row.group_id || 'other'
-      const label = row.group || 'Other'
-      const current = byId.get(id) ?? { id, label, servers: [] }
-      current.servers.push(row)
-      byId.set(id, current)
-    }
-    return GROUP_ORDER.map((id) => byId.get(id)).filter(
-      (g): g is { id: string; label: string; servers: AiInsightExtra[] } => Boolean(g),
-    )
-  }, [extras])
+  const groups = useMemo(() => buildGroupRows(extras), [extras])
   const rows = useMemo(() => {
     if (filter === 'all') return extras
     return extras.filter((row) => (row.group_id || 'other') === filter)
@@ -80,7 +54,8 @@ export function AiInsightsGroups({ extras }: Props) {
           <h2>AI Insights groups</h2>
           <p className="muted">
             Live from MariaDB <code>ai_insights_platform</code> — updates every{' '}
-            {LIVE_EXTRAS_INTERVAL_MS / 1000}s (no refresh). Same groups as aiservers.worktual.tech.
+            {LIVE_EXTRAS_INTERVAL_MS / 1000}s. Same groups as aiservers.worktual.tech. Charts are a
+            live group breakdown, not the old pies.
           </p>
         </div>
       </div>
@@ -131,6 +106,12 @@ export function AiInsightsGroups({ extras }: Props) {
           <span className="muted bv-sub">ok / fair / poor</span>
         </div>
       </div>
+
+      <AiInsightsCharts
+        extras={extras}
+        filter={filter}
+        onSelectGroup={(id) => setFilter((prev) => (prev === id ? 'all' : id))}
+      />
 
       <div className="ai-group-cards">
         {rows.map((row) => (
