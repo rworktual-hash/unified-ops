@@ -232,6 +232,9 @@ function App() {
     )
   }
 
+  const pageTitle = navItems.find((item) => item.id === nav)?.label ?? 'Dashboard'
+  const initials = session.email.slice(0, 2).toUpperCase()
+
   return (
     <div className="app-shell app-shell--fixed">
       <aside className="sidebar">
@@ -239,6 +242,7 @@ function App() {
           <div className="brand-mark">UO</div>
           <span className="brand-text">Unified Ops</span>
         </div>
+        <p className="nav-kicker">Modules</p>
         <nav className="nav">
           {navItems.map((item) => (
             <button
@@ -252,27 +256,37 @@ function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <span className={`api-dot ${apiStatus === 'ok' ? 'ok' : 'err'}`} />
-          API {apiStatus === 'ok' ? 'connected' : apiStatus === 'loading' ? '…' : 'offline'}
-          <br />
-          {session.email}
-          <br />
-          {activeServers.length} servers
-          <br />
+          <p className="sidebar-meta">
+            <span className={`api-dot ${apiStatus === 'ok' ? 'ok' : 'err'}`} />
+            {apiStatus === 'ok' ? 'API connected' : apiStatus === 'loading' ? 'API…' : 'API offline'}
+            <span className="sidebar-meta-sub">
+              {activeServers.length} servers
+            </span>
+          </p>
           <button
             type="button"
-            className="btn ghost sidebar-signout"
+            className="nav-item sidebar-signout"
             onClick={() => {
               clearStoredToken()
               setSession(null)
             }}
           >
-            Sign out
+            Logout
           </button>
         </div>
       </aside>
 
       <main className="main">
+        <header className="topbar">
+          <div className="topbar-title">
+            <span className="topbar-orb" aria-hidden />
+            <h1>{pageTitle}</h1>
+          </div>
+          <div className="topbar-user" title={session.email}>
+            <span>{initials}</span>
+          </div>
+        </header>
+        <div className="main-body">
         {error && <p className="banner error">{error}</p>}
 
         {nav === 'servers' && (
@@ -675,6 +689,7 @@ function App() {
             </button>
           </p>
         )}
+        </div>
       </main>
     </div>
   )
