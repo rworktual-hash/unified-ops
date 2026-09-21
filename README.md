@@ -412,8 +412,11 @@ After each collect, rules run (defaults: RAM ≥85%, disk ≥85% warn / ≥92% c
 
 Allowlisted actions: `recollect_metrics`, `ssh_verify`, `systemctl_restart` (only if service ∈ `ALLOWLIST_RESTART_SERVICES`).
 
-1. **Request recollect** on an active server → creates **pending** approval.
-2. **Approve** runs the executor and logs `execute` in agent audit.
-3. **Reject** closes the request without running anything.
+1. **Request recollect** or **Request SSH verify** on a server card or alert → **pending** approval.
+2. **Request restart** appears only when `ALLOWLIST_RESTART_SERVICES` is set (hidden if empty).
+3. **Approve** runs the executor on the inventory host and logs `execute` in agent audit.
+4. **Reject** closes the request without running anything.
 
-API: `POST /approvals`, `GET /approvals`, `POST /approvals/{id}/approve`, `POST /approvals/{id}/reject`.
+Safe automatic stay off. Nothing mutates until you Approve.
+
+API: `GET /approvals/catalog`, `POST /approvals`, `GET /approvals`, `POST /approvals/{id}/approve`, `POST /approvals/{id}/reject`.

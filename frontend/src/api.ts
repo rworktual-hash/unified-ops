@@ -595,10 +595,22 @@ export async function listApprovals(status?: string): Promise<Approval[]> {
   return res.json()
 }
 
+export type ApprovalCatalog = {
+  safe_actions: string[]
+  restart_services: string[]
+}
+
+export async function fetchApprovalCatalog(): Promise<ApprovalCatalog> {
+  const res = await apiFetch('/approvals/catalog')
+  if (!res.ok) throw new Error('Failed to load approval catalog')
+  return res.json()
+}
+
 export async function createApproval(payload: {
   server_id: number
   action_key: string
   action_params?: Record<string, string> | null
+  alert_id?: number | null
   request_notes?: string | null
 }): Promise<Approval> {
   const res = await apiFetch('/approvals', {

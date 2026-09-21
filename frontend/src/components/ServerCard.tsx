@@ -10,6 +10,7 @@ function uniqueGpusByIndex(rows: GpuMetric[]): GpuMetric[] {
   }
   return [...byIndex.values()].sort((a, b) => a.gpu_index - b.gpu_index)
 }
+import { ApprovalRequestButtons } from './ApprovalRequestButtons'
 import { MetricBar } from './MetricBar'
 import { ServerMetricsCharts } from './ServerMetricsCharts'
 
@@ -25,7 +26,10 @@ type Props = {
   onTest: () => void
   onCollect: () => void
   onInvestigate: () => void
+  restartServices?: string[]
   onRequestRecollect: () => void
+  onRequestSshVerify: () => void
+  onRequestRestart?: (service: string) => void
 }
 
 export function ServerCard({
@@ -40,7 +44,10 @@ export function ServerCard({
   onTest,
   onCollect,
   onInvestigate,
+  restartServices = [],
   onRequestRecollect,
+  onRequestSshVerify,
+  onRequestRestart,
 }: Props) {
   const host = metrics?.host[0]
   const isGpu = server.server_type === 'gpu'
@@ -289,9 +296,12 @@ export function ServerCard({
             <button type="button" className="btn ghost" disabled={investigating} onClick={onInvestigate}>
               {investigating ? 'Working…' : 'Investigate'}
             </button>
-            <button type="button" className="btn ghost" onClick={onRequestRecollect}>
-              Request recollect
-            </button>
+            <ApprovalRequestButtons
+              restartServices={restartServices}
+              onRecollect={onRequestRecollect}
+              onSshVerify={onRequestSshVerify}
+              onRestart={onRequestRestart}
+            />
           </div>
         </>
       ) : (

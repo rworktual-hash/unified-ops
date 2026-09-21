@@ -4,10 +4,25 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.approval_request import ApprovalRequest
 from app.models.server import Server
-from app.schemas.approval import ApprovalCreate, ApprovalDecision, ApprovalRead, ApprovalReadWithServer
+from app.policies.executor_actions import SAFE_ACTION_KEYS, allowlisted_restart_services
+from app.schemas.approval import (
+    ApprovalCatalogRead,
+    ApprovalCreate,
+    ApprovalDecision,
+    ApprovalRead,
+    ApprovalReadWithServer,
+)
 from app.services.approval_flow import approve_request, create_approval_request, reject_request
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
+
+
+@router.get("/catalog", response_model=ApprovalCatalogRead)
+def approval_catalog() -> ApprovalCatalogRead:
+    return ApprovalCatalogRead(
+        safe_actions=sorted(SAFE_ACTION_KEYS),
+        restart_services=sorted(allowlisted_restart_services()),
+    )
 
 
 @router.get("", response_model=list[ApprovalReadWithServer])

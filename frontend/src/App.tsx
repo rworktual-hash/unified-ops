@@ -4,6 +4,7 @@ import {
   collectAllServerMetrics,
   collectServerMetrics,
   createApproval,
+  fetchApprovalCatalog,
   fetchFleetCollectStatus,
   fetchHealth,
   type FleetCollectStatus,
@@ -27,6 +28,7 @@ import {
   UnauthorizedError,
   type AiInsightExtra,
   type AppUser,
+  type ApprovalCatalog,
   type VoiceMgExtra,
 } from './api'
 import { clearStoredToken } from './authStorage'
@@ -38,6 +40,7 @@ import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
 import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
+import { ApprovalRequestButtons } from './components/ApprovalRequestButtons'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { LegacyMetricsSection } from './components/LegacyMetricsSection'
@@ -71,6 +74,10 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([])
   const [liveAlertsReason, setLiveAlertsReason] = useState<string | null>(null)
+  const [approvalCatalog, setApprovalCatalog] = useState<ApprovalCatalog>({
+    safe_actions: ['recollect_metrics', 'ssh_verify'],
+    restart_services: [],
+  })
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
@@ -160,6 +167,11 @@ function App() {
       }
       setAgentActions(await listAgentActions(15))
       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+      try {
+        setApprovalCatalog(await fetchApprovalCatalog())
+      } catch {
+        /* keep defaults */
+      }
     } catch (err) {
       if (err instanceof UnauthorizedError) {
         clearStoredToken()
@@ -216,6 +228,31 @@ function App() {
   useLivePoll(pollAiExtras, loggedIn && (nav === 'servers' || nav === 'infrastructure'))
   useLivePoll(pollVoiceMgExtras, loggedIn && nav === 'servers')
   useLivePoll(pollLiveAlerts, loggedIn && nav === 'alerts')
+
+  const requestApproval = useCallback(
+    async (
+      serverId: number,
+      actionKey: string,
+      actionParams?: Record<string, string>,
+      alertId?: number,
+    ) => {
+      setError(null)
+      try {
+        await createApproval({
+          server_id: serverId,
+          action_key: actionKey,
+          action_params: actionParams,
+          alert_id: alertId,
+          request_notes: `${actionKey} after operator review`,
+        })
+        setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+        setNav('approvals')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Request failed')
+      }
+    },
+    [showAllApprovals],
+  )
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
@@ -450,20 +487,12 @@ function App() {
                       setInvestigatingId(null)
                     }
                   }}
-                  onRequestRecollect={async () => {
-                    setError(null)
-                    try {
-                      await createApproval({
-                        server_id: s.id,
-                        action_key: 'recollect_metrics',
-                        request_notes: 'Recollect metrics after operator review',
-                      })
-                      setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
-                      setNav('approvals')
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : 'Request failed')
-                    }
-                  }}
+                  restartServices={approvalCatalog.restart_services}
+                  onRequestRecollect={() => void requestApproval(s.id, 'recollect_metrics')}
+                  onRequestSshVerify={() => void requestApproval(s.id, 'ssh_verify')}
+                  onRequestRestart={(service) =>
+                    void requestApproval(s.id, 'systemctl_restart', { service_name: service })
+                  }
                 />
               )}
             />
@@ -523,7 +552,8 @@ function App() {
               <h1>Alerts</h1>
               <p>
                 SSH Collect alerts plus live <code>.222</code> AI Insights alerts. Investigate is
-                read-only on the matched inventory host.
+                read-only. Recollect and SSH verify wait on Approvals — nothing runs until you
+                Approve.
               </p>
             </header>
             <section className="panel">
@@ -591,6 +621,20 @@ function App() {
                             >
                               Investigate
                             </button>
+                            {a.inventory_server_id && a.inventory_active ? (
+                              <ApprovalRequestButtons
+                                restartServices={approvalCatalog.restart_services}
+                                onRecollect={() =>
+                                  void requestApproval(a.inventory_server_id!, 'recollect_metrics')
+                                }
+                                onSshVerify={() => void requestApproval(a.inventory_server_id!, 'ssh_verify')}
+                                onRestart={(service) =>
+                                  void requestApproval(a.inventory_server_id!, 'systemctl_restart', {
+                                    service_name: service,
+                                  })
+                                }
+                              />
+                            ) : null}
                           </td>
                         </tr>
                       ))}
@@ -665,6 +709,23 @@ function App() {
                                 >
                                   Resolve
                                 </button>
+                                <ApprovalRequestButtons
+                                  restartServices={approvalCatalog.restart_services}
+                                  onRecollect={() =>
+                                    void requestApproval(a.server_id, 'recollect_metrics', undefined, a.id)
+                                  }
+                                  onSshVerify={() =>
+                                    void requestApproval(a.server_id, 'ssh_verify', undefined, a.id)
+                                  }
+                                  onRestart={(service) =>
+                                    void requestApproval(
+                                      a.server_id,
+                                      'systemctl_restart',
+                                      { service_name: service },
+                                      a.id,
+                                    )
+                                  }
+                                />
                               </>
                             )}
                           </td>
@@ -682,7 +743,10 @@ function App() {
           <>
             <header className="page-head">
               <h1>Approvals</h1>
-              <p>Controlled actions run only after you approve.</p>
+              <p>
+                Recollect and SSH verify wait here. Restart only if a service is allowlisted — never
+                automatic.
+              </p>
             </header>
             <section className="panel">
               <div className="panel-head">
@@ -697,7 +761,9 @@ function App() {
                 </label>
               </div>
               {approvals.length === 0 ? (
-                <p className="muted">No approvals. Use Request recollect on a server card.</p>
+                <p className="muted">
+                  No approvals. Request recollect or SSH verify from a server card or an alert.
+                </p>
               ) : (
                 <div className="table-wrap">
                   <table>
@@ -713,7 +779,15 @@ function App() {
                       {approvals.map((ap) => (
                         <tr key={ap.id}>
                           <td>{ap.server_name}</td>
-                          <td>{ap.action_key}</td>
+                          <td>
+                            {ap.action_key}
+                            {ap.action_params ? (
+                              <>
+                                <br />
+                                <span className="muted">{ap.action_params}</span>
+                              </>
+                            ) : null}
+                          </td>
                           <td>{ap.status}</td>
                           <td className="action-cell">
                             {ap.status === 'pending' && (

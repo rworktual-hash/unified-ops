@@ -38,3 +38,8 @@ class ApprovalReadWithServer(ApprovalRead):
 
 class ApprovalDecision(BaseModel):
     decided_by: str = Field(default="operator", max_length=128)
+
+
+class ApprovalCatalogRead(BaseModel):
+    safe_actions: list[str]
+    restart_services: list[str]
