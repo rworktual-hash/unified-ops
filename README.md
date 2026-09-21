@@ -2,6 +2,68 @@
 
 Single operations platform to replace separate monitoring apps (AI Insights, VoiceMG, BackupVault, Email Management, Server Inventory) with one dashboard, server inventory, monitoring, alerts, human approvals, and controlled agent actions.
 
+## Where we are (Sept 2026)
+
+Dashboard product work from the old portals is **in place** (live read + UI), including **Email Campaign extras** from campaign-db. **GPU 165/166** stay last. **5-minute Celery fleet collect** is optional — **Collect now / Collect all** is enough for now.
+
+### Two live data paths (both live — not stale)
+
+| Path | What it is | Used for today |
+|------|------------|----------------|
+| **MariaDB `10.180.1.222`** | Live product metrics the existing apps keep writing (VoiceMG often every second) | Dashboard tiles, VoiceMG history, AI Insights groups/charts, DID/SSL/domains, BackupVault portal views. **Read-only. Never execute on `.222`.** |
+| **SSH Collect → nlp-sm `unified_ops`** | Host health we collect ourselves on the inventory hosts | Server cards, Host SSH tables, **Alerts**, **Investigate**, thin **Approvals** |
+
+**“Old portal”** means the existing apps (voicemg.worktual.tech, aiservers, …), **not** dead data.
+
+### Fleet vs `.222` (same company, match by IP)
+
+Inventory seed is **61** hosts (`backend/app/seed/full_inventory.py`); production UI is ~**59** active (**165/166** usually inactive). `.222` is **not** one table of all 59 — it is split by product. Link = **same IP**, then hostname.
+
+| Inventory group | Live on `.222`? | Database |
+|-----------------|-----------------|----------|
+| AI / GPU (148, 149, 165, 166) | Yes if listed in AI Insights | `ai_insights_platform` |
+| Nginx, Kong, Redis, MySQL, Postgres, PBX, SIP, Grafana, … | Yes (AI Insights groups) | `ai_insights_platform` |
+| VoiceMG (~9 hosts) | Yes — calls, MOS, RTP, CPU | `voicemg` |
+| Infra inventory / VMs / DID / SSL / domains | Yes | `server_inventory` |
+| BackupVault hosts | Yes (jobs / NFS) | `backupvault` |
+| **Email (3 hosts)** | **No** (gateways 84 / 80) | `EMAIL_MGMT_*` → campaign-db **`10.180.0.203`** `worktual_email_campaign` |
+
+### Agents — finished vs next
+
+The **five domain guides** (AI/GPU, VoiceMG, BackupVault, Email, Infrastructure) use the same three levels: **safe automatic** / **human approval** / **admin-only (diagnose + alert)**. Agents are **for those inventory hosts**, not for executing on `.222`.
+
+| Level | Today | Later |
+|-------|--------|--------|
+| Safe automatic | **Off** | Allowlisted restarts/retries after team locks rules |
+| Human approval | Thin: recollect, SSH verify, `systemctl_restart` if service ∈ allowlist | Full per-domain lists from the five guides |
+| Admin / alert only | **Yes** — Collect → local alerts → **Investigate** (read-only) | Also **read live `.222` alerts** → match IP → same guardrails on that host |
+
+**Agreed target for agents (not fully built):**
+
+```
+Live .222 (metrics + alerts) → Unified Ops reads → match IP to inventory host
+  → guardrails (safe | approve | admin-only) → act only on that host (SSH / allowlisted tools)
+```
+
+Never write or execute on `.222`. SSH Collect alerts stay as a second input (host RAM/disk/GPU/collect fail).
+
+### Finished on the dashboard
+
+- Live extras: AI Insights + VoiceMG + **Email Campaign** (poll ~5s; API cache 2s)
+- VoiceMG history: Live, 5m, 30m, 1h, 2h, 6h, 12h, Today, Yesterday, 2 days, Week, Range…
+- AI Insights group cards + fleet/health/resource charts (not the old pies)
+- Infrastructure: Dashboard / Baremetal / Proxmox / VMs / **DID / SSL / Domains** (view-only) / Host SSH
+- UI: black sidebar, white metric canvas, purple accents
+- Phase 5 Investigate + Phase 6 thin approvals + Agent audit log
+
+### Still to do (agreed order)
+
+1. **Agents on `.222` alerts** — read live alerts/metrics from `.222`, match IP, apply the three guardrail levels on the matching inventory host (five guides).
+2. **GPU 165 / 166** — only when SSH password works. **Do last.**
+3. Optional later: systemd for uvicorn; scheduled Celery collect if we want history without clicking Collect.
+
+Docs: [`docs/LEGACY_METRICS.md`](./docs/LEGACY_METRICS.md), [`docs/VOICEMG_METRICS.md`](./docs/VOICEMG_METRICS.md), five `*_agent_actions_guide.docx` + KT.
+
 **Approach:** Build and validate everything **locally first**, then deploy the same codebase to the dedicated Unified Ops server.
 
 Full knowledge transfer: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./Unified_Ops_Full_KT_and_Project_Start_Guide.docx) (no secrets in that doc or in this repo).
@@ -17,11 +79,14 @@ Full knowledge transfer: [`Unified_Ops_Full_KT_and_Project_Start_Guide.docx`](./
 ## Architecture (simple)
 
 ```
-React UI  →  FastAPI  →  MariaDB (persistent data)
-                ↑
-Celery Beat → Redis → Celery Workers → SSH / safe checks → target servers
+React UI  →  FastAPI
+               ├─ nlp-sm MariaDB unified_ops  (inventory, SSH metrics, our alerts, approvals, audit)
+               ├─ READ live MariaDB 10.180.1.222  (product metrics/alerts — never execute here)
+               ├─ READ live MariaDB 10.180.0.203  (Email Campaign — EMAIL_MGMT_*, SELECT only)
+               └─ SSH Collect → inventory hosts (~59 active)
 
-Alerts → LangGraph agent → guardrails → auto action | human approval → executor → verify → audit log
+Later: .222 alert → IP match → guardrails → action on that inventory host only
+Today: SSH Collect → local alerts → Investigate / thin Approve
 ```
 
 | Component | Role |
@@ -41,7 +106,7 @@ Alerts → LangGraph agent → guardrails → auto action | human approval → e
 - **Backend:** FastAPI (Python)
 - **Database:** MariaDB (`unified_ops`)
 - **Tasks:** Celery, Redis
-- **Agent (later):** LangGraph + domain tools + guardrails
+- **Agent:** LangGraph investigate + thin approvals now; `.222` alert → IP match → full guardrails later
 
 ## Local prerequisites
 
@@ -262,7 +327,7 @@ python scripts/apply-ssh-port-4204.py   # syncs 22 or 4204 from seed
 # or: python scripts/seed-all-servers.py
 ```
 
-**Full inventory** (~64 hosts — AI Insights set + backupvault/email extras; upsert by IP):
+**Full inventory** (61 seed hosts / ~59 active in production — AI Insights set + backupvault/email extras; upsert by IP):
 
 ```bash
 python scripts/seed-all-servers.py
@@ -313,9 +378,9 @@ Step-by-step SSH/nginx/auth: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_POR
 
 ## Status
 
-**Production (observability.worktual.tech):** ~50 active hosts; fleet **host metrics** (SSH) + **alerts**; login via `app_users`. **GPU insights pilot live** on **DR-GPU1-148** and **DR-GPU1-149** (`GPU_PRODUCT_COLLECT_IPS` in nlp-sm `.env`).
+**Production (observability.worktual.tech):** ~59 active hosts; SSH host metrics + **live `.222` dashboard**; login via `app_users`. GPU insights pilot on **DR-GPU1-148** and **DR-GPU1-149**.
 
-**Next (typical order):** enable **scheduled collect** on nlp-sm ([`docs/SCHEDULED_COLLECT.md`](./docs/SCHEDULED_COLLECT.md)); history charts UI; sidebar grouping by project; **165/166** when password ready; BackupVault / email DB sync; systemd for uvicorn/worker/beat.
+**Next:** (1) agents from live `.222` alerts → IP match → guardrails on inventory hosts; (2) **165/166 last** when SSH password works; scheduled 5‑min Celery collect is **not required** now (manual Collect is enough). See **Where we are** above.
 
 ### Phase 3 — Metrics (Redis + Celery)
 

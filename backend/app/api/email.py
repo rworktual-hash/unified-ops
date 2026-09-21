@@ -13,6 +13,7 @@ from app.models.email_sync_state import EmailSyncState
 from app.models.email_ssh_snapshot import EmailSshSnapshot
 from app.models.server import Server
 from app.schemas.email import (
+    EmailExtrasRead,
     EmailLogEventRead,
     EmailOverviewRead,
     EmailQueueSnapshotRead,
@@ -22,8 +23,14 @@ from app.schemas.email import (
     EmailSyncResultRead,
 )
 from app.services.email_mgmt_sync import STREAM_KEY, compute_email_overview, sync_email_events_from_mgmt_db
+from app.services.email_portal import fetch_email_extras
 
 router = APIRouter(prefix="/email", tags=["email"])
+
+
+@router.get("/extras", response_model=EmailExtrasRead)
+def email_extras(hours: int = Query(default=24, ge=1, le=24 * 30)) -> EmailExtrasRead:
+    return EmailExtrasRead.model_validate(fetch_email_extras(hours))
 
 
 @router.get("/ssh-overview", response_model=EmailSshOverviewRead)

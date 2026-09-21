@@ -108,3 +108,77 @@ class EmailSyncResultRead(BaseModel):
     reason: str | None = None
     error: str | None = None
     last_source_id: int | None = None
+
+
+class EmailExtraSenderRead(BaseModel):
+    sender: str
+    count: int = 0
+
+
+class EmailExtraTotalsRead(BaseModel):
+    sent: int = 0
+    bounce: int = 0
+    deferred: int = 0
+    host_not_reachable: int = 0
+    delivered: int = 0
+    inbound: int = 0
+    outbound: int = 0
+    failed: int = 0
+    blocked: int = 0
+    spam: int = 0
+    quarantine: int = 0
+    campaign_queued: int = 0
+    log_total: int = 0
+
+
+class EmailExtraQueueRead(BaseModel):
+    queue_count: int = 0
+    deferred_count: int = 0
+    active_count: int = 0
+    incoming_count: int = 0
+    snapshot_at: datetime | str | None = None
+
+
+class EmailExtraServerRead(BaseModel):
+    server: str | None = None
+    server_name: str | None = None
+    inventory_name: str | None = None
+    queue_count: int = 0
+    deferred_count: int = 0
+    active_count: int = 0
+    incoming_count: int = 0
+    snapshot_at: datetime | str | None = None
+    top_senders: list[EmailExtraSenderRead] = []
+
+
+class EmailExtraEventRead(BaseModel):
+    id: int
+    occurred_at: datetime | str | None = None
+    event_type: str | None = None
+    direction: str | None = None
+    from_addr: str | None = None
+    to_addr: str | None = None
+    subject: str | None = None
+    status: str | None = None
+    dsn: str | None = None
+    reason: str | None = None
+    queue_id: str | None = None
+    message_id: str | None = None
+    spam_score: float | None = None
+    dkim_result: str | None = None
+    spf_result: str | None = None
+    classification: str | None = None
+    server: str | None = None
+    server_name: str | None = None
+    inventory_name: str | None = None
+
+
+class EmailExtrasRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    period_hours: int = 24
+    totals: EmailExtraTotalsRead
+    queue: EmailExtraQueueRead
+    servers: list[EmailExtraServerRead]
+    events: list[EmailExtraEventRead]

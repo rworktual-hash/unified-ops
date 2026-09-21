@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   fetchEmailEvents,
+  fetchEmailExtras,
   fetchEmailOverview,
   fetchEmailQueue,
   fetchEmailSshOverview,
   syncEmailLogs,
   type AppUser,
+  type EmailExtras,
   type EmailLogEvent,
   type EmailOverview,
   type EmailQueueSnapshot,
   type EmailSshOverview,
 } from '../api'
+import { useLivePoll } from '../useLivePoll'
 import type { Server } from '../types'
+import { EmailCampaign } from './EmailCampaign'
 
 type Props = {
   emailServers: Server[]
@@ -26,7 +30,10 @@ const PERIOD_HOURS: { label: string; hours: number }[] = [
 
 export function EmailPanel({ emailServers, session }: Props) {
   const [periodHours, setPeriodHours] = useState(24)
+  const [campaignHours, setCampaignHours] = useState(24)
   const [overview, setOverview] = useState<EmailOverview | null>(null)
+  const [extras, setExtras] = useState<EmailExtras | null>(null)
+  const [extrasLoading, setExtrasLoading] = useState(true)
   const [events, setEvents] = useState<EmailLogEvent[]>([])
   const [search, setSearch] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
@@ -34,6 +41,17 @@ export function EmailPanel({ emailServers, session }: Props) {
   const [sshOverview, setSshOverview] = useState<EmailSshOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+
+  const loadExtras = useCallback(async () => {
+    try {
+      const data = await fetchEmailExtras(campaignHours)
+      setExtras(data)
+    } catch {
+      /* keep last extras */
+    } finally {
+      setExtrasLoading(false)
+    }
+  }, [campaignHours])
 
   const load = useCallback(async () => {
     setError(null)
@@ -59,6 +77,12 @@ export function EmailPanel({ emailServers, session }: Props) {
     void load().catch((err) => setError(err instanceof Error ? err.message : 'Failed to load email data'))
   }, [load])
 
+  useEffect(() => {
+    setExtrasLoading(true)
+    void loadExtras()
+  }, [loadExtras])
+  useLivePoll(loadExtras, true)
+
   const lastUpdated = useMemo(() => {
     if (!overview?.last_synced_at) return null
     return new Date(overview.last_synced_at).toLocaleString()
@@ -69,12 +93,19 @@ export function EmailPanel({ emailServers, session }: Props) {
       <header className="page-head">
         <h1>Email</h1>
         <p>
-          Read-only SSH on email gateways (queue, Postfix/Dovecot/OpenDKIM, today&apos;s mail stats via{' '}
-          <code>pflogsumm</code>). Optional DB sync adds full log history when configured.
+          Live Campaign extras from campaign-db <code>10.180.0.203</code>. SSH on the mail gateways (84 / 80)
+          stays separate. Optional DB sync copies logs into Unified Ops.
         </p>
       </header>
 
       {error && <p className="banner error">{error}</p>}
+
+      <EmailCampaign
+        extras={extras}
+        loading={extrasLoading}
+        periodHours={campaignHours}
+        onPeriodHours={setCampaignHours}
+      />
 
       {sshOverview ? (
         <section className="panel">

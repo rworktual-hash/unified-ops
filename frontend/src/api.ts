@@ -240,6 +240,86 @@ export async function syncEmailLogs(): Promise<{ ok: boolean; inserted?: number;
   return res.json()
 }
 
+export type EmailExtraSender = {
+  sender: string
+  count: number
+}
+
+export type EmailExtraTotals = {
+  sent: number
+  bounce: number
+  deferred: number
+  host_not_reachable: number
+  delivered: number
+  inbound: number
+  outbound: number
+  failed: number
+  blocked: number
+  spam: number
+  quarantine: number
+  campaign_queued: number
+  log_total: number
+}
+
+export type EmailExtraQueue = {
+  queue_count: number
+  deferred_count: number
+  active_count: number
+  incoming_count: number
+  snapshot_at: string | null
+}
+
+export type EmailExtraServer = {
+  server: string | null
+  server_name: string | null
+  inventory_name: string | null
+  queue_count: number
+  deferred_count: number
+  active_count: number
+  incoming_count: number
+  snapshot_at: string | null
+  top_senders: EmailExtraSender[]
+}
+
+export type EmailExtraEvent = {
+  id: number
+  occurred_at: string | null
+  event_type: string | null
+  direction: string | null
+  from_addr: string | null
+  to_addr: string | null
+  subject: string | null
+  status: string | null
+  dsn: string | null
+  reason: string | null
+  queue_id: string | null
+  message_id: string | null
+  spam_score: number | null
+  dkim_result: string | null
+  spf_result: string | null
+  classification: string | null
+  server: string | null
+  server_name: string | null
+  inventory_name: string | null
+}
+
+export type EmailExtras = {
+  ok: boolean
+  database: string | null
+  reason: string | null
+  period_hours: number
+  totals: EmailExtraTotals
+  queue: EmailExtraQueue
+  servers: EmailExtraServer[]
+  events: EmailExtraEvent[]
+}
+
+export async function fetchEmailExtras(hours = 24): Promise<EmailExtras> {
+  const res = await apiFetch(`/email/extras?hours=${hours}`)
+  if (!res.ok) throw new Error('Failed to load email extras')
+  return res.json()
+}
+
 export type BackupVaultSnapshot = {
   id: number
   server_id: number

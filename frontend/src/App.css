@@ -1022,6 +1022,50 @@
   font-size: 0.8125rem;
 }
 
+.email-subhead {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.email-live-logs-head {
+  margin-top: 0.75rem;
+}
+
+.email-mix {
+  display: flex;
+  overflow: hidden;
+  border-radius: 8px;
+  min-height: 1.5rem;
+  margin: 0 0 0.85rem;
+  background: #f1f5f9;
+}
+
+.email-mix-seg {
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 0.35rem;
+}
+
+.email-status-ok {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.email-status-warn {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.email-status-bad {
+  color: #be123c;
+  font-weight: 600;
+}
+
 .stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

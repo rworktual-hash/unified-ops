@@ -55,20 +55,20 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
 
-    # Optional read-only DB for email-management.worktual.tech (parsed mail logs)
+    # Optional read-only DB for campaign-db (worktual_email_campaign on 10.180.0.203)
     email_mgmt_database_url: str | None = None
-    email_mgmt_events_table: str = "email_logs"
+    email_mgmt_events_table: str = "email_log_realtime"
     email_mgmt_col_id: str = "id"
-    email_mgmt_col_time: str = "event_time"
-    email_mgmt_col_event: str = "event"
+    email_mgmt_col_time: str = "log_datetime"
+    email_mgmt_col_event: str = "event_type"
     email_mgmt_col_direction: str = "direction"
-    email_mgmt_col_from: str = "from_address"
-    email_mgmt_col_to: str = "to_address"
+    email_mgmt_col_from: str = "mail_from"
+    email_mgmt_col_to: str = "mail_to"
     email_mgmt_col_subject: str = "subject"
     email_mgmt_col_status: str = "status"
     email_mgmt_col_dsn: str = "dsn"
     email_mgmt_col_queue_id: str = "queue_id"
-    email_mgmt_col_host: str | None = None
+    email_mgmt_col_host: str | None = "server"
     email_mgmt_sync_batch_size: int = 500
     # Optional: only count/sync rows where category column equals this (e.g. transactional app mail).
     email_mgmt_col_category: str | None = None
