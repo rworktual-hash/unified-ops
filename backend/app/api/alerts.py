@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.alert import Alert
 from app.models.server import Server
-from app.schemas.alert import AlertRead, AlertReadWithServer
+from app.schemas.alert import AlertRead, AlertReadWithServer, LiveAlertsRead
 from app.schemas.agent_action import InvestigationResponse
 from app.services.investigation import InvestigationNotAllowed, run_investigation
+from app.services.live_alerts import attach_inventory, fetch_ai_insights_alerts
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -42,9 +43,73 @@ def list_alerts(
                 resolved_at=alert.resolved_at,
                 server_name=server.server_name,
                 ip_address=server.ip_address,
+                source="collect",
             )
         )
     return result
+
+
+@router.get("/live", response_model=LiveAlertsRead)
+def list_live_alerts(db: Session = Depends(get_db)) -> LiveAlertsRead:
+    payload = fetch_ai_insights_alerts()
+    inventory = [
+        {
+            "id": row.id,
+            "server_name": row.server_name,
+            "ip_address": row.ip_address,
+            "hostname": row.server_name,
+            "is_active": row.is_active,
+        }
+        for row in db.query(Server).all()
+    ]
+    alerts = attach_inventory(payload.get("alerts") or [], inventory)
+    return LiveAlertsRead(
+        ok=bool(payload.get("ok")),
+        database=payload.get("database"),
+        reason=payload.get("reason"),
+        alerts=alerts,
+    )
+
+
+@router.post("/live/{source_id}/investigate", response_model=InvestigationResponse)
+def investigate_live_alert(source_id: int, db: Session = Depends(get_db)) -> InvestigationResponse:
+    payload = fetch_ai_insights_alerts()
+    if not payload.get("ok"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=payload.get("reason") or "Live alerts unavailable",
+        )
+    inventory = [
+        {
+            "id": row.id,
+            "server_name": row.server_name,
+            "ip_address": row.ip_address,
+            "hostname": row.server_name,
+            "is_active": row.is_active,
+        }
+        for row in db.query(Server).filter(Server.is_active.is_(True)).all()
+    ]
+    matched = attach_inventory(payload.get("alerts") or [], inventory)
+    alert = next((row for row in matched if row.get("source_id") == source_id), None)
+    if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live alert not found")
+    server_id = alert.get("inventory_server_id")
+    if not server_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No inventory host matches this .222 alert (IP then hostname).",
+        )
+    try:
+        return run_investigation(
+            db,
+            server_id=int(server_id),
+            alert_type=alert.get("alert_type"),
+            alert_message=f"[.222] {alert.get('title')}: {alert.get('message')}",
+        )
+    except InvestigationNotAllowed as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/{alert_id}/investigate", response_model=InvestigationResponse)

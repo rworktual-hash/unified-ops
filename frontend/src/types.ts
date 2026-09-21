@@ -140,4 +140,23 @@ export type Alert = {
   resolved_at: string | null
   server_name: string
   ip_address: string
+  source?: string
+}
+
+export type LiveAlert = {
+  source_id: number
+  source: string
+  alert_type: string
+  severity: string
+  status: string
+  title: string
+  message: string
+  ip_address: string
+  hostname: string | null
+  portal_server_name: string | null
+  first_seen_at: string | null
+  last_seen_at: string | null
+  inventory_server_id: number | null
+  inventory_server_name: string | null
+  matched: boolean
 }

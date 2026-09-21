@@ -36,7 +36,7 @@ The **five domain guides** (AI/GPU, VoiceMG, BackupVault, Email, Infrastructure)
 |-------|--------|--------|
 | Safe automatic | **Off** | Allowlisted restarts/retries after team locks rules |
 | Human approval | Thin: recollect, SSH verify, `systemctl_restart` if service ∈ allowlist | Full per-domain lists from the five guides |
-| Admin / alert only | **Yes** — Collect → local alerts → **Investigate** (read-only) | Also **read live `.222` alerts** → match IP → same guardrails on that host |
+| Admin / alert only | **Yes** — Collect alerts **and** live `.222` `ai_server_alerts` → IP match → **Investigate** (read-only) | Human-approval / safe automatic still later |
 
 **Agreed target for agents (not fully built):**
 
@@ -55,10 +55,11 @@ Never write or execute on `.222`. SSH Collect alerts stay as a second input (hos
 - Infrastructure: Dashboard / Baremetal / Proxmox / VMs / **DID / SSL / Domains** (view-only) / Host SSH
 - UI: black sidebar, white metric canvas, purple accents
 - Phase 5 Investigate + Phase 6 thin approvals + Agent audit log
+- Live `.222` AI Insights alerts on **Alerts** → match IP → Investigate on that inventory host (no restart)
 
 ### Still to do (agreed order)
 
-1. **Agents on `.222` alerts** — read live alerts/metrics from `.222`, match IP, apply the three guardrail levels on the matching inventory host (five guides).
+1. **Agents (next)** — human-approval / allowlisted restart from the five guides. Investigate from `.222` alerts is in place.
 2. **GPU 165 / 166** — only when SSH password works. **Do last.**
 3. Optional later: systemd for uvicorn; scheduled Celery collect if we want history without clicking Collect.
 
@@ -86,7 +87,7 @@ React UI  →  FastAPI
                └─ SSH Collect → inventory hosts (~59 active)
 
 Later: .222 alert → IP match → guardrails → action on that inventory host only
-Today: SSH Collect → local alerts → Investigate / thin Approve
+Today: SSH Collect alerts + live `.222` alerts → IP match → Investigate / thin Approve
 ```
 
 | Component | Role |
@@ -380,7 +381,7 @@ Step-by-step SSH/nginx/auth: [`docs/SSH_PORTS_AND_PRODUCTION.md`](./docs/SSH_POR
 
 **Production (observability.worktual.tech):** ~59 active hosts; SSH host metrics + **live `.222` dashboard**; login via `app_users`. GPU insights pilot on **DR-GPU1-148** and **DR-GPU1-149**.
 
-**Next:** (1) agents from live `.222` alerts → IP match → guardrails on inventory hosts; (2) **165/166 last** when SSH password works; scheduled 5‑min Celery collect is **not required** now (manual Collect is enough). See **Where we are** above.
+**Next:** (1) human-approval / allowlisted restart from the five guides; (2) **165/166 last** when SSH password works. Investigate from live `.222` alerts is in place. Scheduled 5‑min Celery collect is **not required** now.
 
 ### Phase 3 — Metrics (Redis + Celery)
 

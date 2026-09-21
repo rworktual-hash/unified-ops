@@ -46,6 +46,8 @@ def run_investigation(
     *,
     server_id: int,
     alert_id: int | None = None,
+    alert_type: str | None = None,
+    alert_message: str | None = None,
 ) -> InvestigationResponse:
     if not PHASE5_ALLOW_INVESTIGATION:
         raise InvestigationNotAllowed("Investigation disabled by policy.")
@@ -58,8 +60,6 @@ def run_investigation(
     if not server.is_active:
         raise ValueError("Server is inactive.")
 
-    alert_type: str | None = None
-    alert_message: str | None = None
     if alert_id is not None:
         alert = db.get(Alert, alert_id)
         if alert is None or alert.server_id != server_id:

@@ -13,6 +13,8 @@ Unified Ops SSH collect gives **host health** (CPU, RAM, disk). The old web port
 
 **Email** is separate — use `EMAIL_MGMT_DATABASE_URL`, not this DB.
 
+**Live `.222` alerts:** `GET /alerts/live` reads `ai_insights_platform.ai_server_alerts` (open only), matches inventory by IP then hostname, and **Investigate** runs SSH diagnose on that host. Never writes `.222`.
+
 ## Setup on nlp-sm
 
 1. **SSH to server-management** (verify from nlp-sm):

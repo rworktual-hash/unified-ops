@@ -14,9 +14,11 @@ import {
   matchAiInsightExtra,
   matchVoiceMgExtra,
   investigateAlert,
+  investigateLiveAlert,
   investigateServer,
   listAgentActions,
   listAlerts,
+  listLiveAlerts,
   listApprovals,
   listServers,
   rejectApproval,
@@ -41,7 +43,7 @@ import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { LegacyMetricsSection } from './components/LegacyMetricsSection'
 import { VoiceMgPanel } from './components/VoiceMgPanel'
 import { UsersPanel } from './components/UsersPanel'
-import type { AgentAction, Alert, Approval, ConnectionTestResult, MetricsBundle, Server } from './types'
+import type { AgentAction, Alert, Approval, ConnectionTestResult, LiveAlert, MetricsBundle, Server } from './types'
 import './App.css'
 
 type NavId =
@@ -67,6 +69,8 @@ function App() {
   const [collectingId, setCollectingId] = useState<number | null>(null)
   const [metricsByServer, setMetricsByServer] = useState<Record<number, MetricsBundle | null>>({})
   const [alerts, setAlerts] = useState<Alert[]>([])
+  const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([])
+  const [liveAlertsReason, setLiveAlertsReason] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
@@ -146,6 +150,14 @@ function App() {
         setFleetStatus(null)
       }
       setAlerts(await listAlerts(showResolved ? undefined : 'open'))
+      try {
+        const live = await listLiveAlerts()
+        setLiveAlerts(live.ok ? live.alerts : [])
+        setLiveAlertsReason(live.ok ? null : live.reason)
+      } catch {
+        setLiveAlerts([])
+        setLiveAlertsReason('Failed to load live .222 alerts')
+      }
       setAgentActions(await listAgentActions(15))
       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
     } catch (err) {
@@ -190,8 +202,20 @@ function App() {
     }
   }, [])
   const loggedIn = Boolean(session && session !== 'pending')
+  const pollLiveAlerts = useCallback(async () => {
+    try {
+      const live = await listLiveAlerts()
+      if (live.ok) {
+        setLiveAlerts(live.alerts)
+        setLiveAlertsReason(null)
+      }
+    } catch {
+      /* keep last live alerts */
+    }
+  }, [])
   useLivePoll(pollAiExtras, loggedIn && (nav === 'servers' || nav === 'infrastructure'))
   useLivePoll(pollVoiceMgExtras, loggedIn && nav === 'servers')
+  useLivePoll(pollLiveAlerts, loggedIn && nav === 'alerts')
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
@@ -497,11 +521,76 @@ function App() {
           <>
             <header className="page-head">
               <h1>Alerts</h1>
-              <p>Thresholds from the latest metric collection on connected servers.</p>
+              <p>
+                SSH Collect alerts plus live <code>.222</code> AI Insights alerts. Investigate is
+                read-only on the matched inventory host.
+              </p>
             </header>
             <section className="panel">
               <div className="panel-head">
-                <h2>Open alerts ({alerts.filter((a) => a.status === 'open').length})</h2>
+                <h2>Live .222 ({liveAlerts.length})</h2>
+              </div>
+              {liveAlertsReason ? <p className="muted">{liveAlertsReason}</p> : null}
+              {liveAlerts.length === 0 && !liveAlertsReason ? (
+                <p className="muted">No open AI Insights alerts on .222, or none matched yet.</p>
+              ) : liveAlerts.length > 0 ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Severity</th>
+                        <th>Host</th>
+                        <th>Title</th>
+                        <th>Message</th>
+                        <th>Match</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {liveAlerts.map((a) => (
+                        <tr key={`live-${a.source_id}`}>
+                          <td>
+                            <span className={`badge ${a.severity}`}>{a.severity}</span>
+                          </td>
+                          <td>
+                            {a.inventory_server_name || a.portal_server_name || '—'}
+                            <br />
+                            <span className="muted">{a.ip_address || a.hostname || '—'}</span>
+                          </td>
+                          <td>{a.title}</td>
+                          <td>{a.message}</td>
+                          <td>{a.matched ? 'inventory' : 'unmatched'}</td>
+                          <td className="action-cell">
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              disabled={!a.matched || investigatingId === a.source_id}
+                              onClick={async () => {
+                                setInvestigatingId(a.source_id)
+                                setError(null)
+                                try {
+                                  await investigateLiveAlert(a.source_id)
+                                  setAgentActions(await listAgentActions(15))
+                                } catch (err) {
+                                  setError(err instanceof Error ? err.message : 'Investigate failed')
+                                } finally {
+                                  setInvestigatingId(null)
+                                }
+                              }}
+                            >
+                              Investigate
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <h2>SSH Collect ({alerts.filter((a) => a.status === 'open').length})</h2>
                 <label className="checkbox inline">
                   <input
                     type="checkbox"

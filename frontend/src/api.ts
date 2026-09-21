@@ -5,6 +5,7 @@ import type {
   Alert,
   Approval,
   InvestigationResult,
+  LiveAlert,
   MetricsBundle,
   Server,
   ServerCreate,
@@ -663,6 +664,25 @@ export async function listAlerts(status?: string): Promise<Alert[]> {
   const q = status ? `?status=${encodeURIComponent(status)}` : ''
   const res = await apiFetch(`/alerts${q}`)
   if (!res.ok) throw new Error('Failed to load alerts')
+  return res.json()
+}
+
+export async function listLiveAlerts(): Promise<{
+  ok: boolean
+  reason: string | null
+  alerts: LiveAlert[]
+}> {
+  const res = await apiFetch('/alerts/live')
+  if (!res.ok) throw new Error('Failed to load live .222 alerts')
+  return res.json()
+}
+
+export async function investigateLiveAlert(sourceId: number): Promise<InvestigationResult> {
+  const res = await apiFetch(`/alerts/live/${sourceId}/investigate`, { method: 'POST' })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || 'Investigation failed')
+  }
   return res.json()
 }
 
