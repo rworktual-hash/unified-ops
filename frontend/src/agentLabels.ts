@@ -14,7 +14,7 @@ export function actionTitle(key: string | null | undefined): string {
 export function alertTitle(type: string | null | undefined, fallback: string): string {
   if (!type || type === 'manual') return 'Requested by you'
   if (ACTION_TITLES[type]) return ACTION_TITLES[type]
-  return type.replace(/_/g, ' ')
+  return type.replace(/_/g, ' ') || fallback.replace(/_/g, ' ')
 }
 
 export function statusTitle(status: string): string {
