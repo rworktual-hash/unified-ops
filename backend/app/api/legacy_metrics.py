@@ -8,8 +8,11 @@ from app.db.session import get_db
 from app.models.legacy_metric_point import LegacyMetricPoint
 from app.schemas.legacy_metrics import (
     AiInsightExtrasRead,
+    BackupVaultDashboardRead,
+    BackupVaultIncrementalRead,
     BackupVaultMonitoringRead,
     BackupVaultNfsRead,
+    BackupVaultRepositoriesRead,
     BackupVaultRunHistoryRead,
     BackupVaultTargetsRead,
     InventoryCatalogRead,
@@ -23,6 +26,11 @@ from app.schemas.legacy_metrics import (
     LegacySyncResultRead,
 )
 from app.services.ai_insights_portal import fetch_ai_insights_extras
+from app.services.backupvault_portal import (
+    fetch_backupvault_dashboard,
+    fetch_backupvault_incremental,
+    fetch_backupvault_repositories,
+)
 from app.services.inventory_portal import fetch_inventory_catalog, fetch_inventory_portal
 from app.services.voicemg_portal import fetch_voicemg_extras, fetch_voicemg_history
 from app.services.legacy_metrics_sync import (
@@ -65,8 +73,26 @@ def legacy_discovery(_admin=Depends(require_admin)) -> dict:
 
 
 @router.get("/backupvault/runs", response_model=BackupVaultRunHistoryRead)
-def backupvault_run_history() -> BackupVaultRunHistoryRead:
-    return BackupVaultRunHistoryRead.model_validate(fetch_backupvault_run_history())
+def backupvault_run_history(
+    start: str | None = Query(default=None),
+    end: str | None = Query(default=None),
+) -> BackupVaultRunHistoryRead:
+    return BackupVaultRunHistoryRead.model_validate(fetch_backupvault_run_history(start, end))
+
+
+@router.get("/backupvault/dashboard", response_model=BackupVaultDashboardRead)
+def backupvault_dashboard() -> BackupVaultDashboardRead:
+    return BackupVaultDashboardRead.model_validate(fetch_backupvault_dashboard())
+
+
+@router.get("/backupvault/incremental", response_model=BackupVaultIncrementalRead)
+def backupvault_incremental() -> BackupVaultIncrementalRead:
+    return BackupVaultIncrementalRead.model_validate(fetch_backupvault_incremental())
+
+
+@router.get("/backupvault/repositories", response_model=BackupVaultRepositoriesRead)
+def backupvault_repositories() -> BackupVaultRepositoriesRead:
+    return BackupVaultRepositoriesRead.model_validate(fetch_backupvault_repositories())
 
 
 @router.get("/backupvault/targets", response_model=BackupVaultTargetsRead)

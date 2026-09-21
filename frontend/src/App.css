@@ -1748,6 +1748,67 @@ button.linkish {
   background: #dc2626;
 }
 
+.bv-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(240px, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+  align-items: start;
+}
+
+.bv-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+  max-width: 22rem;
+}
+
+.bv-cal-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.7rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  background: var(--border);
+  color: var(--muted);
+}
+
+.bv-cal-day--success {
+  background: #16a34a;
+  color: #fff;
+}
+
+.bv-cal-day--partial {
+  background: #d97706;
+  color: #fff;
+}
+
+.bv-cal-day--failed {
+  background: #dc2626;
+  color: #fff;
+}
+
+.bv-cal-day--empty {
+  background: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.bv-path {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.bv-repo-wrap {
+  margin-top: 1.25rem;
+}
+
+.bv-repo-tier {
+  margin-bottom: 1rem;
+}
+
 .bv-filters input {
   min-width: 12rem;
   padding: 0.35rem 0.5rem;

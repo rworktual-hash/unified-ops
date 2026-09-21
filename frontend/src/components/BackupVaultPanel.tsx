@@ -12,9 +12,12 @@ import {
   type BackupVaultSnapshot,
   type BackupVaultTarget,
 } from '../api'
+import { BackupVaultDashboard } from './BackupVaultDashboard'
+import { BackupVaultIncremental } from './BackupVaultIncremental'
+import { BackupVaultRepositories } from './BackupVaultRepositories'
 import { BackupVaultRunHistory } from './BackupVaultRunHistory'
 
-type TabId = 'runs' | 'targets' | 'monitoring' | 'storage' | 'nfs' | 'hosts'
+type TabId = 'dashboard' | 'runs' | 'targets' | 'incremental' | 'monitoring' | 'storage' | 'nfs' | 'hosts'
 
 function state(value: boolean | null): string {
   return value == null ? '—' : value ? 'Running' : 'Check failed'
@@ -93,7 +96,7 @@ type Props = {
 }
 
 export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
-  const [tab, setTab] = useState<TabId>('runs')
+  const [tab, setTab] = useState<TabId>('dashboard')
   const [overview, setOverview] = useState<BackupVaultOverview | null>(null)
   const [targets, setTargets] = useState<BackupVaultTarget[]>([])
   const [nfs, setNfs] = useState<BackupVaultNfsServer[]>([])
@@ -156,7 +159,7 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
       <header className="page-head">
         <div>
           <h1>BackupVault</h1>
-          <p>Portal metrics from MariaDB: runs, targets, live monitoring and NFS storage.</p>
+          <p>Read-only portal metrics from MariaDB — no restore, query, SFTP, or start backup.</p>
         </div>
       </header>
 
@@ -164,9 +167,11 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
 
       <nav className="bv-tabs" aria-label="BackupVault sections">
         {(
-          [
+            [
+            ['dashboard', 'Dashboard'],
             ['runs', 'Run history'],
             ['targets', `DB servers${targets.length ? ` (${targets.length})` : ''}`],
+            ['incremental', 'Incremental'],
             ['monitoring', 'Monitoring'],
             ['storage', 'Storage'],
             ['nfs', `NFS${nfs.length ? ` (${nfs.length})` : ''}`],
@@ -184,7 +189,9 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
         ))}
       </nav>
 
+      {tab === 'dashboard' && <BackupVaultDashboard />}
       {tab === 'runs' && <BackupVaultRunHistory />}
+      {tab === 'incremental' && <BackupVaultIncremental />}
 
       {tab === 'targets' && (
         <section className="bv-portal">
@@ -392,45 +399,17 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
           {!monitoring?.storage.length && !loadingExtra ? (
             <p className="muted">No NFS storage rows in the portal database.</p>
           ) : null}
+          <BackupVaultRepositories />
         </section>
       )}
 
       {tab === 'nfs' && (
-        <section className="bv-portal">
-          <div className="bv-portal-toolbar">
-            <div>
-              <h2>NFS servers</h2>
-              <p className="muted">{nfs.length} storage endpoints from the portal.</p>
-            </div>
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={loadingExtra}
-              onClick={() => void loadCatalog()}
-            >
-              {loadingExtra ? 'Loading…' : 'Refresh'}
-            </button>
-          </div>
-          <div className="bv-card-grid">
-            {nfs.map((server) => (
-              <article key={server.id} className="bv-card">
-                <div className="bv-card-top">
-                  <strong>{server.name}</strong>
-                  {server.status ? <StatusPill status={server.status} /> : null}
-                </div>
-                <p className="muted bv-sub">
-                  {server.host ?? '—'}
-                  {server.role ? ` · ${server.role}` : ''}
-                </p>
-                <p className="bv-card-meta">{server.export_path || server.mount_point || '—'}</p>
-                <p className="muted bv-sub">
-                  {server.disk_used || '—'} used · {server.disk_avail || '—'} free
-                  {server.disk_size ? ` · ${server.disk_size} total` : ''}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
+        <NfsCards
+          nfs={nfs}
+          monitoring={monitoring}
+          loading={loadingExtra}
+          onRefresh={() => void loadCatalog()}
+        />
       )}
 
       {tab === 'hosts' && overview && (
@@ -507,6 +486,116 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
         </section>
       )}
     </div>
+  )
+}
+
+function NfsCards({
+  nfs,
+  monitoring,
+  loading,
+  onRefresh,
+}: {
+  nfs: BackupVaultNfsServer[]
+  monitoring: BackupVaultMonitoring | null
+  loading: boolean
+  onRefresh: () => void
+}) {
+  const rows = monitoring?.nfs_servers?.length
+    ? monitoring.nfs_servers.map((row) => ({
+        id: row.id,
+        name: row.name,
+        host: row.host,
+        path: row.export_path || row.mount_point,
+        role: row.role,
+        status: row.status,
+        disk_size: row.disk_size,
+        disk_used: row.disk_used,
+        disk_avail: row.disk_avail,
+        disk_pct: row.disk_pct,
+        inode_pct: row.inode_pct,
+        snapshot_at: row.snapshot_at,
+      }))
+    : nfs.map((row) => ({
+        id: row.id,
+        name: row.name,
+        host: row.host,
+        path: row.export_path || row.mount_point,
+        role: row.role,
+        status: row.status,
+        disk_size: row.disk_size,
+        disk_used: row.disk_used,
+        disk_avail: row.disk_avail,
+        disk_pct: null as number | null,
+        inode_pct: null as number | null,
+        snapshot_at: null as string | null,
+      }))
+  const online = rows.filter((row) => (row.status || '').toLowerCase().includes('online') || row.status == null).length
+  const warn = rows.filter((row) => (row.disk_pct ?? 0) >= 85 || (row.inode_pct ?? 0) >= 85).length
+  const offline = rows.filter((row) => (row.status || '').toLowerCase().includes('off')).length
+
+  return (
+    <section className="bv-portal">
+      <div className="bv-portal-toolbar">
+        <div>
+          <h2>NFS servers</h2>
+          <p className="muted">{rows.length} storage endpoints from the portal — view only.</p>
+        </div>
+        <button type="button" className="btn ghost" disabled={loading} onClick={onRefresh}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+      <div className="stat-row backupvault-stat-row">
+        <div className="stat-card">
+          <span className="stat-label">Total NFS</span>
+          <span className="stat-value">{rows.length}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Online</span>
+          <span className="stat-value accent">{online}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Warning / critical</span>
+          <span className="stat-value warn">{warn}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Offline</span>
+          <span className="stat-value warn">{offline}</span>
+        </div>
+      </div>
+      <div className="bv-card-grid bv-storage-grid">
+        {rows.map((server) => {
+          const pct = server.disk_pct
+          const tone = pct == null ? '' : pct >= 90 ? ' crit' : pct >= 85 ? ' warn' : ''
+          return (
+            <article key={server.id} className="bv-card bv-storage-card">
+              <div className="bv-card-top">
+                <strong>{server.name}</strong>
+                {server.status ? <StatusPill status={server.status} /> : null}
+              </div>
+              <p className="muted bv-sub">
+                {server.host ?? '—'}
+                {server.role ? ` · ${server.role}` : ''}
+              </p>
+              <p className="bv-card-meta">{server.path || '—'}</p>
+              <p className="muted bv-sub">
+                {server.disk_used || '—'} used · {server.disk_avail || '—'} free
+                {server.disk_size ? ` · ${server.disk_size} total` : ''}
+                {server.inode_pct != null ? ` · inodes ${fmtPct(server.inode_pct)}` : ''}
+              </p>
+              {pct != null ? (
+                <div className="bv-bar" aria-hidden>
+                  <div className={`bv-bar-fill${tone}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                </div>
+              ) : null}
+              <p className="muted bv-sub">
+                {pct != null ? `${fmtPct(pct)} used` : 'Usage —'}
+                {server.snapshot_at ? ` · checked ${new Date(server.snapshot_at).toLocaleString()}` : ''}
+              </p>
+            </article>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

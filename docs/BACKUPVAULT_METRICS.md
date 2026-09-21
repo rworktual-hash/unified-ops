@@ -58,10 +58,13 @@ Collect metrics on those servers. Remove the list after validation to cover all 
 ## API and UI
 
 - `GET /api/backupvault/ssh-overview`
-- Sidebar: **BackupVault**
+- Sidebar: **BackupVault** — Dashboard, Run history, DB servers, Incremental, Monitoring, Storage (incl. dump trees), NFS, Host SSH
+- Live MariaDB extras (read-only): `GET /api/legacy-metrics/backupvault/dashboard`, `/incremental`, `/repositories`, plus existing `/runs` (`start`/`end`), `/targets`, `/nfs`, `/monitoring`
 - Storage warning: data filesystem >= 85%
 - Stale backup: newest file found in common backup paths is older than 24 hours
 - PostgreSQL healthy standby: in recovery and replay lag <= 300 seconds
+
+**Not in Unified Ops (mutating / live access):** Query Execution, Restore, Remote File Explorer (SFTP), Start / Run all backups, Add / Edit / Remove / Check server.
 
 The backup-path check is configurable for real environments. Add confirmed paths,
 units, and localhost health URLs in `.env`; do not accept them from request

@@ -31,12 +31,17 @@ export function BackupVaultRunHistory({ onLoaded }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [targetFilter, setTargetFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const runs = await fetchBackupVaultRuns()
+      const runs = await fetchBackupVaultRuns(
+        startDate ? `${startDate}T00:00:00` : undefined,
+        endDate ? `${endDate}T23:59:59` : undefined,
+      )
       setHistory(runs)
       onLoaded?.(runs)
       if (!runs.ok && runs.reason) setError(runs.reason)
@@ -45,7 +50,7 @@ export function BackupVaultRunHistory({ onLoaded }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [onLoaded])
+  }, [endDate, onLoaded, startDate])
 
   useEffect(() => {
     void load()
@@ -130,13 +135,23 @@ export function BackupVaultRunHistory({ onLoaded }: Props) {
             <option value="running">Running</option>
           </select>
         </label>
-        {(targetFilter !== 'all' || statusFilter !== 'all') && (
+        <label>
+          From
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </label>
+        <label>
+          To
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </label>
+        {(targetFilter !== 'all' || statusFilter !== 'all' || startDate || endDate) && (
           <button
             type="button"
             className="btn ghost"
             onClick={() => {
               setTargetFilter('all')
               setStatusFilter('all')
+              setStartDate('')
+              setEndDate('')
             }}
           >
             Clear
@@ -157,6 +172,7 @@ export function BackupVaultRunHistory({ onLoaded }: Props) {
               <th>Size</th>
               <th>Started</th>
               <th>Duration</th>
+              <th>Log</th>
             </tr>
           </thead>
           <tbody>
@@ -185,6 +201,9 @@ export function BackupVaultRunHistory({ onLoaded }: Props) {
                 <td>{run.file_size_label && run.file_size_bytes ? run.file_size_label : '—'}</td>
                 <td>{run.started_at ? new Date(run.started_at).toLocaleString() : '—'}</td>
                 <td>{formatDuration(run.duration_seconds)}</td>
+                <td className="bv-path" title={run.log_excerpt || run.error_message || ''}>
+                  {run.log_excerpt || run.error_message || '—'}
+                </td>
               </tr>
             ))}
           </tbody>

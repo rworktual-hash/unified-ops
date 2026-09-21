@@ -57,6 +57,7 @@ class BackupVaultRunRead(BaseModel):
     duration_seconds: int | None
     destination_count: int
     dest_types: str | None = None
+    log_excerpt: str | None = None
 
 
 class BackupVaultRunHistoryRead(BaseModel):
@@ -176,6 +177,97 @@ class BackupVaultNfsRead(BaseModel):
     database: str | None = None
     reason: str | None = None
     servers: list[BackupVaultNfsServerRead]
+
+
+class BackupVaultCalendarDayRead(BaseModel):
+    date: str
+    tone: str
+    success: int = 0
+    failed: int = 0
+    partial: int = 0
+    total: int = 0
+
+
+class BackupVaultHistoryDayRead(BaseModel):
+    date: str
+    runs: int = 0
+
+
+class BackupVaultDashboardRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    checked_at: datetime | None = None
+    live_db_servers: int = 0
+    today_runs: int = 0
+    today_success: int = 0
+    today_failed: int = 0
+    failures_30d: int = 0
+    primary_nfs_pct: float | None = None
+    primary_nfs_used: str | None = None
+    primary_nfs_size: str | None = None
+    data_backed_up_bytes: int | None = None
+    data_backed_up_label: str | None = None
+    remote_used: str | None = None
+    remote_size: str | None = None
+    remote_pct: float | None = None
+    s3_bytes: int | None = None
+    s3_label: str | None = None
+    s3_objects: int | None = None
+    calendar: list[BackupVaultCalendarDayRead] = []
+    history_14d: list[BackupVaultHistoryDayRead] = []
+
+
+class BackupVaultIncrementalJobRead(BaseModel):
+    id: int
+    name: str
+    script: str | None = None
+    status: str | None = None
+    last_success: datetime | None = None
+    file_size_bytes: int | None = None
+    file_size_label: str | None = None
+    remote_path: str | None = None
+    host: str | None = None
+    schedule: str | None = None
+
+
+class BackupVaultIncrementalRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    source: str | None = None
+    host: str | None = None
+    schedule: str | None = None
+    last_cycle: datetime | None = None
+    jobs: list[BackupVaultIncrementalJobRead] = []
+
+
+class BackupVaultRepoFolderRead(BaseModel):
+    name: str
+    dest: str
+    latest_file: str | None = None
+    file_path: str | None = None
+    file_size_bytes: int | None = None
+    file_size_label: str | None = None
+    modified_at: datetime | None = None
+    file_count: int = 1
+
+
+class BackupVaultRepoTierRead(BaseModel):
+    id: str
+    label: str
+    folder_count: int = 0
+    file_count: int = 0
+    bytes_label: str | None = None
+    folders: list[BackupVaultRepoFolderRead] = []
+
+
+class BackupVaultRepositoriesRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    source: str | None = None
+    tiers: list[BackupVaultRepoTierRead] = []
 
 
 class InventoryBaremetalRead(BaseModel):

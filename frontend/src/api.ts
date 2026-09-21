@@ -786,6 +786,7 @@ export type BackupVaultRun = {
   duration_seconds: number | null
   destination_count: number
   dest_types?: string | null
+  log_excerpt?: string | null
 }
 
 export type BackupVaultTarget = {
@@ -831,9 +832,110 @@ export type BackupVaultRunHistory = {
   runs: BackupVaultRun[]
 }
 
-export async function fetchBackupVaultRuns(): Promise<BackupVaultRunHistory> {
-  const res = await apiFetch('/legacy-metrics/backupvault/runs')
+export async function fetchBackupVaultRuns(start?: string, end?: string): Promise<BackupVaultRunHistory> {
+  const params = new URLSearchParams()
+  if (start) params.set('start', start)
+  if (end) params.set('end', end)
+  const suffix = params.toString() ? `?${params}` : ''
+  const res = await apiFetch(`/legacy-metrics/backupvault/runs${suffix}`)
   if (!res.ok) throw new Error('Failed to load BackupVault run history')
+  return res.json()
+}
+
+export type BackupVaultDashboard = {
+  ok: boolean
+  reason?: string | null
+  checked_at?: string | null
+  live_db_servers: number
+  today_runs: number
+  today_success: number
+  today_failed: number
+  failures_30d: number
+  primary_nfs_pct: number | null
+  primary_nfs_used: string | null
+  primary_nfs_size: string | null
+  data_backed_up_bytes: number | null
+  data_backed_up_label: string | null
+  remote_used: string | null
+  remote_size: string | null
+  remote_pct: number | null
+  s3_bytes: number | null
+  s3_label: string | null
+  s3_objects: number | null
+  calendar: Array<{
+    date: string
+    tone: string
+    success: number
+    failed: number
+    partial: number
+    total: number
+  }>
+  history_14d: Array<{ date: string; runs: number }>
+}
+
+export async function fetchBackupVaultDashboard(): Promise<BackupVaultDashboard> {
+  const res = await apiFetch('/legacy-metrics/backupvault/dashboard')
+  if (!res.ok) throw new Error('Failed to load BackupVault dashboard')
+  return res.json()
+}
+
+export type BackupVaultIncrementalJob = {
+  id: number
+  name: string
+  script: string | null
+  status: string | null
+  last_success: string | null
+  file_size_bytes: number | null
+  file_size_label: string | null
+  remote_path: string | null
+  host: string | null
+  schedule: string | null
+}
+
+export type BackupVaultIncremental = {
+  ok: boolean
+  reason?: string | null
+  source?: string | null
+  host: string | null
+  schedule: string | null
+  last_cycle: string | null
+  jobs: BackupVaultIncrementalJob[]
+}
+
+export async function fetchBackupVaultIncremental(): Promise<BackupVaultIncremental> {
+  const res = await apiFetch('/legacy-metrics/backupvault/incremental')
+  if (!res.ok) throw new Error('Failed to load incremental backups')
+  return res.json()
+}
+
+export type BackupVaultRepoFolder = {
+  name: string
+  dest: string
+  latest_file: string | null
+  file_path: string | null
+  file_size_bytes: number | null
+  file_size_label: string | null
+  modified_at: string | null
+  file_count: number
+}
+
+export type BackupVaultRepoTier = {
+  id: string
+  label: string
+  folder_count: number
+  file_count: number
+  bytes_label: string | null
+  folders: BackupVaultRepoFolder[]
+}
+
+export async function fetchBackupVaultRepositories(): Promise<{
+  ok: boolean
+  reason?: string | null
+  source?: string | null
+  tiers: BackupVaultRepoTier[]
+}> {
+  const res = await apiFetch('/legacy-metrics/backupvault/repositories')
+  if (!res.ok) throw new Error('Failed to load BackupVault repositories')
   return res.json()
 }
 

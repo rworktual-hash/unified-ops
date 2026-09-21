@@ -80,7 +80,10 @@ Review `legacy-metrics-discovery.json`, then set `LEGACY_*_TABLE` and `LEGACY_*_
 |--------|------|-------|
 | GET | `/api/legacy-metrics/status` | Connection + per-stream sync state |
 | GET | `/api/legacy-metrics/overview/{domain}` | Aggregated synced data (`ai_insights`, `backupvault`, `voicemg`, `infrastructure`) |
-| GET | `/api/legacy-metrics/backupvault/runs` | Full BackupVault Run History (all jobs, live SELECT from portal DB) |
+| GET | `/api/legacy-metrics/backupvault/runs` | Full BackupVault Run History (all jobs, live SELECT from portal DB). Optional `start`/`end`. Log excerpt if a run-log table exists. |
+| GET | `/api/legacy-metrics/backupvault/dashboard` | Read-only KPIs, 35-day calendar, 14-day run counts |
+| GET | `/api/legacy-metrics/backupvault/incremental` | Last incremental / rsync job status (no Run all) |
+| GET | `/api/legacy-metrics/backupvault/repositories` | Dump trees by dest (primary / secondary / remote / S3) |
 | GET | `/api/legacy-metrics/backupvault/targets` | Backup targets (no passwords) |
 | GET | `/api/legacy-metrics/backupvault/nfs` | NFS server list |
 | GET | `/api/legacy-metrics/backupvault/monitoring` | Latest `db_server_snapshots` + `nfs_monitoring_snapshots` + storage tiles |

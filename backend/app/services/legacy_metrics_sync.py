@@ -454,7 +454,7 @@ def _format_bytes(value: int | None) -> str | None:
     return f"{amount:.{digits}f} {units[index]}"
 
 
-def fetch_backupvault_run_history() -> dict:
+def fetch_backupvault_run_history(start: str | None = None, end: str | None = None) -> dict:
     """Read-only Run History from BackupVault portal MariaDB (all jobs, not 24h)."""
     if not settings.legacy_metrics_database_url:
         return {"ok": False, "reason": "LEGACY_METRICS_DATABASE_URL not set", "runs": []}
@@ -463,8 +463,18 @@ def fetch_backupvault_run_history() -> dict:
     if engine is None:
         return {"ok": False, "reason": "engine unavailable", "runs": []}
 
+    where = []
+    params: dict[str, Any] = {}
+    if start:
+        where.append("r.started_at >= :start")
+        params["start"] = start
+    if end:
+        where.append("r.started_at <= :end")
+        params["end"] = end
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
+
     sql = text(
-        """
+        f"""
         SELECT
           r.id,
           r.target_id,
@@ -484,12 +494,13 @@ def fetch_backupvault_run_history() -> dict:
           (SELECT GROUP_CONCAT(DISTINCT x.dest_type SEPARATOR ',') FROM backup_transfers x WHERE x.run_id = r.id) AS dest_types
         FROM backup_runs r
         LEFT JOIN backup_targets t ON t.id = r.target_id
+        {clause}
         ORDER BY r.id DESC
         """
     )
     try:
         with engine.connect() as conn:
-            rows = conn.execute(sql).mappings().all()
+            rows = conn.execute(sql, params).mappings().all()
         runs: list[dict] = []
         counts = {"success": 0, "failed": 0, "partial": 0, "running": 0, "pending": 0}
         for row in rows:
@@ -520,8 +531,12 @@ def fetch_backupvault_run_history() -> dict:
                     "duration_seconds": int(duration) if duration is not None else None,
                     "destination_count": int(row.get("destination_count") or 0),
                     "dest_types": row.get("dest_types"),
+                    "log_excerpt": None,
                 }
             )
+        from app.services.backupvault_portal import attach_run_logs
+
+        runs = attach_run_logs(runs)
         total = len(runs)
         success_rate = round((counts["success"] / total) * 100) if total else 0
         return {
