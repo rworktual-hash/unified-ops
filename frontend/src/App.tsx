@@ -376,7 +376,7 @@ function App() {
                   <p className="muted fleet-collect-line">
                     Scheduled collect:{' '}
                     {fleetStatus.scheduled_collect_enabled
-                      ? `every ${Math.round(fleetStatus.interval_seconds / 60)} min (Celery Beat)`
+                      ? `every ${Math.round(fleetStatus.interval_seconds / 60)} min · read-only (no restart)`
                       : 'off — set METRICS_SCHEDULED_COLLECT_ENABLED=true on API host'}
                     {fleetStatus.last_run_at
                       ? ` · Last run ${new Date(fleetStatus.last_run_at).toLocaleString()} (${fleetStatus.last_servers_ok ?? 0} ok${

@@ -54,6 +54,10 @@ class GpuProductSnapshotRead(BaseModel):
     compute_mem_used_mb: float | None
     compute_process_names: str | None
     docker_containers_running: int | None
+    docker_active: bool | None = None
+    docker_container_status: str | None = None
+    process_sample: str | None = None
+    log_tail: str | None = None
     gpu_model_name: str | None
     driver_version: str | None
     collect_error: str | None
@@ -71,6 +75,8 @@ class GpuInsightsSnapshotRead(BaseModel):
     tcp_established: int | None
     listen_sockets: int | None
     listen_port_8000: int | None
+    listen_port_8011: int | None = None
+    localhost_ping_ok: bool | None = None
     cpu_util_pct: float | None
     gpu_util_avg: float | None
     gpu_temp_avg: float | None

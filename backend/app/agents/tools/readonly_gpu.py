@@ -1,4 +1,5 @@
 from app.monitoring.collectors import collect_gpu_metrics, collect_host_metrics
+from app.monitoring.gpu_product_collectors import collect_gpu_product_snapshot
 from app.models.server import Server
 
 
@@ -44,4 +45,24 @@ def tool_check_gpu(server: Server) -> dict:
             }
             for r in rows
         ],
+    }
+
+
+def tool_check_readonly_extras(server: Server) -> dict:
+    snap = collect_gpu_product_snapshot(
+        host=server.ip_address,
+        port=server.ssh_port,
+        username=server.ssh_username,
+        credential_ref=server.credential_ref,
+        ssh_password=server.ssh_password,
+        ssh_auth_mode=server.ssh_auth_mode or "auto",
+    )
+    return {
+        "tool": "check_readonly_extras",
+        "error": snap.error,
+        "docker_active": snap.docker_active,
+        "docker_containers_running": snap.docker_containers_running,
+        "docker_container_status": snap.docker_container_status,
+        "process_sample": snap.process_sample,
+        "log_tail": snap.log_tail,
     }

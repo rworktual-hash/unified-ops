@@ -951,6 +951,17 @@
   align-items: center;
 }
 
+.readonly-sample {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.65rem;
+  background: var(--bg);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  max-height: 140px;
+  overflow: auto;
+}
+
 .approval-request-row {
   display: flex;
   flex-wrap: wrap;

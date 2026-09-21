@@ -60,6 +60,8 @@ export type GpuInsightsSnapshot = {
   tcp_established: number | null
   listen_sockets: number | null
   listen_port_8000: number | null
+  listen_port_8011?: number | null
+  localhost_ping_ok?: boolean | null
   cpu_util_pct: number | null
   gpu_util_avg: number | null
   gpu_temp_avg: number | null
@@ -76,6 +78,10 @@ export type GpuProductSnapshot = {
   compute_mem_used_mb: number | null
   compute_process_names: string | null
   docker_containers_running: number | null
+  docker_active?: boolean | null
+  docker_container_status?: string | null
+  process_sample?: string | null
+  log_tail?: string | null
   gpu_model_name: string | null
   driver_version: string | null
   collect_error: string | null

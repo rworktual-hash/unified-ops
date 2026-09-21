@@ -39,8 +39,9 @@ class Settings(BaseSettings):
     alert_disk_used_pct_critical: float = 92.0
     alert_gpu_temp_c_warning: float = 85.0
 
-    # Comma-separated IPs for GPU product SSH collect pilot, or * for all gpu servers.
-    gpu_product_collect_ips: str = "81.17.61.148"
+    # Comma-separated IPs for GPU product SSH collect, or * for all gpu servers.
+    # Inactive hosts (165/166) are still skipped by collect_all_active_servers.
+    gpu_product_collect_ips: str = "*"
 
     allowlist_restart_services: str = ""
 

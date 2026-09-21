@@ -42,6 +42,8 @@ def collect_and_store_gpu_insights(
         tcp_established=snap.tcp_established,
         listen_sockets=snap.listen_sockets,
         listen_port_8000=snap.listen_port_8000,
+        listen_port_8011=snap.listen_port_8011,
+        localhost_ping_ok=snap.localhost_ping_ok,
         cpu_util_pct=snap.cpu_util_pct,
         gpu_util_avg=util_avg,
         gpu_temp_avg=temp_avg,

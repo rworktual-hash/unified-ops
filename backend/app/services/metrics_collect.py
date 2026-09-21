@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.models.gpu_metric import GpuMetric
@@ -14,6 +16,8 @@ from app.services.infrastructure_ssh_collect import collect_and_store_infrastruc
 from app.services.voicemg_ssh_collect import collect_and_store_voicemg_ssh
 from app.services.gpu_insights_collect import collect_and_store_gpu_insights
 from app.services.gpu_product_collect import collect_and_store_gpu_product
+
+logger = logging.getLogger(__name__)
 
 
 def collect_and_store_metrics(db: Session, server: Server) -> tuple[ServerMetric, list[GpuMetric]]:
@@ -120,7 +124,13 @@ def collect_all_active_servers(db: Session) -> tuple[int, int]:
         try:
             collect_and_store_metrics(db, server)
             ok += 1
-        except Exception:
+        except Exception as exc:
             db.rollback()
             failed += 1
+            logger.warning(
+                "Read-only collect failed for %s (%s): %s",
+                server.server_name,
+                server.ip_address,
+                exc,
+            )
     return ok, failed

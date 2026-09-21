@@ -33,6 +33,20 @@ def build_diagnosis(
             f"load {host_tool.get('load_1m')}"
         )
 
+    extras = tool_results.get("check_readonly_extras") or {}
+    if extras.get("error"):
+        lines.append(f"Read-only extras error: {extras['error']}")
+    elif extras:
+        docker = extras.get("docker_containers_running")
+        lines.append(
+            "Read-only extras: "
+            f"docker {extras.get('docker_active')} · containers {docker}"
+        )
+        if extras.get("process_sample"):
+            lines.append(f"Process sample:\n{extras['process_sample']}")
+        if extras.get("log_tail"):
+            lines.append(f"Log tail:\n{extras['log_tail']}")
+
     gpu_tool = tool_results.get("check_gpu") or {}
     gpus = gpu_tool.get("gpus") or []
     if gpus:

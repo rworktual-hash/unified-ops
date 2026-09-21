@@ -16,6 +16,8 @@ CMD_SS_LISTEN = "ss -tlnH 2>/dev/null | wc -l"
 CMD_SS_ESTABLISHED = "ss -H -tan state established 2>/dev/null | wc -l"
 CMD_SS_TCP_LINES = "ss -H -tan 2>/dev/null | wc -l"
 CMD_SS_LISTEN_8000 = "ss -tlnH sport = :8000 2>/dev/null | wc -l"
+CMD_SS_LISTEN_8011 = "ss -tlnH sport = :8011 2>/dev/null | wc -l"
+CMD_PING_LOCAL = "ping -c 1 -W 2 127.0.0.1 2>/dev/null | head -2"
 CMD_CPU_UTIL = "grep '^cpu ' /proc/stat; sleep 1; grep '^cpu ' /proc/stat"
 CMD_NET_DEV = "cat /proc/net/dev"
 
@@ -27,6 +29,8 @@ _ALLOWED = frozenset(
         CMD_SS_ESTABLISHED,
         CMD_SS_TCP_LINES,
         CMD_SS_LISTEN_8000,
+        CMD_SS_LISTEN_8011,
+        CMD_PING_LOCAL,
         CMD_CPU_UTIL,
         CMD_NET_DEV,
     }
@@ -117,6 +121,8 @@ class GpuHostInsightsSnapshot:
     tcp_established: int | None
     listen_sockets: int | None
     listen_port_8000: int | None
+    listen_port_8011: int | None
+    localhost_ping_ok: bool | None
     cpu_util_pct: float | None
     net_rx_bytes: int | None
     net_tx_bytes: int | None
@@ -140,6 +146,8 @@ def collect_gpu_host_insights(
     tcp_established: int | None = None
     listen_sockets: int | None = None
     listen_8000: int | None = None
+    listen_8011: int | None = None
+    ping_ok: bool | None = None
     cpu_util: float | None = None
     rx: int | None = None
     tx: int | None = None
@@ -160,6 +168,7 @@ def collect_gpu_host_insights(
                 (CMD_SS_ESTABLISHED, _parse_wc),
                 (CMD_SS_LISTEN, _parse_wc),
                 (CMD_SS_LISTEN_8000, _parse_wc),
+                (CMD_SS_LISTEN_8011, _parse_wc),
             ):
                 code, out, err = _run_command(client, cmd)
                 if code != 0 and not out.strip():
@@ -178,6 +187,14 @@ def collect_gpu_host_insights(
                     listen_sockets = val
                 elif cmd == CMD_SS_LISTEN_8000:
                     listen_8000 = val
+                elif cmd == CMD_SS_LISTEN_8011:
+                    listen_8011 = val
+
+            code, out, err = _run_command(client, CMD_PING_LOCAL)
+            if out.strip():
+                ping_ok = "1 received" in out or "0% packet loss" in out or "ttl=" in out.lower()
+            elif code != 0:
+                ping_ok = False
 
             code, out, err = _run_command(client, CMD_CPU_UTIL)
             if code == 0:
@@ -200,6 +217,8 @@ def collect_gpu_host_insights(
             tcp_established=None,
             listen_sockets=None,
             listen_port_8000=None,
+            listen_port_8011=None,
+            localhost_ping_ok=None,
             cpu_util_pct=None,
             net_rx_bytes=None,
             net_tx_bytes=None,
@@ -214,6 +233,8 @@ def collect_gpu_host_insights(
             tcp_established=None,
             listen_sockets=None,
             listen_port_8000=None,
+            listen_port_8011=None,
+            localhost_ping_ok=None,
             cpu_util_pct=None,
             net_rx_bytes=None,
             net_tx_bytes=None,
@@ -228,6 +249,8 @@ def collect_gpu_host_insights(
         tcp_established=tcp_established,
         listen_sockets=listen_sockets,
         listen_port_8000=listen_8000,
+        listen_port_8011=listen_8011,
+        localhost_ping_ok=ping_ok,
         cpu_util_pct=cpu_util,
         net_rx_bytes=rx,
         net_tx_bytes=tx,

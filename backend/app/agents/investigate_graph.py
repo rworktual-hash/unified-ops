@@ -6,7 +6,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.diagnosis import build_diagnosis
-from app.agents.tools.readonly_gpu import tool_check_gpu, tool_check_host_snapshot
+from app.agents.tools.readonly_gpu import (
+    tool_check_gpu,
+    tool_check_host_snapshot,
+    tool_check_readonly_extras,
+)
 from app.models.server import Server
 from app.policies.guardrails import PHASE5_DEFAULT_RECOMMENDATION
 
@@ -29,6 +33,7 @@ def _node_run_tools(state: InvestigateState) -> dict[str, Any]:
     }
     if server.server_type == "gpu":
         results["check_gpu"] = tool_check_gpu(server)
+        results["check_readonly_extras"] = tool_check_readonly_extras(server)
     return {"tool_results": results}
 
 

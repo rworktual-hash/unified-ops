@@ -2,6 +2,8 @@
 
 Unified Ops can collect **all active servers** on a timer (same logic as **Collect all servers** in the UI).
 
+This is **Level 4 read-only autonomous**: CPU/RAM/disk/GPU plus Docker status, process sample, syslog tail, and listen/ping checks. It does **not** restart, stop, kill, delete, or change config. SSH failures increment `servers_failed` and `collect_error` — no recovery action.
+
 ## Components
 
 | Process | Role |

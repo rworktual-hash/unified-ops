@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -18,6 +18,8 @@ class GpuInsightsSnapshotRow(Base):
     tcp_established: Mapped[int | None] = mapped_column(Integer, nullable=True)
     listen_sockets: Mapped[int | None] = mapped_column(Integer, nullable=True)
     listen_port_8000: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    listen_port_8011: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    localhost_ping_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     cpu_util_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     gpu_util_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     gpu_temp_avg: Mapped[float | None] = mapped_column(Float, nullable=True)

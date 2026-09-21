@@ -17,8 +17,29 @@ CMD_GPU_COMPUTE_APPS = (
 )
 CMD_GPU_NAME_DRIVER = "nvidia-smi --query-gpu=index,name,driver_version --format=csv,noheader"
 CMD_DOCKER_RUNNING = "docker ps -q 2>/dev/null | wc -l"
+CMD_DOCKER_ACTIVE = "systemctl is-active docker 2>/dev/null || echo inactive"
+CMD_DOCKER_STATUS = "docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null | head -20"
+CMD_PROCESS_SAMPLE = "ps -eo pid,comm,pcpu --sort=-pcpu --no-headers 2>/dev/null | head -8"
+CMD_LOG_TAIL = (
+    "tail -n 12 /var/log/syslog 2>/dev/null || "
+    "tail -n 12 /var/log/messages 2>/dev/null || echo ''"
+)
 
-_ALLOWED = frozenset({CMD_GPU_COMPUTE_APPS, CMD_GPU_NAME_DRIVER, CMD_DOCKER_RUNNING})
+_ALLOWED = frozenset(
+    {
+        CMD_GPU_COMPUTE_APPS,
+        CMD_GPU_NAME_DRIVER,
+        CMD_DOCKER_RUNNING,
+        CMD_DOCKER_ACTIVE,
+        CMD_DOCKER_STATUS,
+        CMD_PROCESS_SAMPLE,
+        CMD_LOG_TAIL,
+    }
+)
+_SECRET_LINE = re.compile(
+    r"(password|secret|token|api[_-]?key|authorization|passwd)\s*[:=]",
+    re.IGNORECASE,
+)
 
 
 def _run_command(client, command: str) -> tuple[int, str, str]:
@@ -83,6 +104,34 @@ def _parse_docker_count(text: str) -> int | None:
     return int(match.group(0))
 
 
+def _docker_active(text: str) -> bool | None:
+    token = (text or "").strip().splitlines()[0].strip().lower() if text else ""
+    if token == "active":
+        return True
+    if token in {"inactive", "failed", "unknown"}:
+        return False
+    return None
+
+
+def _clip_text(text: str, limit: int = 1500) -> str | None:
+    cleaned = "\n".join(line.rstrip()[:240] for line in (text or "").splitlines() if line.strip())
+    if not cleaned:
+        return None
+    if len(cleaned) > limit:
+        return cleaned[: limit - 1] + "…"
+    return cleaned
+
+
+def sanitize_log_tail(text: str) -> str | None:
+    lines: list[str] = []
+    for line in (text or "").splitlines()[:20]:
+        if _SECRET_LINE.search(line):
+            lines.append("[redacted]")
+        elif line.strip():
+            lines.append(line[:240])
+    return _clip_text("\n".join(lines))
+
+
 @dataclass
 class GpuProductSnapshot:
     collected_at: datetime
@@ -90,6 +139,10 @@ class GpuProductSnapshot:
     compute_mem_used_mb: float | None
     compute_process_names: str | None
     docker_containers_running: int | None
+    docker_active: bool | None
+    docker_container_status: str | None
+    process_sample: str | None
+    log_tail: str | None
     gpu_model_name: str | None
     driver_version: str | None
     error: str | None = None
@@ -110,8 +163,25 @@ def collect_gpu_product_snapshot(
     compute_mem: float | None = None
     proc_names: str | None = None
     docker_count: int | None = None
+    docker_on: bool | None = None
+    docker_status: str | None = None
+    process_sample: str | None = None
+    log_tail: str | None = None
     model_name: str | None = None
     driver: str | None = None
+
+    empty = dict(
+        compute_process_count=None,
+        compute_mem_used_mb=None,
+        compute_process_names=None,
+        docker_containers_running=None,
+        docker_active=None,
+        docker_container_status=None,
+        process_sample=None,
+        log_tail=None,
+        gpu_model_name=None,
+        driver_version=None,
+    )
 
     try:
         with ssh_session(
@@ -138,34 +208,31 @@ def collect_gpu_product_snapshot(
 
             code, out, err = _run_command(client, CMD_DOCKER_RUNNING)
             if code != 0 and not out.strip().isdigit():
-                # docker missing is normal on some hosts
                 if "docker" not in (err or "").lower() and code != 0:
                     errors.append(f"docker: {err or f'exit {code}'}"[:200])
             else:
                 docker_count = _parse_docker_count(out)
 
+            code, out, err = _run_command(client, CMD_DOCKER_ACTIVE)
+            if code == 0 or out.strip():
+                docker_on = _docker_active(out)
+
+            code, out, err = _run_command(client, CMD_DOCKER_STATUS)
+            if out.strip():
+                docker_status = _clip_text(out)
+
+            code, out, err = _run_command(client, CMD_PROCESS_SAMPLE)
+            if out.strip():
+                process_sample = _clip_text(out)
+
+            code, out, err = _run_command(client, CMD_LOG_TAIL)
+            if out.strip():
+                log_tail = sanitize_log_tail(out)
+
     except CredentialError as exc:
-        return GpuProductSnapshot(
-            collected_at=now,
-            compute_process_count=None,
-            compute_mem_used_mb=None,
-            compute_process_names=None,
-            docker_containers_running=None,
-            gpu_model_name=None,
-            driver_version=None,
-            error=str(exc)[:1000],
-        )
+        return GpuProductSnapshot(collected_at=now, **empty, error=str(exc)[:1000])
     except Exception as exc:
-        return GpuProductSnapshot(
-            collected_at=now,
-            compute_process_count=None,
-            compute_mem_used_mb=None,
-            compute_process_names=None,
-            docker_containers_running=None,
-            gpu_model_name=None,
-            driver_version=None,
-            error=str(exc)[:1000],
-        )
+        return GpuProductSnapshot(collected_at=now, **empty, error=str(exc)[:1000])
 
     err_text = "; ".join(errors) if errors else None
     return GpuProductSnapshot(
@@ -174,6 +241,10 @@ def collect_gpu_product_snapshot(
         compute_mem_used_mb=compute_mem,
         compute_process_names=proc_names,
         docker_containers_running=docker_count,
+        docker_active=docker_on,
+        docker_container_status=docker_status,
+        process_sample=process_sample,
+        log_tail=log_tail,
         gpu_model_name=model_name,
         driver_version=driver,
         error=err_text,

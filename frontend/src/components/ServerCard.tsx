@@ -215,6 +215,22 @@ export function ServerCard({
                   </span>
                 </div>
                 <div className="metric-tile">
+                  <span className="metric-label">Listen :8011</span>
+                  <span className="metric-value">
+                    {insights.listen_port_8011 != null ? insights.listen_port_8011 : '—'}
+                  </span>
+                </div>
+                <div className="metric-tile">
+                  <span className="metric-label">Local ping</span>
+                  <span className="metric-value">
+                    {insights.localhost_ping_ok == null
+                      ? '—'
+                      : insights.localhost_ping_ok
+                        ? 'ok'
+                        : 'fail'}
+                  </span>
+                </div>
+                <div className="metric-tile">
                   <span className="metric-label">Listen sockets</span>
                   <span className="metric-value">
                     {insights.listen_sockets != null ? insights.listen_sockets : '—'}
@@ -253,6 +269,12 @@ export function ServerCard({
                       : '—'}
                   </span>
                 </div>
+                <div className="metric-tile">
+                  <span className="metric-label">Docker</span>
+                  <span className="metric-value">
+                    {product.docker_active == null ? '—' : product.docker_active ? 'active' : 'off'}
+                  </span>
+                </div>
               </div>
               {product.gpu_model_name ? (
                 <p className="muted product-meta">
@@ -262,6 +284,15 @@ export function ServerCard({
               ) : null}
               {product.compute_process_names ? (
                 <p className="muted product-meta">{product.compute_process_names}</p>
+              ) : null}
+              {product.docker_container_status ? (
+                <pre className="readonly-sample">{product.docker_container_status}</pre>
+              ) : null}
+              {product.process_sample ? (
+                <pre className="readonly-sample">{product.process_sample}</pre>
+              ) : null}
+              {product.log_tail ? (
+                <pre className="readonly-sample">{product.log_tail}</pre>
               ) : null}
               {product.collect_error ? (
                 <p className="ssh-line fail">Product collect: {product.collect_error}</p>
