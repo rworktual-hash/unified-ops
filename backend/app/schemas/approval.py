@@ -34,10 +34,16 @@ class ApprovalRead(BaseModel):
 class ApprovalReadWithServer(ApprovalRead):
     server_name: str
     ip_address: str
+    alert_type: str | None = None
+    alert_reason: str | None = None
+    proposed_command: str | None = None
+    impact: str | None = None
+    host_label: str | None = None
 
 
 class ApprovalDecision(BaseModel):
     decided_by: str = Field(default="operator", max_length=128)
+    confirmed: bool = False
 
 
 class ApprovalCatalogRead(BaseModel):

@@ -13,6 +13,7 @@ from app.schemas.approval import (
     ApprovalReadWithServer,
 )
 from app.services.approval_flow import approve_request, create_approval_request, reject_request
+from app.services.level5_propose import parse_guardrail
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
@@ -37,6 +38,7 @@ def list_approvals(
     rows = q.order_by(ApprovalRequest.created_at.desc()).limit(limit).all()
     out: list[ApprovalReadWithServer] = []
     for req, server in rows:
+        guard = parse_guardrail(req.action_params)
         out.append(
             ApprovalReadWithServer(
                 id=req.id,
@@ -54,6 +56,11 @@ def list_approvals(
                 executed_at=req.executed_at,
                 server_name=server.server_name,
                 ip_address=server.ip_address,
+                alert_type=guard["alert_type"],
+                alert_reason=guard["alert_reason"],
+                proposed_command=guard["proposed_command"],
+                impact=guard["impact"],
+                host_label=guard["host"],
             )
         )
     return out
@@ -78,7 +85,9 @@ def create_approval(payload: ApprovalCreate, db: Session = Depends(get_db)) -> A
 @router.post("/{approval_id}/approve", response_model=ApprovalRead)
 def approve(approval_id: int, body: ApprovalDecision, db: Session = Depends(get_db)) -> ApprovalRequest:
     try:
-        return approve_request(db, approval_id, decided_by=body.decided_by)
+        return approve_request(
+            db, approval_id, decided_by=body.decided_by, confirmed=body.confirmed
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

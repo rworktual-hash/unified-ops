@@ -124,6 +124,11 @@ export type Approval = {
   executed_at: string | null
   server_name: string
   ip_address: string
+  alert_type?: string | null
+  alert_reason?: string | null
+  proposed_command?: string | null
+  impact?: string | null
+  host_label?: string | null
 }
 
 export type InvestigationResult = {
@@ -131,6 +136,8 @@ export type InvestigationResult = {
   summary: string
   diagnosis: string
   recommendation: string
+  approval_id?: number | null
+  proposed_action?: string | null
 }
 
 export type Alert = {

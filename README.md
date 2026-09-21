@@ -35,7 +35,7 @@ The **five domain guides** (AI/GPU, VoiceMG, BackupVault, Email, Infrastructure)
 | Level | Today | Later |
 |-------|--------|--------|
 | Safe automatic | **Read-only only** — 5‑min Celery collect (CPU/RAM/disk/GPU + Docker/process/logs/listen). **No restart.** Failures log, no recovery. | Allowlisted restarts only if the team later accepts the risk |
-| Human approval | Thin: recollect, SSH verify. Restart stays off unless `ALLOWLIST_RESTART_SERVICES` is set | Full per-domain lists from the five guides |
+| Human approval | Investigate → explain alert/reason/command → Approve → **Confirm run**. Only **recollect** and **SSH verify**. Living doc: [`docs/AI_SERVER_AGENTS.md`](./docs/AI_SERVER_AGENTS.md) | More Level 5 commands only when added to that doc + allowlist |
 | Admin / alert only | **Yes** — Collect alerts **and** live `.222` `ai_server_alerts` → IP match → **Investigate** (read-only) | Never reboot / GPU reset / format / unknown scripts |
 
 **Agreed target for agents (not fully built):**
@@ -62,7 +62,7 @@ Never write or execute on `.222`. SSH Collect alerts stay as a second input (hos
 1. **GPU 165 / 166** — only when SSH password works. **Do last.**
 2. Optional later: systemd for uvicorn; more Level 5 approval tools (never Level 6).
 
-Docs: [`docs/LEGACY_METRICS.md`](./docs/LEGACY_METRICS.md), [`docs/VOICEMG_METRICS.md`](./docs/VOICEMG_METRICS.md), five `*_agent_actions_guide.docx` + KT.
+Docs: [`docs/AI_SERVER_AGENTS.md`](./docs/AI_SERVER_AGENTS.md) (AI Level 4/5 living doc), [`docs/LEGACY_METRICS.md`](./docs/LEGACY_METRICS.md), [`docs/VOICEMG_METRICS.md`](./docs/VOICEMG_METRICS.md), five `*_agent_actions_guide.docx` + KT.
 
 **Approach:** Build and validate everything **locally first**, then deploy the same codebase to the dedicated Unified Ops server.
 

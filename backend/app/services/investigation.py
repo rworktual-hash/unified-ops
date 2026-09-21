@@ -10,6 +10,7 @@ from app.models.server import Server
 from app.models.server_metric import ServerMetric
 from app.policies.guardrails import PHASE5_ALLOW_EXECUTOR, PHASE5_ALLOW_INVESTIGATION
 from app.schemas.agent_action import InvestigationResponse
+from app.services.level5_propose import propose_after_investigation
 
 
 class InvestigationNotAllowed(Exception):
@@ -97,9 +98,31 @@ def run_investigation(
     db.commit()
     db.refresh(row)
 
+    approval_id = None
+    proposed_action = None
+    try:
+        approval = propose_after_investigation(
+            db,
+            server=server,
+            alert_id=alert_id,
+            alert_type=alert_type,
+            alert_message=alert_message,
+            diagnosis=final.get("diagnosis"),
+            host_collect_error=(metrics.get("host") or {}).get("collect_error"),
+        )
+        approval_id = approval.id
+        proposed_action = approval.action_key
+        row.recommendation = f"pending_approval:{approval.action_key}"
+        db.commit()
+    except ValueError:
+        row.recommendation = "monitor_only"
+        db.commit()
+
     return InvestigationResponse(
         agent_action_id=row.id,
         summary=row.summary,
         diagnosis=row.diagnosis,
         recommendation=row.recommendation,
+        approval_id=approval_id,
+        proposed_action=proposed_action,
     )

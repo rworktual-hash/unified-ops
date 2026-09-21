@@ -627,7 +627,7 @@ export async function createApproval(payload: {
 export async function approveApproval(id: number): Promise<Approval> {
   const res = await apiFetch(`/approvals/${id}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ decided_by: 'operator' }),
+    body: JSON.stringify({ decided_by: 'operator', confirmed: true }),
   })
   if (!res.ok) {
     const detail = await res.text()

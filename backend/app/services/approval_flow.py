@@ -8,6 +8,7 @@ from app.models.agent_action import AgentAction
 from app.models.approval_request import ApprovalRequest
 from app.models.server import Server
 from app.policies.executor_actions import is_action_allowed
+from app.services.level5_propose import SAFE_COMMANDS, build_guardrail_params
 
 
 def create_approval_request(
@@ -30,12 +31,24 @@ def create_approval_request(
     if not allowed:
         raise ValueError(reason)
 
+    params = dict(action_params or {})
+    if action_key in SAFE_COMMANDS and not params.get("proposed_command"):
+        params.update(
+            build_guardrail_params(
+                server=server,
+                action_key=action_key,
+                alert_type=params.get("alert_type") or "manual",
+                alert_message=request_notes,
+                diagnosis=None,
+            )
+        )
+
     now = datetime.now(timezone.utc)
     row = ApprovalRequest(
         server_id=server_id,
         alert_id=alert_id,
         action_key=action_key,
-        action_params=json.dumps(action_params) if action_params else None,
+        action_params=json.dumps(params) if params else None,
         status="pending",
         request_notes=request_notes,
         requested_by=requested_by,
@@ -70,12 +83,20 @@ def _log_execution(
     )
 
 
-def approve_request(db: Session, approval_id: int, *, decided_by: str) -> ApprovalRequest:
+def approve_request(
+    db: Session,
+    approval_id: int,
+    *,
+    decided_by: str,
+    confirmed: bool = False,
+) -> ApprovalRequest:
     row = db.get(ApprovalRequest, approval_id)
     if row is None:
         raise ValueError("Approval request not found")
     if row.status != "pending":
         raise ValueError(f"Request is not pending (status={row.status}).")
+    if not confirmed:
+        raise ValueError("Second confirmation required before the agent may run the command.")
 
     server = db.get(Server, row.server_id)
     if server is None:

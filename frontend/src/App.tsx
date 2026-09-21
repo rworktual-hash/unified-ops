@@ -40,6 +40,7 @@ import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
 import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
+import { ApprovalDecisionCard } from './components/ApprovalDecisionCard'
 import { ApprovalRequestButtons } from './components/ApprovalRequestButtons'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
@@ -481,6 +482,8 @@ function App() {
                     try {
                       await investigateServer(s.id)
                       setAgentActions(await listAgentActions(15))
+                      setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+                      setNav('approvals')
                     } catch (err) {
                       setError(err instanceof Error ? err.message : 'Investigate failed')
                     } finally {
@@ -612,6 +615,8 @@ function App() {
                                 try {
                                   await investigateLiveAlert(a.source_id)
                                   setAgentActions(await listAgentActions(15))
+                                  setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+                                  setNav('approvals')
                                 } catch (err) {
                                   setError(err instanceof Error ? err.message : 'Investigate failed')
                                 } finally {
@@ -692,6 +697,10 @@ function App() {
                                     try {
                                       await investigateAlert(a.id)
                                       setAgentActions(await listAgentActions(15))
+                                      setApprovals(
+                                        await listApprovals(showAllApprovals ? undefined : 'pending'),
+                                      )
+                                      setNav('approvals')
                                     } finally {
                                       setInvestigatingId(null)
                                     }
@@ -744,8 +753,8 @@ function App() {
             <header className="page-head">
               <h1>Approvals</h1>
               <p>
-                Recollect and SSH verify wait here. Restart only if a service is allowlisted — never
-                automatic.
+                Level 5: the agent shows the alert, the reason, and the exact command. Approve then
+                Confirm run — or Reject. Nothing runs on the first click.
               </p>
             </header>
             <section className="panel">
@@ -762,65 +771,25 @@ function App() {
               </div>
               {approvals.length === 0 ? (
                 <p className="muted">
-                  No approvals. Request recollect or SSH verify from a server card or an alert.
+                  No approvals. Run Investigate on an AI server alert — the agent will propose a
+                  command here.
                 </p>
               ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Server</th>
-                        <th>Action</th>
-                        <th>Status</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {approvals.map((ap) => (
-                        <tr key={ap.id}>
-                          <td>{ap.server_name}</td>
-                          <td>
-                            {ap.action_key}
-                            {ap.action_params ? (
-                              <>
-                                <br />
-                                <span className="muted">{ap.action_params}</span>
-                              </>
-                            ) : null}
-                          </td>
-                          <td>{ap.status}</td>
-                          <td className="action-cell">
-                            {ap.status === 'pending' && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn primary"
-                                  onClick={async () => {
-                                    await approveApproval(ap.id)
-                                    await load()
-                                  }}
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn ghost"
-                                  onClick={async () => {
-                                    await rejectApproval(ap.id)
-                                    setApprovals(
-                                      await listApprovals(showAllApprovals ? undefined : 'pending'),
-                                    )
-                                  }}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="approval-card-list">
+                  {approvals.map((ap) => (
+                    <ApprovalDecisionCard
+                      key={ap.id}
+                      approval={ap}
+                      onApprove={async (id) => {
+                        await approveApproval(id)
+                        await load()
+                      }}
+                      onReject={async (id) => {
+                        await rejectApproval(id)
+                        setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </section>

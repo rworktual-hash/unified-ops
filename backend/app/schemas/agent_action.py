@@ -23,3 +23,5 @@ class InvestigationResponse(BaseModel):
     summary: str
     diagnosis: str
     recommendation: str
+    approval_id: int | None = None
+    proposed_action: str | None = None
