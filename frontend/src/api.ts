@@ -1192,6 +1192,24 @@ export type VoiceMgExtra = {
   rtcp: string | null
   disk_used_pct: number | null
   disk_mount: string | null
+  rx_errors?: number | null
+  rx_drops?: number | null
+  open_fds?: number | null
+  threads?: number | null
+  ipc_sent_ps?: number | null
+  ipc_recv_ps?: number | null
+  ipc_latency_ms?: number | null
+  runqueue?: number | null
+  buffers_mb?: number | null
+  cached_mb?: number | null
+  udp_pps_in?: number | null
+  udp_pps_out?: number | null
+  nic_rx_mbps?: number | null
+  nic_tx_mbps?: number | null
+  proc_cpu_pct?: number | null
+  proc_mem_pct?: number | null
+  udp_sockets?: number | null
+  rtp_gb?: number | null
   recorded_at: string | null
 }
 
@@ -1232,7 +1250,30 @@ export type VoiceMgHistoryPoint = {
   jitter_ms: number | null
   packet_loss_pct: number | null
   rtp_mbps: number | null
+  rtp_mbps_in?: number | null
+  rtp_mbps_out?: number | null
+  rtp_mbps_exp?: number | null
   cpu_pct: number | null
+  mem_pct?: number | null
+  rx_errors?: number | null
+  rx_drops?: number | null
+  open_fds?: number | null
+  threads?: number | null
+  ipc_sent_ps?: number | null
+  ipc_recv_ps?: number | null
+  ipc_latency_ms?: number | null
+  runqueue?: number | null
+  buffers_mb?: number | null
+  cached_mb?: number | null
+  udp_pps_in?: number | null
+  udp_pps_out?: number | null
+  nic_rx_mbps?: number | null
+  nic_tx_mbps?: number | null
+  proc_cpu_pct?: number | null
+  proc_mem_pct?: number | null
+  udp_sockets?: number | null
+  rtp_gb?: number | null
+  disk_used_pct?: number | null
 }
 
 export type VoiceMgHistory = {
@@ -1247,6 +1288,8 @@ export type VoiceMgHistory = {
   host_count: number
   point_count: number
   points: VoiceMgHistoryPoint[]
+  server_id?: number | null
+  host_name?: string | null
 }
 
 export async function fetchVoiceMgHistory(
@@ -1254,10 +1297,12 @@ export async function fetchVoiceMgHistory(
   group: VoiceMgHistoryGroup,
   start?: string,
   end?: string,
+  serverId?: number | null,
 ): Promise<VoiceMgHistory> {
   const params = new URLSearchParams({ range, group })
   if (start) params.set('start', start)
   if (end) params.set('end', end)
+  if (serverId != null) params.set('server_id', String(serverId))
   const res = await apiFetch(`/legacy-metrics/voicemg/history?${params}`, {
     signal: AbortSignal.timeout(15000),
   })

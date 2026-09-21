@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { VoiceMgExtra, VoiceMgHistoryGroup, VoiceMgHistoryRange } from '../api'
 import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
+import { SimpleBarChart } from './SimpleBarChart'
 import { VoiceMgHistory } from './VoiceMgHistory'
 
 type FilterId = VoiceMgHistoryGroup
@@ -69,6 +70,7 @@ type Props = {
 export function VoiceMgCcaas({ servers, loading = false }: Props) {
   const [filter, setFilter] = useState<FilterId>('ai_ccaas')
   const [range, setRange] = useState<VoiceMgHistoryRange>('5m')
+  const [selectedHostId, setSelectedHostId] = useState<number | null>(null)
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - 1)
@@ -82,15 +84,35 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
   }, [filter, servers])
   const vmg = rows.filter((row) => (row.role || row.hostname).toLowerCase().includes('stt') === false)
   const stt = rows.filter((row) => (row.role || row.hostname).toLowerCase().includes('stt'))
+  const selected = rows.find((row) => row.id === selectedHostId) ?? null
+  const scoped = selected ? [selected] : rows
   const kpis = {
-    calls: sum(rows.map((r) => r.active_calls)),
-    stall: sum(rows.map((r) => r.stall ?? r.udp_inactive)),
-    mos: avg(rows.map((r) => r.mos)),
-    jitter: avg(rows.map((r) => r.jitter_ms)),
-    loss: avg(rows.map((r) => r.packet_loss_pct)),
-    rtp: sum(rows.map((r) => rtpMbps(r))),
-    cpu: avg(rows.map((r) => r.cpu_pct)),
+    calls: sum(scoped.map((r) => r.active_calls)),
+    stall: sum(scoped.map((r) => r.stall ?? r.udp_inactive)),
+    mos: avg(scoped.map((r) => r.mos)),
+    jitter: avg(scoped.map((r) => r.jitter_ms)),
+    loss: avg(scoped.map((r) => r.packet_loss_pct)),
+    rtp: sum(scoped.map((r) => rtpMbps(r))),
+    cpu: avg(scoped.map((r) => r.cpu_pct)),
+    disk: avg(scoped.map((r) => r.disk_used_pct)),
+    udp: sum(scoped.map((r) => r.udp_sockets ?? r.udp_active)),
+    rtpGb: sum(scoped.map((r) => r.rtp_gb)),
   }
+  const toggleHost = (id: number) => {
+    setSelectedHostId((prev) => (prev === id ? null : id))
+  }
+  const productBars = useMemo(() => {
+    const byProduct = new Map<string, number>()
+    for (const row of scoped) {
+      const key = row.product || row.group || 'unknown'
+      byProduct.set(key, (byProduct.get(key) ?? 0) + (row.active_calls ?? 0))
+    }
+    return [...byProduct.entries()].map(([label, value]) => ({ label, value }))
+  }, [scoped])
+  const diskBars = scoped.map((row) => ({
+    label: row.hostname,
+    value: row.disk_used_pct,
+  }))
 
   return (
     <section className="panel">
@@ -99,7 +121,7 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
           <h2>Live CCaaS / AI-CCaaS</h2>
           <p className="muted">
             Latest MariaDB <code>voicemg</code> row per host — updates every {LIVE_EXTRAS_INTERVAL_MS / 1000}s.
-            History windows match voicemg.worktual.tech — live SELECT from MariaDB, not the sync at the bottom.
+            Click a host to switch the live/history series. Charts match voicemg.worktual.tech.
           </p>
         </div>
         <div className="bv-tabs">
@@ -128,14 +150,24 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
         <div>
           <p className="metric-label">VoiceMG</p>
           {vmg.map((row) => (
-            <HostMini key={row.id} row={row} />
+            <HostMini
+              key={row.id}
+              row={row}
+              selected={selectedHostId === row.id}
+              onSelect={() => toggleHost(row.id)}
+            />
           ))}
           {!vmg.length ? <p className="muted">No VoiceMG hosts in this filter.</p> : null}
         </div>
         <div>
           <p className="metric-label">STT</p>
           {stt.map((row) => (
-            <HostMini key={row.id} row={row} />
+            <HostMini
+              key={row.id}
+              row={row}
+              selected={selectedHostId === row.id}
+              onSelect={() => toggleHost(row.id)}
+            />
           ))}
           {!stt.length ? <p className="muted">No STT hosts in this filter.</p> : null}
         </div>
@@ -153,6 +185,9 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
         <Kpi label="Packet loss %" value={kpis.loss == null ? '—' : `${fmt(kpis.loss, 2)}%`} />
         <Kpi label="RTP Mbps" value={fmt(kpis.rtp, 1)} />
         <Kpi label="Avg CPU %" value={kpis.cpu == null ? '—' : `${fmt(kpis.cpu, 0)}%`} />
+        <Kpi label="Disk %" value={kpis.disk == null ? '—' : `${fmt(kpis.disk, 0)}%`} />
+        <Kpi label="UDP sockets" value={String(kpis.udp)} />
+        <Kpi label="RTP GB" value={fmt(kpis.rtpGb, 2)} />
       </div>
 
       <div className="chart-toolbar vmg-range-toolbar">
@@ -190,20 +225,34 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
           </label>
         </div>
       ) : null}
-      {range === 'live' ? (
-        <p className="muted">Live tiles above are the current MariaDB row, same as the old Live view.</p>
+      {selected ? (
+        <p className="muted">
+          Showing {selected.hostname}. Click the host again for fleet view.
+        </p>
       ) : (
-        <VoiceMgHistory
-          range={range}
-          group={filter}
-          start={range === 'custom' ? customStart : undefined}
-          end={range === 'custom' ? customEnd : undefined}
-        />
+        <p className="muted">Fleet view. Click a host card to switch its live charts.</p>
       )}
+      <div className="charts-grid">
+        <SimpleBarChart title="Disk % by server" rows={diskBars} unit="%" max={100} />
+        <SimpleBarChart title="Calls by product" rows={productBars} unit="" />
+      </div>
+      <VoiceMgHistory
+        range={range}
+        group={filter}
+        start={range === 'custom' ? customStart : undefined}
+        end={range === 'custom' ? customEnd : undefined}
+        serverId={selected?.id ?? null}
+        hostName={selected?.hostname ?? null}
+      />
 
       <div className="vmg-ccaas-cards">
         {rows.map((row) => (
-          <HostCard key={row.id} row={row} />
+          <HostCard
+            key={row.id}
+            row={row}
+            selected={selectedHostId === row.id}
+            onSelect={() => toggleHost(row.id)}
+          />
         ))}
       </div>
     </section>
@@ -220,9 +269,21 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
   )
 }
 
-function HostMini({ row }: { row: VoiceMgExtra }) {
+function HostMini({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: VoiceMgExtra
+  selected: boolean
+  onSelect: () => void
+}) {
   return (
-    <div className="vmg-ccaas-mini">
+    <button
+      type="button"
+      className={`vmg-ccaas-mini${selected ? ' vmg-ccaas-mini--selected' : ''}`}
+      onClick={onSelect}
+    >
       <strong>{row.hostname}</strong>
       <span className="muted">
         {row.active_calls ?? 0} calls
@@ -230,14 +291,33 @@ function HostMini({ row }: { row: VoiceMgExtra }) {
         {row.mos != null ? ` · ${fmt(row.mos, 2)} MOS` : ' · MOS n/a'}
         {qualityBadge(row) ? ` · ${qualityBadge(row)}` : ''}
       </span>
-    </div>
+    </button>
   )
 }
 
-function HostCard({ row }: { row: VoiceMgExtra }) {
+function HostCard({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: VoiceMgExtra
+  selected: boolean
+  onSelect: () => void
+}) {
   const rtp = rtpMbps(row)
   return (
-    <article className="vmg-ccaas-card">
+    <article
+      className={`vmg-ccaas-card${selected ? ' vmg-ccaas-card--selected' : ''}`}
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect()
+        }
+      }}
+    >
       <div className="ai-extra-head">
         <strong>{row.hostname}</strong>
         <span className="bv-pill bv-pill--ok">
@@ -262,6 +342,16 @@ function HostCard({ row }: { row: VoiceMgExtra }) {
           : ''}
         {rtp != null ? ` · ${fmt(rtp, 1)} Mbps` : ''}
         {row.rtp_mbps_exp != null ? ` · exp ${fmt(row.rtp_mbps_exp, 1)}` : ''}
+        {row.udp_sockets != null ? ` · ${row.udp_sockets} sockets` : ''}
+      </p>
+      <p className="muted bv-sub">
+        {row.disk_used_pct != null ? `Disk ${fmt(row.disk_used_pct, 0)}%` : 'Disk —'}
+        {row.open_fds != null ? ` · FDs ${row.open_fds}` : ''}
+        {row.threads != null ? ` · thr ${row.threads}` : ''}
+        {row.rx_errors != null ? ` · RX err ${fmt(row.rx_errors, 0)}` : ''}
+        {row.nic_rx_mbps != null || row.nic_tx_mbps != null
+          ? ` · NIC ${fmt(row.nic_rx_mbps, 1)}/${fmt(row.nic_tx_mbps, 1)}`
+          : ''}
       </p>
     </article>
   )

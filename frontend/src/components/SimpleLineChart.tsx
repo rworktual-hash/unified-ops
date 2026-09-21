@@ -93,9 +93,10 @@ export function MultiLineChart({
   title,
   series,
   yMin = 0,
-  yMax = 100,
+  yMax,
   unit = '%',
   height = 88,
+  emptyLabel = 'No data yet',
 }: {
   title: string
   series: { label: string; points: Point[]; colorIndex?: number }[]
@@ -103,6 +104,7 @@ export function MultiLineChart({
   yMax?: number
   unit?: string
   height?: number
+  emptyLabel?: string
 }) {
   const width = 280
   const pad = { t: 8, r: 8, b: 18, l: 8 }
@@ -113,14 +115,15 @@ export function MultiLineChart({
     return (
       <div className="chart-block">
         <div className="chart-title">{title}</div>
-        <p className="chart-empty">No data yet</p>
+        <p className="chart-empty">{emptyLabel}</p>
       </div>
     )
   }
   const minX = Math.min(...all.map((p) => p.x))
   const maxX = Math.max(...all.map((p) => p.x))
   const spanX = maxX - minX || 1
-  const spanY = yMax - yMin || 1
+  const maxY = yMax ?? Math.max(yMin + 1, ...all.map((p) => p.y))
+  const spanY = maxY - yMin || 1
 
   const pathFor = (pts: Point[]) =>
     pts
@@ -159,7 +162,8 @@ export function MultiLineChart({
         )}
       </svg>
       <span className="chart-axis-hint">
-        0{unit} – {yMax}
+        {yMin}
+        {unit} – {maxY}
         {unit}
       </span>
     </div>

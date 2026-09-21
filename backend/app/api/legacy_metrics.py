@@ -110,8 +110,11 @@ def voicemg_history(
     group: str = Query(default="all"),
     start: str | None = Query(default=None),
     end: str | None = Query(default=None),
+    server_id: int | None = Query(default=None),
 ) -> VoiceMgHistoryRead:
-    return VoiceMgHistoryRead.model_validate(fetch_voicemg_history(range_id, group, start, end))
+    return VoiceMgHistoryRead.model_validate(
+        fetch_voicemg_history(range_id, group, start, end, server_id)
+    )
 
 
 @router.get("/overview/{domain}", response_model=LegacyOverviewRead)

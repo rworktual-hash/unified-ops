@@ -19,9 +19,28 @@ Optional `.env` lists extend probes safely (allowlisted commands only):
 ## API & UI
 
 - `GET /api/voicemg/ssh-overview` — SSH snapshots (keep this)
-- `GET /api/legacy-metrics/voicemg/extras` — live MariaDB `voicemg` extras (CPU, load, mem, active calls, MOS, stall, RTP, jitter, UDP). Match by IP then hostname. No new sidebar tabs.
-- `GET /api/legacy-metrics/voicemg/history?range=5m|30m|1h|2h|6h|12h|today|yesterday|2d|week|custom&group=ai_ccaas|ccaas|all` — same windows as voicemg.worktual.tech. Optional `start`/`end` for custom. Live SELECT from `metrics_calls` + `metrics_system`. Short ranges poll; week / custom do not.
-- Sidebar **VoiceMG** panel: **Live CCaaS / AI-CCaaS** cards + **5m / Today** charts + SSH table **Portal extras** + optional Server-card tiles when `project=voicemg`
+- `GET /api/legacy-metrics/voicemg/extras` — live MariaDB `voicemg` extras (CPU, load, mem, disk, active calls, MOS, stall, RTP, jitter, UDP, FDs, threads, NIC, IPC, process). Match by IP then hostname. No new sidebar tabs.
+- `GET /api/legacy-metrics/voicemg/history?range=5m|30m|1h|2h|6h|12h|today|yesterday|2d|week|custom&group=ai_ccaas|ccaas|all` — same windows as voicemg.worktual.tech. Optional `start`/`end` for custom and `server_id` to switch one host. Live SELECT from `metrics_calls` + `metrics_system` plus `metrics_process` / `metrics_disk` / `metrics_net` / `metrics_kernel` / `metrics_ipc` / `metrics_gateway` when those tables exist. Missing columns stay empty — no skip of the chart itself. Short ranges poll; week / custom do not.
+- Sidebar **VoiceMG** panel: **Live CCaaS / AI-CCaaS** cards (click host to switch series) + disk % / calls-by-product bars + utilization charts + SSH table **Portal extras** + optional Server-card tiles when `project=voicemg`
+
+## MariaDB utilization charts
+
+All read-only. Charts stay visible even when `.222` has no rows for that metric.
+
+| Chart | Source heuristic |
+|-------|------------------|
+| Active calls, MOS, jitter, loss, RTP Mbps | `metrics_calls` |
+| RTP vs expected G.711 | `rtp_mbps_*` + `rtp_mbps_exp` |
+| CPU / MEM % | `metrics_system` |
+| RX errors / drops, NIC RX/TX | `metrics_net` or system/net columns |
+| Open FDs / threads / UDP sockets | `metrics_process` |
+| Inter-server sent/recv + latency | `metrics_ipc` |
+| Runqueue / buffers / cached | `metrics_kernel` or system internals |
+| UDP packets/s | `metrics_calls` or process UDP pps |
+| Gateway process CPU/MEM | process / `metrics_gateway` |
+| RTP GB total | `rtp_gb` or `rtp_bytes / 1e9` |
+| Disk % bar + line | `metrics_disk` or `disk_used_pct` |
+| Calls by product | latest extras grouped by `product` |
 
 ## Guardrails
 

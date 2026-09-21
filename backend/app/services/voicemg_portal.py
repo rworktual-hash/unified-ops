@@ -73,7 +73,10 @@ def _select(alias: str, cols: list[str], prefix: str = "") -> str:
 
 
 def _latest_row(conn, table: str, cols: list[str], server_id: int) -> dict:
-    if not cols or "id" not in cols or not _IDENT.match(table):
+    if not cols or not _IDENT.match(table):
+        return {}
+    order = "id" if "id" in cols else "ts" if "ts" in cols else None
+    if not order:
         return {}
     select_cols = [c for c in cols if _IDENT.match(c)]
     if not select_cols:
@@ -82,7 +85,7 @@ def _latest_row(conn, table: str, cols: list[str], server_id: int) -> dict:
     row = conn.execute(
         text(
             f"SELECT {quoted} FROM `{table}` "
-            "WHERE server_id = :sid ORDER BY id DESC LIMIT 1"
+            f"WHERE server_id = :sid ORDER BY `{order}` DESC LIMIT 1"
         ),
         {"sid": server_id},
     ).mappings().first()
@@ -160,6 +163,17 @@ def _find_num(row, *needles: str, exclude: tuple[str, ...] = ()) -> float | None
     return None
 
 
+_PROCESS_SUM = ("udp_active", "udp_inactive", "udp_sockets", "open_fds", "threads")
+_PROCESS_AVG = ("cpu_pct", "mem_pct", "proc_cpu_pct", "proc_mem_pct")
+_EXTRA_TABLES = (
+    ("metrics_disk", "d_"),
+    ("metrics_net", "n_"),
+    ("metrics_kernel", "k_"),
+    ("metrics_ipc", "i_"),
+    ("metrics_gateway", "gw_"),
+)
+
+
 def _latest_process_udp(conn, cols: list[str], server_id: int) -> dict:
     if "ts" not in cols or not _IDENT.match("metrics_process"):
         return {}
@@ -170,10 +184,12 @@ def _latest_process_udp(conn, cols: list[str], server_id: int) -> dict:
     if not latest:
         return {}
     parts: list[str] = []
-    if "udp_active" in cols:
-        parts.append("SUM(udp_active) AS udp_active")
-    if "udp_inactive" in cols:
-        parts.append("SUM(udp_inactive) AS udp_inactive")
+    for name in _PROCESS_SUM:
+        if name in cols:
+            parts.append(f"SUM(`{name}`) AS `{name}`")
+    for name in _PROCESS_AVG:
+        if name in cols:
+            parts.append(f"AVG(`{name}`) AS `{name}`")
     if not parts:
         return {}
     row = conn.execute(
@@ -228,6 +244,10 @@ def _fetch_voicemg_extras() -> dict:
             process_cols = (
                 _safe_columns(conn, "metrics_process") if _table_exists(conn, "metrics_process") else []
             )
+            extra_cols = {
+                table: _safe_columns(conn, table) if _table_exists(conn, table) else []
+                for table, _prefix in _EXTRA_TABLES
+            }
 
             order_col = "hostname" if "hostname" in server_cols else "id"
             host_rows = conn.execute(
@@ -246,6 +266,10 @@ def _fetch_voicemg_extras() -> dict:
                     merged.update(_prefixed(_latest_row(conn, "metrics_calls", calls_cols, server_id), "c_"))
                 if process_cols:
                     merged.update(_latest_process_udp(conn, process_cols, server_id))
+                for table, prefix in _EXTRA_TABLES:
+                    cols = extra_cols.get(table) or []
+                    if cols:
+                        merged.update(_prefixed(_latest_row(conn, table, cols, server_id), prefix))
                 rows.append(merged)
 
         servers = [_map_server(row) for row in rows]
@@ -311,10 +335,52 @@ def _map_server(row) -> dict:
         "udp_inactive": _int(_first(row, "p_udp_inactive", "udp_inactive")),
         "quality_source": quality_source,
         "rtcp": rtcp,
-        "disk_used_pct": _num(_first(row, "d_used_pct", "d_disk_used_pct", "used_pct")),
+        "disk_used_pct": _disk_used_pct(row),
         "disk_mount": _str(_first(row, "d_mount", "d_mountpoint", "mount")),
-        "recorded_at": _first(row, "c_ts", "sys_ts", "p_ts", "d_ts", "ts"),
+        "rx_errors": _find_num(row, "rx_err", exclude=("tx",)),
+        "rx_drops": _find_num(row, "rx_drop", exclude=("tx",)),
+        "open_fds": _int(_first(row, "p_open_fds", "open_fds"))
+        or _int(_find_num(row, "open_fd", "fd_count")),
+        "threads": _int(_first(row, "p_threads", "threads"))
+        or _int(_find_num(row, "thread", exclude=("_id",))),
+        "ipc_sent_ps": _find_num(row, "sent_ps", "ipc_sent", "msg_sent"),
+        "ipc_recv_ps": _find_num(row, "recv_ps", "ipc_recv", "msg_recv"),
+        "ipc_latency_ms": _find_num(row, "latency_ms", "ipc_latency"),
+        "runqueue": _find_num(row, "runqueue", "nr_running"),
+        "buffers_mb": _find_num(row, "buffers"),
+        "cached_mb": _find_num(row, "cached", exclude=("cache_hit",)),
+        "udp_pps_in": _find_num(row, "udp_pps_in", "udp_in_pps"),
+        "udp_pps_out": _find_num(row, "udp_pps_out", "udp_out_pps"),
+        "nic_rx_mbps": _find_num(row, "nic_rx", exclude=("rtp",))
+        or _find_num(row, "n_rx_mbps", "n_rx_bps"),
+        "nic_tx_mbps": _find_num(row, "nic_tx", exclude=("rtp",))
+        or _find_num(row, "n_tx_mbps", "n_tx_bps"),
+        "proc_cpu_pct": _num(_first(row, "p_cpu_pct", "p_proc_cpu_pct", "gw_cpu_pct"))
+        or _find_num(row, "proc_cpu", "gw_cpu"),
+        "proc_mem_pct": _num(_first(row, "p_mem_pct", "p_proc_mem_pct", "gw_mem_pct"))
+        or _find_num(row, "proc_mem", "gw_mem"),
+        "udp_sockets": _int(_first(row, "p_udp_sockets", "udp_sockets"))
+        or _int(_first(row, "p_udp_active", "udp_active")),
+        "rtp_gb": _rtp_gb(row),
+        "recorded_at": _first(row, "c_ts", "sys_ts", "p_ts", "d_ts", "n_ts", "k_ts", "i_ts", "ts"),
     }
+
+
+def _disk_used_pct(row) -> float | None:
+    disk = _num(_first(row, "d_used_pct", "d_disk_used_pct", "sys_disk_used_pct", "used_pct"))
+    if disk is not None:
+        return disk
+    return _find_num(row, "disk_used", "disk_pct")
+
+
+def _rtp_gb(row) -> float | None:
+    gb = _find_num(row, "rtp_gb")
+    if gb is not None:
+        return gb
+    raw = _find_num(row, "rtp_bytes")
+    if raw is None:
+        return None
+    return raw / 1_000_000_000 if raw > 10_000 else raw
 
 
 HISTORY_RANGES = {
@@ -336,14 +402,144 @@ _CALL_METRICS = (
     "rtp_sessions",
     "rtp_mbps_out",
     "rtp_mbps_in",
+    "rtp_mbps_exp",
     "jitter_ms",
     "pkt_loss_pct",
     "mos",
     "pkts_lost_delta",
     "pkts_sent_ps",
     "pkts_recv_ps",
+    "stalled_udp",
+    "rtp_gb",
+    "udp_pps_in",
+    "udp_pps_out",
 )
-_SYS_METRICS = ("cpu_pct", "load1", "mem_used_mb", "mem_total_mb")
+_SYS_METRICS = (
+    "cpu_pct",
+    "load1",
+    "mem_used_mb",
+    "mem_total_mb",
+    "mem_pct",
+    "disk_used_pct",
+    "rx_errors",
+    "rx_drops",
+    "tx_errors",
+    "open_fds",
+    "threads",
+    "nic_rx_mbps",
+    "nic_tx_mbps",
+    "rx_mbps",
+    "tx_mbps",
+    "sent_ps",
+    "recv_ps",
+    "latency_ms",
+    "runqueue",
+    "buffers_mb",
+    "cached_mb",
+    "proc_cpu_pct",
+    "proc_mem_pct",
+)
+_HISTORY_FIELDS = (
+    "active_calls",
+    "mos",
+    "jitter_ms",
+    "packet_loss_pct",
+    "rtp_mbps",
+    "rtp_mbps_in",
+    "rtp_mbps_out",
+    "rtp_mbps_exp",
+    "cpu_pct",
+    "mem_pct",
+    "rx_errors",
+    "rx_drops",
+    "open_fds",
+    "threads",
+    "ipc_sent_ps",
+    "ipc_recv_ps",
+    "ipc_latency_ms",
+    "runqueue",
+    "buffers_mb",
+    "cached_mb",
+    "udp_pps_in",
+    "udp_pps_out",
+    "nic_rx_mbps",
+    "nic_tx_mbps",
+    "proc_cpu_pct",
+    "proc_mem_pct",
+    "udp_sockets",
+    "rtp_gb",
+    "disk_used_pct",
+)
+_FLEET_SUM = {
+    "active_calls",
+    "rtp_mbps",
+    "rtp_mbps_in",
+    "rtp_mbps_out",
+    "rtp_mbps_exp",
+    "udp_pps_in",
+    "udp_pps_out",
+    "rx_errors",
+    "rx_drops",
+    "ipc_sent_ps",
+    "ipc_recv_ps",
+    "rtp_gb",
+    "udp_sockets",
+    "open_fds",
+    "threads",
+}
+_NUMERIC_HINTS = (
+    "pct",
+    "mb",
+    "ms",
+    "cpu",
+    "mem",
+    "rx",
+    "tx",
+    "udp",
+    "rtp",
+    "jitter",
+    "mos",
+    "load",
+    "fd",
+    "thread",
+    "latenc",
+    "sent",
+    "recv",
+    "drop",
+    "err",
+    "pps",
+    "queue",
+    "buffer",
+    "cache",
+    "socket",
+    "stall",
+    "call",
+    "session",
+    "pkt",
+    "nic",
+    "ctx",
+    "run",
+    "used",
+    "active",
+    "inact",
+    "gb",
+    "byte",
+    "loss",
+    "count",
+)
+_WINDOW_SKIP = {
+    "id",
+    "server_id",
+    "ts",
+    "hostname",
+    "name",
+    "product",
+    "role",
+    "ip",
+    "ip_address",
+    "mount",
+    "mountpoint",
+}
 
 
 def _empty_history(
@@ -364,6 +560,8 @@ def _empty_history(
         "host_count": 0,
         "point_count": 0,
         "points": [],
+        "server_id": None,
+        "host_name": None,
     }
 
 
@@ -453,16 +651,21 @@ def map_history_sample(row: dict) -> dict:
     sent = _num(_first(row, "pkts_sent_ps"))
     recv = _num(_first(row, "pkts_recv_ps"))
     lost = _num(_first(row, "pkts_lost_delta"))
-    loss = _num(_first(row, "pkt_loss_pct"))
+    loss = _num(_first(row, "pkt_loss_pct", "packet_loss_pct"))
     if loss is None and lost is not None:
         denom = (sent or 0) + (recv or 0)
         if denom > 0:
             loss = 100.0 * lost / denom
     rtp_out = _num(_first(row, "rtp_mbps_out"))
     rtp_in = _num(_first(row, "rtp_mbps_in"))
-    rtp = None
-    if rtp_out is not None or rtp_in is not None:
+    rtp = _num(_first(row, "rtp_mbps"))
+    if rtp is None and (rtp_out is not None or rtp_in is not None):
         rtp = (rtp_out or 0) + (rtp_in or 0)
+    used = _num(_first(row, "mem_used_mb"))
+    total = _num(_first(row, "mem_total_mb"))
+    mem_pct = _num(_first(row, "mem_pct"))
+    if mem_pct is None and used is not None and total:
+        mem_pct = 100.0 * used / total
     return {
         "ts": _as_dt(_first(row, "ts")),
         "active_calls": _num(_first(row, "active_calls")),
@@ -470,7 +673,35 @@ def map_history_sample(row: dict) -> dict:
         "jitter_ms": _num(_first(row, "jitter_ms")),
         "packet_loss_pct": loss,
         "rtp_mbps": rtp,
+        "rtp_mbps_in": rtp_in,
+        "rtp_mbps_out": rtp_out,
+        "rtp_mbps_exp": _num(_first(row, "rtp_mbps_exp"))
+        or _find_num(row, "expected_rtp", "rtp_exp"),
         "cpu_pct": _num(_first(row, "cpu_pct")),
+        "mem_pct": mem_pct,
+        "rx_errors": _find_num(row, "rx_err", exclude=("tx",)),
+        "rx_drops": _find_num(row, "rx_drop", exclude=("tx",)),
+        "open_fds": _num(_first(row, "open_fds")) or _find_num(row, "open_fd", "fd_count"),
+        "threads": _num(_first(row, "threads")) or _find_num(row, "thread", exclude=("_id",)),
+        "ipc_sent_ps": _find_num(row, "sent_ps", "ipc_sent", "msg_sent"),
+        "ipc_recv_ps": _find_num(row, "recv_ps", "ipc_recv", "msg_recv"),
+        "ipc_latency_ms": _find_num(row, "latency_ms", "ipc_latency"),
+        "runqueue": _find_num(row, "runqueue", "nr_running"),
+        "buffers_mb": _find_num(row, "buffers"),
+        "cached_mb": _find_num(row, "cached", exclude=("cache_hit",)),
+        "udp_pps_in": _find_num(row, "udp_pps_in", "udp_in_pps"),
+        "udp_pps_out": _find_num(row, "udp_pps_out", "udp_out_pps"),
+        "nic_rx_mbps": _find_num(row, "nic_rx", exclude=("rtp",))
+        or _num(_first(row, "rx_mbps", "n_rx_mbps")),
+        "nic_tx_mbps": _find_num(row, "nic_tx", exclude=("rtp",))
+        or _num(_first(row, "tx_mbps", "n_tx_mbps")),
+        "proc_cpu_pct": _num(_first(row, "proc_cpu_pct"))
+        or _find_num(row, "proc_cpu", "gw_cpu"),
+        "proc_mem_pct": _num(_first(row, "proc_mem_pct")) or _find_num(row, "proc_mem", "gw_mem"),
+        "udp_sockets": _num(_first(row, "udp_sockets", "udp_active")),
+        "rtp_gb": _rtp_gb(row),
+        "disk_used_pct": _num(_first(row, "disk_used_pct", "used_pct"))
+        or _find_num(row, "disk_used", "disk_pct"),
     }
 
 
@@ -479,22 +710,16 @@ def merge_host_series(
     sys_rows: list[dict],
     bucket_seconds: int,
     max_points: int = 120,
+    extra_rows: list[dict] | None = None,
 ) -> list[dict]:
     by_ts: dict[datetime, dict] = {}
-    for raw in call_rows + sys_rows:
+    for raw in call_rows + sys_rows + (extra_rows or []):
         sample = map_history_sample(raw)
         key = _bucket_key(sample["ts"], bucket_seconds)
         if key is None:
             continue
         prev = by_ts.get(key, {"ts": key})
-        for field in (
-            "active_calls",
-            "mos",
-            "jitter_ms",
-            "packet_loss_pct",
-            "rtp_mbps",
-            "cpu_pct",
-        ):
+        for field in _HISTORY_FIELDS:
             if sample.get(field) is not None:
                 prev[field] = sample[field]
         by_ts[key] = prev
@@ -526,17 +751,11 @@ def fleet_points(host_series: list[list[dict]]) -> list[dict]:
     out = []
     for ts in sorted(buckets):
         samples = buckets[ts]
-        out.append(
-            {
-                "ts": ts,
-                "active_calls": _sum_num(s.get("active_calls") for s in samples),
-                "mos": _avg_num(s.get("mos") for s in samples),
-                "jitter_ms": _avg_num(s.get("jitter_ms") for s in samples),
-                "packet_loss_pct": _avg_num(s.get("packet_loss_pct") for s in samples),
-                "rtp_mbps": _sum_num(s.get("rtp_mbps") for s in samples),
-                "cpu_pct": _avg_num(s.get("cpu_pct") for s in samples),
-            }
-        )
+        point = {"ts": ts}
+        for field in _HISTORY_FIELDS:
+            values = (s.get(field) for s in samples)
+            point[field] = _sum_num(values) if field in _FLEET_SUM else _avg_num(values)
+        out.append(point)
     return out
 
 
@@ -545,14 +764,17 @@ def fetch_voicemg_history(
     group: str = "all",
     start: str | None = None,
     end: str | None = None,
+    server_id: int | None = None,
 ) -> dict:
     range_id = range_id if range_id in HISTORY_RANGES else "5m"
     group = group if group in HISTORY_GROUPS else "all"
-    cache_key = f"voicemg_history:{range_id}:{group}:{start or ''}:{end or ''}"
+    cache_key = f"voicemg_history:{range_id}:{group}:{start or ''}:{end or ''}:{server_id or 'all'}"
     cached = get_cached(cache_key)
     if cached is not None:
         return cached
-    out = _fetch_voicemg_history(range_id, group, parse_history_dt(start), parse_history_dt(end))
+    out = _fetch_voicemg_history(
+        range_id, group, parse_history_dt(start), parse_history_dt(end), server_id
+    )
     set_cached(cache_key, out)
     return out
 
@@ -562,6 +784,7 @@ def _fetch_voicemg_history(
     group: str,
     start: datetime | None = None,
     end: datetime | None = None,
+    server_id: int | None = None,
 ) -> dict:
     engine, extra = _engine()
     if engine is None:
@@ -599,24 +822,39 @@ def _fetch_voicemg_history(
                 .mappings()
                 .all()
             )
+            extra_tables = [("metrics_process",)] + [(name,) for name, _prefix in _EXTRA_TABLES]
+            extra_cols: dict[str, list[str]] = {}
+            for (table,) in extra_tables:
+                extra_cols[table] = _safe_columns(conn, table) if _table_exists(conn, table) else []
             series: list[list[dict]] = []
             host_count = 0
+            matched_name: str | None = None
             for host in host_rows:
-                server_id = _int(host.get("id"))
-                if server_id is None:
+                hid = _int(host.get("id"))
+                if hid is None:
+                    continue
+                if server_id is not None and hid != server_id:
                     continue
                 hostname = _str(_first(host, "hostname", "server_name", "name")) or ""
                 if group != "all" and product_group(hostname, _str(host.get("product"))) != group:
                     continue
                 host_count += 1
+                matched_name = hostname
                 call_rows = _window_rows(
-                    conn, "metrics_calls", calls_cols, server_id, since, until, bucket_seconds
+                    conn, "metrics_calls", calls_cols, hid, since, until, bucket_seconds
                 )
                 sys_rows = _window_rows(
-                    conn, "metrics_system", system_cols, server_id, since, until, bucket_seconds
+                    conn, "metrics_system", system_cols, hid, since, until, bucket_seconds
                 )
-                series.append(merge_host_series(call_rows, sys_rows, bucket_seconds))
-        points = fleet_points(series)
+                extra_rows: list[dict] = []
+                for table, cols in extra_cols.items():
+                    extra_rows.extend(
+                        _window_rows(conn, table, cols, hid, since, until, bucket_seconds)
+                    )
+                series.append(
+                    merge_host_series(call_rows, sys_rows, bucket_seconds, extra_rows=extra_rows)
+                )
+        points = series[0] if server_id is not None and len(series) == 1 else fleet_points(series)
         return {
             "ok": True,
             "reason": None,
@@ -629,9 +867,23 @@ def _fetch_voicemg_history(
             "host_count": host_count,
             "point_count": len(points),
             "points": points,
+            "server_id": server_id,
+            "host_name": matched_name if server_id is not None else None,
         }
     except Exception as exc:
         return _empty_history(str(exc), range_id, group, database)
+
+
+def _window_metric_names(cols: list[str]) -> list[str]:
+    named = [name for name in _CALL_METRICS + _SYS_METRICS if name in cols]
+    extra = [
+        name
+        for name in cols
+        if name not in named
+        and name not in _WINDOW_SKIP
+        and any(hint in name.lower() for hint in _NUMERIC_HINTS)
+    ]
+    return named + extra
 
 
 def _window_rows(
@@ -649,8 +901,8 @@ def _window_rows(
         return []
     avgs = [
         f"AVG(`{name}`) AS `{name}`"
-        for name in _CALL_METRICS + _SYS_METRICS
-        if name in cols and _IDENT.match(name)
+        for name in _window_metric_names(cols)
+        if _IDENT.match(name)
     ]
     if not avgs:
         return []

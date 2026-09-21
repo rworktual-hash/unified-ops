@@ -424,6 +424,24 @@ class VoiceMgExtraRead(BaseModel):
     rtcp: str | None = None
     disk_used_pct: float | None = None
     disk_mount: str | None = None
+    rx_errors: float | None = None
+    rx_drops: float | None = None
+    open_fds: int | None = None
+    threads: int | None = None
+    ipc_sent_ps: float | None = None
+    ipc_recv_ps: float | None = None
+    ipc_latency_ms: float | None = None
+    runqueue: float | None = None
+    buffers_mb: float | None = None
+    cached_mb: float | None = None
+    udp_pps_in: float | None = None
+    udp_pps_out: float | None = None
+    nic_rx_mbps: float | None = None
+    nic_tx_mbps: float | None = None
+    proc_cpu_pct: float | None = None
+    proc_mem_pct: float | None = None
+    udp_sockets: int | None = None
+    rtp_gb: float | None = None
     recorded_at: datetime | None = None
 
 
@@ -441,7 +459,30 @@ class VoiceMgHistoryPointRead(BaseModel):
     jitter_ms: float | None = None
     packet_loss_pct: float | None = None
     rtp_mbps: float | None = None
+    rtp_mbps_in: float | None = None
+    rtp_mbps_out: float | None = None
+    rtp_mbps_exp: float | None = None
     cpu_pct: float | None = None
+    mem_pct: float | None = None
+    rx_errors: float | None = None
+    rx_drops: float | None = None
+    open_fds: float | None = None
+    threads: float | None = None
+    ipc_sent_ps: float | None = None
+    ipc_recv_ps: float | None = None
+    ipc_latency_ms: float | None = None
+    runqueue: float | None = None
+    buffers_mb: float | None = None
+    cached_mb: float | None = None
+    udp_pps_in: float | None = None
+    udp_pps_out: float | None = None
+    nic_rx_mbps: float | None = None
+    nic_tx_mbps: float | None = None
+    proc_cpu_pct: float | None = None
+    proc_mem_pct: float | None = None
+    udp_sockets: float | None = None
+    rtp_gb: float | None = None
+    disk_used_pct: float | None = None
 
 
 class VoiceMgHistoryRead(BaseModel):
@@ -456,6 +497,8 @@ class VoiceMgHistoryRead(BaseModel):
     host_count: int = 0
     point_count: int = 0
     points: list[VoiceMgHistoryPointRead]
+    server_id: int | None = None
+    host_name: str | None = None
 
 
 class LegacyMetricPointRead(BaseModel):

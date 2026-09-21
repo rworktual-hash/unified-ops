@@ -23,7 +23,7 @@ Inventory seed is **61** hosts (`backend/app/seed/full_inventory.py`); productio
 |-----------------|-----------------|----------|
 | AI / GPU (148, 149, 165, 166) | Yes if listed in AI Insights | `ai_insights_platform` |
 | Nginx, Kong, Redis, MySQL, Postgres, PBX, SIP, Grafana, … | Yes (AI Insights groups) | `ai_insights_platform` |
-| VoiceMG (~9 hosts) | Yes — calls, MOS, RTP, CPU | `voicemg` |
+| VoiceMG (~9 hosts) | Yes — calls, MOS, RTP, CPU, disk, NIC, UDP, FDs, process | `voicemg` |
 | Infra inventory / VMs / DID / SSL / domains | Yes | `server_inventory` |
 | BackupVault hosts | Yes (jobs / NFS) | `backupvault` |
 | **Email (3 hosts)** | **No** (gateways 84 / 80) | `EMAIL_MGMT_*` → campaign-db **`10.180.0.203`** `worktual_email_campaign` |
@@ -50,7 +50,7 @@ Never write or execute on `.222`. SSH Collect alerts stay as a second input (hos
 ### Finished on the dashboard
 
 - Live extras: AI Insights + VoiceMG + **Email Campaign** (poll ~5s; API cache 2s)
-- VoiceMG history: Live, 5m, 30m, 1h, 2h, 6h, 12h, Today, Yesterday, 2 days, Week, Range…
+- VoiceMG history: Live, 5m, 30m, 1h, 2h, 6h, 12h, Today, Yesterday, 2 days, Week, Range… plus utilization charts and click-host series (`?server_id=`)
 - AI Insights group cards + fleet/health/resource charts (not the old pies)
 - Infrastructure: Dashboard / Baremetal / Proxmox / VMs / **DID / SSL / Domains** (view-only) / Host SSH
 - UI: black sidebar, white metric canvas, purple accents

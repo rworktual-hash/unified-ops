@@ -69,6 +69,78 @@ def test_product_group_ai_ccaas():
     assert product_group("ccaas-stt1", "ccaas") == "ccaas"
 
 
+def test_map_server_utilization_fields():
+    row = {
+        "id": 3,
+        "hostname": "ccaas-vmg2",
+        "ip_address": "10.180.0.77",
+        "product": "ccaas",
+        "d_used_pct": 0.0,
+        "n_rx_errors": 4,
+        "n_rx_drops": 1,
+        "p_open_fds": 812,
+        "p_threads": 44,
+        "i_sent_ps": 12.5,
+        "i_recv_ps": 11.0,
+        "i_latency_ms": 2.4,
+        "k_runqueue": 3,
+        "k_buffers_mb": 128,
+        "c_udp_pps_in": 90,
+        "c_udp_pps_out": 80,
+        "n_rx_mbps": 1.2,
+        "n_tx_mbps": 0.8,
+        "p_cpu_pct": 18.0,
+        "p_mem_pct": 9.5,
+        "p_udp_sockets": 40,
+        "c_rtp_gb": 1.5,
+        "c_rtp_mbps_exp": 2.1,
+    }
+    out = _map_server(row)
+    assert out["disk_used_pct"] == 0.0
+    assert out["rx_errors"] == 4
+    assert out["rx_drops"] == 1
+    assert out["open_fds"] == 812
+    assert out["threads"] == 44
+    assert out["ipc_sent_ps"] == 12.5
+    assert out["ipc_latency_ms"] == 2.4
+    assert out["runqueue"] == 3
+    assert out["udp_pps_in"] == 90
+    assert out["nic_rx_mbps"] == 1.2
+    assert out["proc_cpu_pct"] == 18.0
+    assert out["udp_sockets"] == 40
+    assert out["rtp_gb"] == 1.5
+    assert out["rtp_mbps_exp"] == 2.1
+
+
+def test_map_history_sample_utilization():
+    out = map_history_sample(
+        {
+            "ts": datetime(2026, 9, 19, 12, 0, 0),
+            "rx_errors": 2,
+            "open_fds": 100,
+            "sent_ps": 5,
+            "recv_ps": 4,
+            "latency_ms": 1.2,
+            "udp_pps_in": 30,
+            "nic_rx_mbps": 0.4,
+            "proc_cpu_pct": 11,
+            "rtp_bytes": 2_000_000_000,
+            "disk_used_pct": 41,
+            "rtp_mbps_exp": 3.3,
+        }
+    )
+    assert out["rx_errors"] == 2
+    assert out["open_fds"] == 100
+    assert out["ipc_sent_ps"] == 5
+    assert out["ipc_latency_ms"] == 1.2
+    assert out["udp_pps_in"] == 30
+    assert out["nic_rx_mbps"] == 0.4
+    assert out["proc_cpu_pct"] == 11
+    assert out["rtp_gb"] == 2.0
+    assert out["disk_used_pct"] == 41
+    assert out["rtp_mbps_exp"] == 3.3
+
+
 def test_map_server_quality_fields():
     row = {
         "id": 2,

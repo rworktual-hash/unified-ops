@@ -1780,6 +1780,17 @@ button.linkish {
   flex-direction: column;
   gap: 0.2rem;
   background: var(--surface);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.vmg-ccaas-mini--selected,
+.vmg-ccaas-card--selected {
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.22);
 }
 
 .vmg-ccaas-cards {
@@ -1795,6 +1806,52 @@ button.linkish {
   padding: 0.9rem 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.vmg-bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.vmg-bar-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 1.2fr) minmax(80px, 3fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vmg-bar-label {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vmg-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+  overflow: hidden;
+}
+
+.vmg-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #6d28d9;
+}
+
+.vmg-bar-fill--warn {
+  background: #dc2626;
+}
+
+.vmg-bar-value {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, #5c5470);
 }
 
 .ai-group-cards {
