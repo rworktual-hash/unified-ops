@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { login } from '../api'
+import { BrandLockup } from './BrandLockup'
 
 type Props = {
   onLoggedIn: () => void
@@ -14,12 +15,11 @@ export function LoginPage({ onLoggedIn }: Props) {
   return (
     <div className="login-shell">
       <div className="login-card">
-        <div className="brand login-brand">
-          <div className="brand-mark">UO</div>
-          <span className="brand-text">Unified Ops</span>
+        <div className="login-brand-wrap">
+          <BrandLockup variant="login" />
         </div>
         <h1>Sign in</h1>
-        <p className="muted">Use the email and password your admin gave you.</p>
+        <p className="muted">Worktual Observability — use the account your admin created.</p>
         <form
           onSubmit={async (e) => {
             e.preventDefault()

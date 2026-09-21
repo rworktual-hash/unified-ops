@@ -26,7 +26,7 @@
 }
 
 .sidebar {
-  width: 232px;
+  width: 248px;
   flex-shrink: 0;
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
@@ -36,35 +36,44 @@
   gap: 0.35rem;
 }
 
-.brand {
+.brand-lockup {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.35rem 0.65rem 1.1rem;
+  gap: 0.7rem;
+  padding: 0.25rem 0.55rem 1.15rem;
 }
 
-.brand-mark {
+.brand-mark-img {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.62rem;
+  flex-shrink: 0;
+}
+
+.brand-words {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
 }
 
-.brand-text {
+.brand-name {
+  font-weight: 650;
+  font-size: 1.02rem;
+  letter-spacing: -0.035em;
+  color: #fff;
+}
+
+.brand-sub {
+  margin-top: 0.18rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9a9aa0;
 }
 
-.sidebar .brand-text {
-  color: var(--sidebar-text);
+.brand-lockup--login .brand-name {
+  color: #fff;
 }
 
 .nav-kicker {
@@ -958,10 +967,49 @@
 }
 
 .approval-card {
-  padding: 1rem 1.1rem;
+  padding: 1.15rem 1.2rem 1.2rem;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--panel, #fff);
+  background: var(--surface);
+}
+
+.approval-card-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.approval-meta {
+  margin: 0.75rem 0 0.85rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.approval-meta dt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.approval-meta dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+}
+
+.approval-ask {
+  margin: 0 0 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.approval-impact,
+.approval-confirm-copy {
+  margin: 0.45rem 0 0.15rem;
 }
 
 .approval-card-head {
@@ -1269,13 +1317,34 @@ th {
   padding: 0;
 }
 
-.agent-log li {
+.agent-log-item {
   border-bottom: 1px solid var(--border);
-  padding: 0.75rem 0;
+  padding: 0.35rem 0;
 }
 
-.agent-log li:last-child {
+.agent-log-item:last-child {
   border-bottom: none;
+}
+
+.agent-log-head {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.75rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.55rem 0;
+  cursor: pointer;
+}
+
+.agent-log-head strong {
+  flex: 1 1 12rem;
+}
+
+.agent-log-body {
+  padding: 0 0 0.75rem;
 }
 
 pre.diagnosis {
@@ -1300,24 +1369,28 @@ pre.diagnosis {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background:
-    linear-gradient(90deg, var(--black) 0 232px, transparent 232px),
-    var(--bg);
+  background: #0b0b0c;
 }
 
 .login-card {
   width: 100%;
   max-width: 400px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid #1c1c1e;
   border-radius: var(--radius);
-  padding: 2rem 1.75rem;
+  padding: 0 1.75rem 2rem;
   box-shadow: var(--shadow);
-  margin-left: 116px;
+  overflow: hidden;
 }
 
-.login-brand {
-  margin-bottom: 1.25rem;
+.login-brand-wrap {
+  background: #0b0b0c;
+  margin: 0 -1.75rem 1.5rem;
+  padding: 1.15rem 1.5rem 1.05rem;
+}
+
+.login-brand-wrap .brand-lockup {
+  padding: 0;
 }
 
 .login-card h1 {

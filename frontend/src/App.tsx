@@ -42,6 +42,8 @@ import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
 import { ApprovalDecisionCard } from './components/ApprovalDecisionCard'
 import { ApprovalRequestButtons } from './components/ApprovalRequestButtons'
+import { BrandLockup } from './components/BrandLockup'
+import { AgentLogList } from './components/AgentLogList'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { LegacyMetricsSection } from './components/LegacyMetricsSection'
@@ -300,10 +302,7 @@ function App() {
   return (
     <div className="app-shell app-shell--fixed">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">UO</div>
-          <span className="brand-text">Unified Ops</span>
-        </div>
+        <BrandLockup />
         <p className="nav-kicker">Modules</p>
         <nav className="nav">
           {navItems.map((item) => (
@@ -554,9 +553,8 @@ function App() {
             <header className="page-head">
               <h1>Alerts</h1>
               <p>
-                SSH Collect alerts plus live <code>.222</code> AI Insights alerts. Investigate is
-                read-only. Recollect and SSH verify wait on Approvals — nothing runs until you
-                Approve.
+                Live portal alerts and SSH Collect. Investigate is read-only. Changing a host always
+                waits on Approvals.
               </p>
             </header>
             <section className="panel">
@@ -593,22 +591,22 @@ function App() {
                           <td>{a.title}</td>
                           <td>{a.message}</td>
                           <td>
-                            {!a.matched
-                              ? 'unmatched'
-                              : a.inventory_active
-                                ? 'inventory'
-                                : 'inactive'}
+                            <span
+                              className={`badge ${
+                                !a.matched ? 'rejected' : a.inventory_active ? 'executed' : 'pending'
+                              }`}
+                            >
+                              {!a.matched ? 'Unmatched' : a.inventory_active ? 'Inventory' : 'Paused'}
+                            </span>
                           </td>
                           <td className="action-cell">
+                            {!a.matched || !a.inventory_active ? (
+                              <span className="muted">No agent</span>
+                            ) : (
                             <button
                               type="button"
                               className="btn ghost"
-                              title={
-                                a.matched && !a.inventory_active
-                                  ? 'Host is paused (165/166) until SSH works'
-                                  : undefined
-                              }
-                              disabled={!a.matched || !a.inventory_active || investigatingId === a.source_id}
+                              disabled={investigatingId === a.source_id}
                               onClick={async () => {
                                 setInvestigatingId(a.source_id)
                                 setError(null)
@@ -626,6 +624,7 @@ function App() {
                             >
                               Investigate
                             </button>
+                            )}
                             {a.inventory_server_id && a.inventory_active ? (
                               <ApprovalRequestButtons
                                 restartServices={approvalCatalog.restart_services}
@@ -753,8 +752,7 @@ function App() {
             <header className="page-head">
               <h1>Approvals</h1>
               <p>
-                Level 5: the agent shows the alert, the reason, and the exact command. Approve then
-                Confirm run — or Reject. Nothing runs on the first click.
+                Review the alert and the exact command. Approve, then Confirm run. Reject stops it.
               </p>
             </header>
             <section className="panel">
@@ -802,24 +800,13 @@ function App() {
           <>
             <header className="page-head">
               <h1>Agent log</h1>
-              <p>Investigations and approved executions.</p>
+              <p>Investigations and approved runs. Click a row for the full report.</p>
             </header>
             <section className="panel">
               {agentActions.length === 0 ? (
                 <p className="muted">No activity yet. Run Investigate on a connected server.</p>
               ) : (
-                <ul className="agent-log">
-                  {agentActions.map((aa) => (
-                    <li key={aa.id}>
-                      <strong>{aa.summary}</strong>
-                      <span className="muted">
-                        {' '}
-                        · server #{aa.server_id} · {aa.action_type} · {aa.recommendation}
-                      </span>
-                      <pre className="diagnosis">{aa.diagnosis}</pre>
-                    </li>
-                  ))}
-                </ul>
+                <AgentLogList items={agentActions} />
               )}
             </section>
           </>

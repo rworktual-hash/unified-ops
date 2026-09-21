@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { actionTitle, alertTitle, statusTitle } from '../agentLabels'
 import type { Approval } from '../types'
 
 type Props = {
@@ -25,23 +26,27 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
   return (
     <article className="approval-card">
       <header className="approval-card-head">
-        <strong>{host}</strong>
-        <span className={`badge ${approval.status}`}>{approval.status}</span>
+        <div>
+          <p className="approval-card-kicker">{actionTitle(approval.action_key)}</p>
+          <strong>{host}</strong>
+        </div>
+        <span className={`badge ${approval.status}`}>{statusTitle(approval.status)}</span>
       </header>
-      <p>
-        <span className="metric-label">Alert</span> {approval.alert_type || approval.action_key}
-      </p>
-      <p>{approval.alert_reason || approval.request_notes || '—'}</p>
-      <p>
-        <span className="metric-label">Can the agent run this?</span>
-      </p>
+      <dl className="approval-meta">
+        <div>
+          <dt>Alert</dt>
+          <dd>{alertTitle(approval.alert_type, approval.action_key)}</dd>
+        </div>
+        <div>
+          <dt>Reason</dt>
+          <dd>{approval.alert_reason || approval.request_notes || 'Operator requested this check.'}</dd>
+        </div>
+      </dl>
+      <p className="approval-ask">Can the agent run this command?</p>
       <pre className="readonly-sample">
-        {approval.proposed_command || approval.action_key}
-        {approval.action_key === 'systemctl_restart' && approval.action_params
-          ? `\n${approval.action_params}`
-          : ''}
+        {approval.proposed_command || actionTitle(approval.action_key)}
       </pre>
-      {approval.impact ? <p className="muted">{approval.impact}</p> : null}
+      {approval.impact ? <p className="muted approval-impact">{approval.impact}</p> : null}
 
       {approval.status === 'pending' ? (
         <div className="approval-request-row">
@@ -61,9 +66,8 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
             </>
           ) : (
             <>
-              <p className="muted">
-                Confirm run on <strong>{approval.server_name}</strong>? Second click required. Reject
-                cancels.
+              <p className="approval-confirm-copy">
+                Confirm run on <strong>{approval.server_name}</strong>. Nothing has run yet.
               </p>
               <button
                 type="button"
@@ -80,8 +84,18 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
           )}
         </div>
       ) : approval.execution_result ? (
-        <p className="muted">{approval.execution_result}</p>
+        <p className="muted">{prettyResult(approval.execution_result)}</p>
       ) : null}
     </article>
   )
+}
+
+function prettyResult(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as { message?: string }
+    if (parsed.message) return parsed.message
+  } catch {
+    /* keep raw */
+  }
+  return raw
 }
