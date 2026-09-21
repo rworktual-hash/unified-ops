@@ -48,6 +48,7 @@ def _empty(reason: str) -> dict:
         "hosts": [],
         "baremetal": [],
         "vms": [],
+        "network": {"peak_rx_mbps": None, "peak_tx_mbps": None, "source": None, "points": []},
     }
 
 
@@ -69,6 +70,7 @@ def _empty_dashboard() -> dict:
         "storage_total_gb": None,
         "storage_used_gb": None,
         "storage_pct": None,
+        "teams": [],
     }
 
 
@@ -250,6 +252,7 @@ def fetch_inventory_portal() -> dict:
             vms.append(_map_vm(row, host, live))
 
         dashboard = _build_dashboard(clusters, hosts, baremetal, vms, live_node_rows, live_vm_rows)
+        network = _build_network(hosts, vms)
         return {
             "ok": True,
             "database": database,
@@ -259,6 +262,7 @@ def fetch_inventory_portal() -> dict:
             "hosts": hosts,
             "baremetal": baremetal,
             "vms": vms,
+            "network": network,
         }
     except Exception as exc:
         return {**_empty(str(exc)), "database": database}
@@ -457,7 +461,47 @@ def _build_dashboard(clusters, hosts, baremetal, vms, live_nodes, live_vms) -> d
         "storage_total_gb": storage_total,
         "storage_used_gb": storage_used,
         "storage_pct": _pct(storage_used, storage_total),
+        "teams": _team_breakdown(vms),
     }
+
+
+def _team_breakdown(vms: list[dict]) -> list[dict]:
+    counts: dict[str, int] = {}
+    for vm in vms:
+        name = _str(vm.get("team")) or "Unassigned"
+        counts[name] = counts.get(name, 0) + 1
+    total = sum(counts.values()) or 1
+    return [
+        {"name": name, "count": counts[name], "pct": round(100.0 * counts[name] / total, 1)}
+        for name in sorted(counts, key=lambda key: (-counts[key], key))
+    ]
+
+
+def _build_network(hosts: list[dict], vms: list[dict]) -> dict:
+    rx = sum((vm.get("net_in_bps") or 0) for vm in vms)
+    tx = sum((vm.get("net_out_bps") or 0) for vm in vms)
+    points = []
+    for vm in vms:
+        if vm.get("net_in_bps") or vm.get("net_out_bps"):
+            points.append(
+                {
+                    "name": vm.get("guest_hostname") or vm.get("vm_id"),
+                    "rx_mbps": _bps_to_mbps(vm.get("net_in_bps")),
+                    "tx_mbps": _bps_to_mbps(vm.get("net_out_bps")),
+                }
+            )
+    return {
+        "peak_rx_mbps": _bps_to_mbps(rx),
+        "peak_tx_mbps": _bps_to_mbps(tx),
+        "source": "live_vm_statistics",
+        "points": points[:80],
+    }
+
+
+def _bps_to_mbps(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round((value * 8) / 1_000_000, 3)
 
 
 def _empty_catalog(reason: str, database: str | None = None) -> dict:
@@ -467,14 +511,23 @@ def _empty_catalog(reason: str, database: str | None = None) -> dict:
         "database": database,
         "did_total": 0,
         "did_allocated": 0,
+        "did_available": 0,
+        "did_reserved": 0,
+        "did_monthly_cost": None,
         "ssl_total": 0,
+        "ssl_active": 0,
         "ssl_expiring": 0,
+        "ssl_expired": 0,
         "domain_total": 0,
+        "domain_active": 0,
+        "domain_expiring": 0,
+        "domain_expired": 0,
         "dids": [],
         "ssl": [],
         "domains": [],
         "providers": [],
         "clients": [],
+        "allocations": [],
     }
 
 
@@ -508,22 +561,40 @@ def _fetch_inventory_catalog() -> dict:
                 "did_clients",
                 ("id", "company_name", "company_id", "contact_name", "contact_email", "status"),
             )
-        allocated = sum(1 for row in dids if (row.get("status") or "").lower() in {"allocated", "active", "in_use"})
-        expiring = sum(1 for row in ssl_rows if (row.get("remaining_days") or 999) <= 30)
+            allocations = _load_allocations(conn)
+        allocated = sum(1 for row in dids if _did_bucket(row.get("status")) == "allocated")
+        available = sum(1 for row in dids if _did_bucket(row.get("status")) == "available")
+        reserved = sum(1 for row in dids if _did_bucket(row.get("status")) == "reserved")
+        monthly = sum((row.get("monthly_cost") or 0) for row in dids)
+        ssl_active = sum(1 for row in ssl_rows if _ssl_bucket(row) == "active")
+        ssl_expiring = sum(1 for row in ssl_rows if _ssl_bucket(row) == "expiring")
+        ssl_expired = sum(1 for row in ssl_rows if _ssl_bucket(row) == "expired")
+        domain_active = sum(1 for row in domains if _domain_bucket(row) == "active")
+        domain_expiring = sum(1 for row in domains if _domain_bucket(row) == "expiring")
+        domain_expired = sum(1 for row in domains if _domain_bucket(row) == "expired")
         return {
             "ok": True,
             "reason": None,
             "database": database,
             "did_total": len(dids),
             "did_allocated": allocated,
+            "did_available": available,
+            "did_reserved": reserved,
+            "did_monthly_cost": monthly or None,
             "ssl_total": len(ssl_rows),
-            "ssl_expiring": expiring,
+            "ssl_active": ssl_active,
+            "ssl_expiring": ssl_expiring,
+            "ssl_expired": ssl_expired,
             "domain_total": len(domains),
+            "domain_active": domain_active,
+            "domain_expiring": domain_expiring,
+            "domain_expired": domain_expired,
             "dids": dids,
             "ssl": ssl_rows,
             "domains": domains,
             "providers": providers,
             "clients": clients,
+            "allocations": allocations,
         }
     except Exception as exc:
         return _empty_catalog(str(exc), database)
@@ -573,7 +644,7 @@ def _load_dids(conn) -> list[dict]:
         if client_cols:
             sql += ", " + _select("c", [c for c in client_cols if c != "id"], "c_")
             joins += " LEFT JOIN did_clients c ON c.id = a.client_id "
-    rows = conn.execute(text(sql + joins + " ORDER BY n.id LIMIT 500")).mappings().all()
+    rows = conn.execute(text(sql + joins + " ORDER BY n.id LIMIT 20000")).mappings().all()
     out = []
     for row in rows:
         status = _str(_first(row, "did_status", "a_status", "status"))
@@ -587,6 +658,9 @@ def _load_dids(conn) -> list[dict]:
                 "status": status,
                 "provider": _str(_first(row, "p_provider_name", "provider_name")),
                 "client": _str(_first(row, "c_company_name", "kyc_for_company", "kyc_name")),
+                "contact": _str(_first(row, "a_contact_name", "c_contact_name", "contact_name")),
+                "email": _str(_first(row, "a_contact_email", "c_contact_email", "contact_email")),
+                "kyc_name": _str(_first(row, "kyc_name", "kyc_for_company", "a_kyc_name", "c_company_name")),
                 "use_case": _str(_first(row, "a_use_case", "use_case")),
                 "application": _str(_first(row, "a_application_name", "application_name")),
                 "monthly_cost": _num(_first(row, "monthly_cost")),
@@ -595,6 +669,76 @@ def _load_dids(conn) -> list[dict]:
             }
         )
     return out
+
+
+def _load_allocations(conn) -> list[dict]:
+    if not _table_exists(conn, "did_allocations"):
+        return []
+    cols = _safe_columns(conn, "did_allocations")
+    if "id" not in cols:
+        return []
+    num_cols = _safe_columns(conn, "did_numbers") if _table_exists(conn, "did_numbers") else []
+    client_cols = _safe_columns(conn, "did_clients") if _table_exists(conn, "did_clients") else []
+    sql = f"SELECT {_select('a', cols)}"
+    joins = " FROM did_allocations a "
+    if num_cols:
+        sql += ", " + _select("n", [c for c in num_cols if c != "id"], "n_")
+        joins += " LEFT JOIN did_numbers n ON n.id = a.did_number_id "
+    if client_cols:
+        sql += ", " + _select("c", [c for c in client_cols if c != "id"], "c_")
+        joins += " LEFT JOIN did_clients c ON c.id = a.client_id "
+    rows = conn.execute(text(sql + joins + " ORDER BY a.id DESC LIMIT 4000")).mappings().all()
+    return [
+        {
+            "id": int(row["id"]),
+            "did_number": _str(_first(row, "n_did_number", "did_number")),
+            "client": _str(_first(row, "c_company_name", "kyc_for_company")),
+            "status": _str(_first(row, "status")),
+            "use_case": _str(_first(row, "use_case")),
+            "application": _str(_first(row, "application_name", "application")),
+            "allocated_date": _as_dt(_first(row, "allocated_date")),
+        }
+        for row in rows
+    ]
+
+
+def _did_bucket(status: str | None) -> str:
+    value = (status or "").lower()
+    if value in {"allocated", "active", "in_use"}:
+        return "allocated"
+    if value in {"available", "free", "unassigned", "idle"}:
+        return "available"
+    if "reserv" in value:
+        return "reserved"
+    return "other"
+
+
+def _ssl_bucket(row: dict) -> str:
+    status = (row.get("status") or "").lower()
+    days = row.get("remaining_days")
+    if status == "expired" or (isinstance(days, int) and days < 0):
+        return "expired"
+    if status == "expiring" or (isinstance(days, int) and days <= 30):
+        return "expiring"
+    return "active"
+
+
+def _domain_bucket(row: dict) -> str:
+    status = (row.get("status") or "").lower()
+    if status == "expired":
+        return "expired"
+    renewal = row.get("renewal_date")
+    if isinstance(renewal, datetime):
+        renewal = renewal.date()
+    if isinstance(renewal, date):
+        days = (renewal - date.today()).days
+        if days < 0 or status == "expired":
+            return "expired"
+        if days <= 60:
+            return "expiring"
+    if status in {"active", "ok", "valid"} or status == "":
+        return "active"
+    return "other"
 
 
 def _load_ssl(conn) -> list[dict]:

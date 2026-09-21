@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { InventoryCatalog as Catalog, InventoryDid, InventoryDomain, InventorySsl } from '../api'
 
 function day(value: string | null | undefined): string {
@@ -16,6 +17,7 @@ function StatusPill({ status }: { status: string | null }) {
 }
 
 type Tab = 'did' | 'ssl' | 'domains'
+type DidSub = 'numbers' | 'allocations' | 'clients' | 'providers'
 
 type Props = {
   data: Catalog | null
@@ -50,13 +52,21 @@ export function InventoryCatalog({ data, loading, tab, onRefresh }: Props) {
         </button>
       </div>
       {tab === 'did' ? <DidView data={data} /> : null}
-      {tab === 'ssl' ? <SslView rows={data.ssl} expiring={data.ssl_expiring} /> : null}
-      {tab === 'domains' ? <DomainView rows={data.domains} /> : null}
+      {tab === 'ssl' ? (
+        <SslView
+          rows={data.ssl}
+          active={data.ssl_active ?? 0}
+          expiring={data.ssl_expiring}
+          expired={data.ssl_expired ?? 0}
+        />
+      ) : null}
+      {tab === 'domains' ? <DomainView data={data} /> : null}
     </section>
   )
 }
 
 function DidView({ data }: { data: Catalog }) {
+  const [sub, setSub] = useState<DidSub>('numbers')
   return (
     <>
       <div className="stat-row backupvault-stat-row">
@@ -65,70 +75,194 @@ function DidView({ data }: { data: Catalog }) {
           <span className="stat-value">{data.did_total}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Allocated / active</span>
+          <span className="stat-label">Available</span>
+          <span className="stat-value">{data.did_available ?? 0}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Allocated</span>
           <span className="stat-value">{data.did_allocated}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Providers</span>
-          <span className="stat-value">{data.providers.length}</span>
+          <span className="stat-label">Reserved</span>
+          <span className="stat-value">{data.did_reserved ?? 0}</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Clients</span>
           <span className="stat-value">{data.clients.length}</span>
         </div>
+        <div className="stat-card">
+          <span className="stat-label">Monthly cost</span>
+          <span className="stat-value">
+            {data.did_monthly_cost == null ? '—' : data.did_monthly_cost.toLocaleString()}
+          </span>
+        </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>DID</th>
-              <th>Status</th>
-              <th>Provider</th>
-              <th>Client</th>
-              <th>Use / app</th>
-              <th>Type</th>
-              <th>Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.dids.length ? (
-              data.dids.map((row: InventoryDid) => (
+      <div className="bv-tabs" aria-label="DID sections">
+        {(
+          [
+            ['numbers', 'Numbers'],
+            ['allocations', `Allocations${data.allocations?.length ? ` (${data.allocations.length})` : ''}`],
+            ['clients', `Clients (${data.clients.length})`],
+            ['providers', `Providers (${data.providers.length})`],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={sub === id ? 'bv-tab active' : 'bv-tab'}
+            onClick={() => setSub(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {sub === 'numbers' ? <DidNumbers rows={data.dids} /> : null}
+      {sub === 'allocations' ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>DID</th>
+                <th>Client</th>
+                <th>Status</th>
+                <th>Use</th>
+                <th>Allocated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.allocations ?? []).map((row) => (
                 <tr key={row.id}>
-                  <td>
-                    {row.did_number}
-                    <br />
-                    <span className="muted">
-                      {[row.country_code, row.area_code].filter(Boolean).join(' ')}
-                    </span>
-                  </td>
-                  <td>
-                    <StatusPill status={row.status} />
-                  </td>
-                  <td>{row.provider || '—'}</td>
+                  <td>{row.did_number || '—'}</td>
                   <td>{row.client || '—'}</td>
+                  <td>
+                    <StatusPill status={row.status ?? null} />
+                  </td>
                   <td>
                     {row.use_case || '—'}
                     {row.application ? <span className="muted"> · {row.application}</span> : null}
                   </td>
-                  <td>{row.number_type || '—'}</td>
-                  <td>{row.monthly_cost == null ? '—' : row.monthly_cost}</td>
+                  <td>{day(row.allocated_date)}</td>
                 </tr>
-              ))
-            ) : (
+              ))}
+            </tbody>
+          </table>
+          {!data.allocations?.length ? <p className="muted">No allocation rows.</p> : null}
+        </div>
+      ) : null}
+      {sub === 'clients' ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={7} className="muted">
-                  No DID numbers in server_inventory.
-                </td>
+                <th>Client</th>
+                <th>Contact</th>
+                <th>Email</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {data.clients.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.company_name || '—'}</td>
+                  <td>{row.contact_name || '—'}</td>
+                  <td>{row.contact_email || '—'}</td>
+                  <td>
+                    <StatusPill status={row.status ?? null} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {sub === 'providers' ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Contact</th>
+                <th>Email</th>
+                <th>Phone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.providers.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.provider_name || '—'}</td>
+                  <td>{row.contact_person || '—'}</td>
+                  <td>{row.support_email || '—'}</td>
+                  <td>{row.support_phone || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </>
   )
 }
 
-function SslView({ rows, expiring }: { rows: InventorySsl[]; expiring: number }) {
+function DidNumbers({ rows }: { rows: InventoryDid[] }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>DID</th>
+            <th>Provider</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Client</th>
+            <th>Contact</th>
+            <th>Email</th>
+            <th>KYC</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? (
+            rows.map((row: InventoryDid) => (
+              <tr key={row.id}>
+                <td>
+                  {row.did_number}
+                  <br />
+                  <span className="muted">{[row.country_code, row.area_code].filter(Boolean).join(' ')}</span>
+                </td>
+                <td>{row.provider || '—'}</td>
+                <td>{row.number_type || '—'}</td>
+                <td>
+                  <StatusPill status={row.status} />
+                </td>
+                <td>{row.client || '—'}</td>
+                <td>{row.contact || '—'}</td>
+                <td>{row.email || '—'}</td>
+                <td>{row.kyc_name || '—'}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={8} className="muted">
+                No DID numbers in server_inventory.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function SslView({
+  rows,
+  active,
+  expiring,
+  expired,
+}: {
+  rows: InventorySsl[]
+  active: number
+  expiring: number
+  expired: number
+}) {
   return (
     <>
       <div className="stat-row backupvault-stat-row">
@@ -137,8 +271,16 @@ function SslView({ rows, expiring }: { rows: InventorySsl[]; expiring: number })
           <span className="stat-value">{rows.length}</span>
         </div>
         <div className="stat-card">
+          <span className="stat-label">Active</span>
+          <span className="stat-value accent">{active}</span>
+        </div>
+        <div className="stat-card">
           <span className="stat-label">Expiring ≤30 days</span>
           <span className="stat-value warn">{expiring}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Expired</span>
+          <span className="stat-value warn">{expired}</span>
         </div>
       </div>
       <div className="table-wrap">
@@ -189,13 +331,26 @@ function SslView({ rows, expiring }: { rows: InventorySsl[]; expiring: number })
   )
 }
 
-function DomainView({ rows }: { rows: InventoryDomain[] }) {
+function DomainView({ data }: { data: Catalog }) {
+  const rows: InventoryDomain[] = data.domains
   return (
     <>
       <div className="stat-row backupvault-stat-row">
         <div className="stat-card">
           <span className="stat-label">Domains</span>
-          <span className="stat-value">{rows.length}</span>
+          <span className="stat-value">{data.domain_total}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Active</span>
+          <span className="stat-value accent">{data.domain_active ?? 0}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Expiring</span>
+          <span className="stat-value warn">{data.domain_expiring ?? 0}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Expired</span>
+          <span className="stat-value warn">{data.domain_expired ?? 0}</span>
         </div>
       </div>
       <div className="table-wrap">

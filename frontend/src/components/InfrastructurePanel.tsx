@@ -16,12 +16,27 @@ import { InventoryCatalog } from './InventoryCatalog'
 import { InventoryPortal } from './InventoryPortal'
 import { LegacyMetricsSection } from './LegacyMetricsSection'
 
-type InventoryTab = 'dashboard' | 'baremetal' | 'proxmox' | 'vms'
+type InventoryTab =
+  | 'dashboard'
+  | 'baremetal'
+  | 'proxmox'
+  | 'realtime-hosts'
+  | 'vms'
+  | 'realtime-vms'
+  | 'network'
 type CatalogTab = 'did' | 'ssl' | 'domains'
 type TabId = InventoryTab | CatalogTab | 'hosts'
 
 function isInventoryTab(tab: TabId): tab is InventoryTab {
-  return tab === 'dashboard' || tab === 'baremetal' || tab === 'proxmox' || tab === 'vms'
+  return (
+    tab === 'dashboard' ||
+    tab === 'baremetal' ||
+    tab === 'proxmox' ||
+    tab === 'realtime-hosts' ||
+    tab === 'vms' ||
+    tab === 'realtime-vms' ||
+    tab === 'network'
+  )
 }
 
 function isCatalogTab(tab: TabId): tab is CatalogTab {
@@ -33,14 +48,23 @@ const emptyCatalog = (): InventoryCatalogData => ({
   reason: 'Catalog not loaded',
   did_total: 0,
   did_allocated: 0,
+  did_available: 0,
+  did_reserved: 0,
+  did_monthly_cost: null,
   ssl_total: 0,
+  ssl_active: 0,
   ssl_expiring: 0,
+  ssl_expired: 0,
   domain_total: 0,
+  domain_active: 0,
+  domain_expiring: 0,
+  domain_expired: 0,
   dids: [],
   ssl: [],
   domains: [],
   providers: [],
   clients: [],
+  allocations: [],
 })
 
 function state(value: boolean | null): string {
@@ -197,6 +221,17 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
     await loadCatalog(true)
   }, [loadCatalog])
   useLivePoll(pollCatalog, isCatalogTab(tab))
+  const pollInventory = useCallback(async () => {
+    try {
+      setInventory(await fetchInventoryPortal())
+    } catch {
+      /* keep last snapshot */
+    }
+  }, [])
+  useLivePoll(
+    pollInventory,
+    tab === 'realtime-hosts' || tab === 'realtime-vms' || tab === 'network' || tab === 'dashboard',
+  )
 
   const counts = inventory?.ok
     ? {
@@ -226,7 +261,10 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
             ['dashboard', 'Dashboard'],
             ['baremetal', `Baremetal${counts.baremetal ? ` (${counts.baremetal})` : ''}`],
             ['proxmox', `Proxmox${counts.hosts ? ` (${counts.hosts})` : ''}`],
+            ['realtime-hosts', 'Realtime hosts'],
             ['vms', `VMs${counts.vms ? ` (${counts.vms})` : ''}`],
+            ['realtime-vms', 'Realtime VMs'],
+            ['network', 'Network'],
             ['did', `DID${catalog?.did_total ? ` (${catalog.did_total})` : ''}`],
             ['ssl', `SSL${catalog?.ssl_total ? ` (${catalog.ssl_total})` : ''}`],
             ['domains', `Domains${catalog?.domain_total ? ` (${catalog.domain_total})` : ''}`],
@@ -247,6 +285,7 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
       {isInventoryTab(tab) ? (
         <InventoryPortal
           data={inventory}
+          catalog={catalog}
           loading={loadingInv}
           onRefresh={() => void loadInventory()}
           tab={tab}

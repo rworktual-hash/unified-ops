@@ -352,6 +352,12 @@ class InventoryVmRead(BaseModel):
     updated_at: datetime | None = None
 
 
+class InventoryTeamRead(BaseModel):
+    name: str
+    count: int
+    pct: float
+
+
 class InventoryDashboardRead(BaseModel):
     total_servers: int = 0
     online_servers: int = 0
@@ -369,6 +375,20 @@ class InventoryDashboardRead(BaseModel):
     storage_total_gb: float | None = None
     storage_used_gb: float | None = None
     storage_pct: float | None = None
+    teams: list[InventoryTeamRead] = []
+
+
+class InventoryNetworkPointRead(BaseModel):
+    name: str | None = None
+    rx_mbps: float | None = None
+    tx_mbps: float | None = None
+
+
+class InventoryNetworkRead(BaseModel):
+    peak_rx_mbps: float | None = None
+    peak_tx_mbps: float | None = None
+    source: str | None = None
+    points: list[InventoryNetworkPointRead] = []
 
 
 class InventoryPortalRead(BaseModel):
@@ -380,6 +400,7 @@ class InventoryPortalRead(BaseModel):
     hosts: list[InventoryHostRead]
     baremetal: list[InventoryBaremetalRead]
     vms: list[InventoryVmRead]
+    network: InventoryNetworkRead | None = None
 
 
 class InventoryDidRead(BaseModel):
@@ -396,6 +417,9 @@ class InventoryDidRead(BaseModel):
     monthly_cost: float | None = None
     purchase_date: datetime | date | None = None
     allocated_date: datetime | date | None = None
+    contact: str | None = None
+    email: str | None = None
+    kyc_name: str | None = None
 
 
 class InventorySslRead(BaseModel):
@@ -434,20 +458,39 @@ class InventoryNamedRead(BaseModel):
     status: str | None = None
 
 
+class InventoryAllocationRead(BaseModel):
+    id: int
+    did_number: str | None = None
+    client: str | None = None
+    status: str | None = None
+    use_case: str | None = None
+    application: str | None = None
+    allocated_date: datetime | date | None = None
+
+
 class InventoryCatalogRead(BaseModel):
     ok: bool
     database: str | None = None
     reason: str | None = None
     did_total: int = 0
     did_allocated: int = 0
+    did_available: int = 0
+    did_reserved: int = 0
+    did_monthly_cost: float | None = None
     ssl_total: int = 0
+    ssl_active: int = 0
     ssl_expiring: int = 0
+    ssl_expired: int = 0
     domain_total: int = 0
+    domain_active: int = 0
+    domain_expiring: int = 0
+    domain_expired: int = 0
     dids: list[InventoryDidRead]
     ssl: list[InventorySslRead]
     domains: list[InventoryDomainRead]
     providers: list[InventoryNamedRead]
     clients: list[InventoryNamedRead]
+    allocations: list[InventoryAllocationRead] = []
 
 
 class AiInsightExtraTileRead(BaseModel):

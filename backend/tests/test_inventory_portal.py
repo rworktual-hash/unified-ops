@@ -6,10 +6,13 @@ from app.services.inventory_portal import (
     _as_dt,
     _as_gb,
     _build_dashboard,
+    _did_bucket,
     _is_online,
     _map_baremetal,
     _remaining_days,
     _safe_columns,
+    _ssl_bucket,
+    _team_breakdown,
     fetch_inventory_catalog,
     fetch_inventory_portal,
 )
@@ -83,6 +86,20 @@ def test_build_dashboard_counts():
     assert dash["online_servers"] == 2
     assert dash["total_servers"] == 5
     assert dash["cpu_pct"] == 20.0
+    assert dash["teams"][0]["name"] == "Unassigned"
+    assert dash["teams"][0]["count"] == 2
+
+
+def test_team_and_status_buckets():
+    teams = _team_breakdown([{"team": "DevOps"}, {"team": "DevOps"}, {"team": "Linux"}])
+    assert teams[0]["name"] == "DevOps"
+    assert teams[0]["count"] == 2
+    assert _did_bucket("Allocated") == "allocated"
+    assert _did_bucket("unassigned") == "available"
+    assert _did_bucket("reserved") == "reserved"
+    assert _ssl_bucket({"status": "active", "remaining_days": 90}) == "active"
+    assert _ssl_bucket({"status": "ok", "remaining_days": 12}) == "expiring"
+    assert _ssl_bucket({"status": "expired", "remaining_days": -2}) == "expired"
 
 
 def test_safe_columns_drops_secrets():

@@ -1125,6 +1125,7 @@ export type InventoryDashboard = {
   storage_total_gb: number | null
   storage_used_gb: number | null
   storage_pct: number | null
+  teams?: Array<{ name: string; count: number; pct: number }>
 }
 
 export type InventoryPortal = {
@@ -1136,6 +1137,12 @@ export type InventoryPortal = {
   hosts: InventoryHost[]
   baremetal: InventoryBaremetal[]
   vms: InventoryVm[]
+  network?: {
+    peak_rx_mbps: number | null
+    peak_tx_mbps: number | null
+    source?: string | null
+    points: Array<{ name?: string | null; rx_mbps: number | null; tx_mbps: number | null }>
+  }
 }
 
 export async function fetchInventoryPortal(): Promise<InventoryPortal> {
@@ -1158,6 +1165,9 @@ export type InventoryDid = {
   monthly_cost: number | null
   purchase_date: string | null
   allocated_date: string | null
+  contact?: string | null
+  email?: string | null
+  kyc_name?: string | null
 }
 
 export type InventorySsl = {
@@ -1189,14 +1199,31 @@ export type InventoryCatalog = {
   reason?: string | null
   did_total: number
   did_allocated: number
+  did_available?: number
+  did_reserved?: number
+  did_monthly_cost?: number | null
   ssl_total: number
+  ssl_active?: number
   ssl_expiring: number
+  ssl_expired?: number
   domain_total: number
+  domain_active?: number
+  domain_expiring?: number
+  domain_expired?: number
   dids: InventoryDid[]
   ssl: InventorySsl[]
   domains: InventoryDomain[]
-  providers: Array<{ id: number; provider_name?: string | null; support_email?: string | null }>
-  clients: Array<{ id: number; company_name?: string | null; contact_email?: string | null; status?: string | null }>
+  providers: Array<{ id: number; provider_name?: string | null; support_email?: string | null; contact_person?: string | null; support_phone?: string | null }>
+  clients: Array<{ id: number; company_name?: string | null; contact_name?: string | null; contact_email?: string | null; status?: string | null }>
+  allocations?: Array<{
+    id: number
+    did_number?: string | null
+    client?: string | null
+    status?: string | null
+    use_case?: string | null
+    application?: string | null
+    allocated_date?: string | null
+  }>
 }
 
 export async function fetchInventoryCatalog(): Promise<InventoryCatalog> {

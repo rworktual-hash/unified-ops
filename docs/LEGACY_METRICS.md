@@ -87,8 +87,8 @@ Review `legacy-metrics-discovery.json`, then set `LEGACY_*_TABLE` and `LEGACY_*_
 | GET | `/api/legacy-metrics/backupvault/targets` | Backup targets (no passwords) |
 | GET | `/api/legacy-metrics/backupvault/nfs` | NFS server list |
 | GET | `/api/legacy-metrics/backupvault/monitoring` | Latest `db_server_snapshots` + `nfs_monitoring_snapshots` + storage tiles |
-| GET | `/api/legacy-metrics/inventory` | Live `server_inventory` dashboard, baremetal, Proxmox hosts, VMs (no password columns) |
-| GET | `/api/legacy-metrics/inventory/catalog` | Read-only DID / SSL / domain lists from the same `server_inventory` DB (no add / edit / upload). UI polls every 5s on those tabs; API caches 2s. |
+| GET | `/api/legacy-metrics/inventory` | Live `server_inventory` dashboard (incl. team VM mix + network peaks), baremetal, Proxmox hosts, VMs, realtime host/VM join (no password columns) |
+| GET | `/api/legacy-metrics/inventory/catalog` | Read-only DID / SSL / domain lists + allocations/clients/providers. Extra KPIs: available/reserved, monthly cost, SSL/domain expired. No add / edit / upload. |
 | GET | `/api/legacy-metrics/ai-insights/extras` | Latest health / service tiles from `ai_insights_platform` (no new sidebar app; Servers page group cards + extras). UI polls every 5s; API caches 2s. Fleet donut, health mix, stacked group health, and CPU/RAM/disk bars are derived from this payload. |
 | GET | `/api/legacy-metrics/voicemg/extras` | Latest system + call/RTP tiles from `voicemg` (no new tabs; enriches VoiceMG SSH table + Server cards). UI polls every 5s; API caches 2s. |
 | GET | `/api/legacy-metrics/voicemg/history` | Live VoiceMG series: 5m, 30m, 1h, 2h, 6h, 12h, today, yesterday, 2d, week, custom (`start`/`end`). From `voicemg.metrics_calls` + `metrics_system`. |

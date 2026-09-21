@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type {
   InventoryBaremetal,
+  InventoryCatalog,
   InventoryCluster,
   InventoryDashboard,
   InventoryHost,
@@ -76,14 +77,24 @@ function unique(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(values.filter((v): v is string => Boolean(v)))).sort()
 }
 
+export type InventoryLiveTab =
+  | 'dashboard'
+  | 'baremetal'
+  | 'proxmox'
+  | 'realtime-hosts'
+  | 'vms'
+  | 'realtime-vms'
+  | 'network'
+
 type Props = {
   data: InventoryPortalData | null
+  catalog?: InventoryCatalog | null
   loading: boolean
   onRefresh: () => void
-  tab: 'dashboard' | 'baremetal' | 'proxmox' | 'vms'
+  tab: InventoryLiveTab
 }
 
-export function InventoryPortal({ data, loading, onRefresh, tab }: Props) {
+export function InventoryPortal({ data, catalog, loading, onRefresh, tab }: Props) {
   if (!data && loading) {
     return <p className="muted">Loading inventory…</p>
   }
@@ -102,7 +113,7 @@ export function InventoryPortal({ data, loading, onRefresh, tab }: Props) {
   }
 
   if (tab === 'dashboard') {
-    return <Dashboard data={data} loading={loading} onRefresh={onRefresh} />
+    return <Dashboard data={data} catalog={catalog} loading={loading} onRefresh={onRefresh} />
   }
   if (tab === 'baremetal') {
     return <BaremetalTable rows={data.baremetal} loading={loading} onRefresh={onRefresh} />
@@ -117,19 +128,32 @@ export function InventoryPortal({ data, loading, onRefresh, tab }: Props) {
       />
     )
   }
+  if (tab === 'realtime-hosts') {
+    return <RealtimeHosts hosts={data.hosts} loading={loading} onRefresh={onRefresh} />
+  }
+  if (tab === 'realtime-vms') {
+    return <RealtimeVms rows={data.vms} loading={loading} onRefresh={onRefresh} />
+  }
+  if (tab === 'network') {
+    return <NetworkView data={data} loading={loading} onRefresh={onRefresh} />
+  }
   return <VmTable rows={data.vms} loading={loading} onRefresh={onRefresh} />
 }
 
 function Dashboard({
   data,
+  catalog,
   loading,
   onRefresh,
 }: {
   data: InventoryPortalData
+  catalog?: InventoryCatalog | null
   loading: boolean
   onRefresh: () => void
 }) {
   const dash: InventoryDashboard = data.dashboard
+  const teams = dash.teams ?? []
+  const money = catalog?.did_monthly_cost
   return (
     <section className="bv-portal">
       <div className="bv-portal-toolbar">
@@ -194,6 +218,57 @@ function Dashboard({
           unit=" GB"
         />
       </div>
+      {teams.length ? (
+        <>
+          <h3 className="bv-group-title">Team VM usage</h3>
+          <div className="bv-card-grid">
+            {teams.map((team) => (
+              <UtilBar
+                key={team.name}
+                label={team.name}
+                used={team.count}
+                total={dash.total_vms}
+                pct={team.pct}
+                unit=" VMs"
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+      {catalog?.ok ? (
+        <>
+          <h3 className="bv-group-title">DID / Domains / SSL</h3>
+          <div className="stat-row backupvault-stat-row">
+            <div className="stat-card">
+              <span className="stat-label">DIDs</span>
+              <span className="stat-value">{catalog.did_total}</span>
+              <span className="muted bv-sub">{catalog.did_allocated} allocated</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Available / reserved</span>
+              <span className="stat-value">
+                {catalog.did_available ?? 0}/{catalog.did_reserved ?? 0}
+              </span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Monthly DID cost</span>
+              <span className="stat-value">{money == null ? '—' : money.toLocaleString()}</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Domains</span>
+              <span className="stat-value">{catalog.domain_total}</span>
+              <span className="muted bv-sub">{catalog.domain_active ?? 0} active</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">SSL certs</span>
+              <span className="stat-value">{catalog.ssl_total}</span>
+              <span className="muted bv-sub">
+                {catalog.ssl_active ?? 0} active · {catalog.ssl_expiring} expiring
+              </span>
+            </div>
+          </div>
+        </>
+      ) : null}
       <h3 className="bv-group-title">Clusters ({data.clusters.length})</h3>
       <div className="bv-card-grid bv-storage-grid">
         {data.clusters.map((cluster) => (
@@ -605,6 +680,190 @@ function VmTable({
         </table>
       </div>
       {!filtered.length ? <p className="muted">No VMs match the filter.</p> : null}
+    </section>
+  )
+}
+
+function fmtUptime(seconds: number | null | undefined): string {
+  if (seconds == null) return '—'
+  const days = seconds / 86400
+  return `${days.toFixed(1)} days`
+}
+
+function RealtimeHosts({
+  hosts,
+  loading,
+  onRefresh,
+}: {
+  hosts: InventoryHost[]
+  loading: boolean
+  onRefresh: () => void
+}) {
+  return (
+    <section className="bv-portal">
+      <div className="bv-portal-toolbar">
+        <div>
+          <h2>Realtime hosts</h2>
+          <p className="muted">Live CPU / memory / storage / uptime from `live_node_statistics` — view only.</p>
+        </div>
+        <button type="button" className="btn ghost" disabled={loading} onClick={onRefresh}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+      <div className="table-wrap bv-runs-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Cluster</th>
+              <th>Live CPU</th>
+              <th>Memory</th>
+              <th>Storage</th>
+              <th>Uptime</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hosts.map((host) => (
+              <tr key={host.id}>
+                <td>{host.node_name}</td>
+                <td>{host.cluster_label || host.cluster_name || '—'}</td>
+                <td>{fmtPct(host.cpu_pct)}</td>
+                <td>
+                  {fmtGb(host.used_ram_gb)} / {fmtGb(host.total_ram_gb)}
+                </td>
+                <td>
+                  {fmtGb(host.used_storage_gb)} / {fmtGb(host.total_storage_gb)}
+                </td>
+                <td>{fmtUptime(host.uptime_seconds)}</td>
+                <td>
+                  <StatusPill status={host.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function RealtimeVms({
+  rows,
+  loading,
+  onRefresh,
+}: {
+  rows: InventoryVm[]
+  loading: boolean
+  onRefresh: () => void
+}) {
+  return (
+    <section className="bv-portal">
+      <div className="bv-portal-toolbar">
+        <div>
+          <h2>Realtime VMs</h2>
+          <p className="muted">
+            {rows.length} workloads · live CPU / memory / storage from `live_vm_statistics`.
+          </p>
+        </div>
+        <button type="button" className="btn ghost" disabled={loading} onClick={onRefresh}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+      <div className="table-wrap bv-runs-table">
+        <table>
+          <thead>
+            <tr>
+              <th>VM / name</th>
+              <th>IPs</th>
+              <th>Node</th>
+              <th>Live CPU</th>
+              <th>Memory</th>
+              <th>Storage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <strong>{row.guest_hostname || row.vm_id}</strong>
+                  <div className="muted bv-sub">{row.vm_id}</div>
+                </td>
+                <td className="bv-mono">
+                  {row.guest_ip_private ?? '—'}
+                  {row.guest_ip_public ? <div className="muted bv-sub">{row.guest_ip_public}</div> : null}
+                </td>
+                <td>{row.node_name ?? '—'}</td>
+                <td>{fmtPct(row.cpu_util_pct)}</td>
+                <td>
+                  {fmtGb(row.ram_used_gb)} / {fmtGb(row.ram_total_gb ?? row.ram_gb)}
+                </td>
+                <td>
+                  {fmtGb(row.storage_used_gb)} / {fmtGb(row.disk_gb)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function NetworkView({
+  data,
+  loading,
+  onRefresh,
+}: {
+  data: InventoryPortalData
+  loading: boolean
+  onRefresh: () => void
+}) {
+  const net = data.network
+  return (
+    <section className="bv-portal">
+      <div className="bv-portal-toolbar">
+        <div>
+          <h2>Network statistics</h2>
+          <p className="muted">
+            Peak RX/TX from live VM telemetry{net?.source ? ` · ${net.source}` : ''} — no waveform if `.222` has no history rows.
+          </p>
+        </div>
+        <button type="button" className="btn ghost" disabled={loading} onClick={onRefresh}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+      <div className="stat-row backupvault-stat-row">
+        <div className="stat-card">
+          <span className="stat-label">Peak inbound (RX)</span>
+          <span className="stat-value">{net?.peak_rx_mbps == null ? '—' : `${net.peak_rx_mbps.toFixed(2)} Mbps`}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Peak outbound (TX)</span>
+          <span className="stat-value">{net?.peak_tx_mbps == null ? '—' : `${net.peak_tx_mbps.toFixed(2)} Mbps`}</span>
+        </div>
+      </div>
+      <div className="table-wrap bv-runs-table">
+        <table>
+          <thead>
+            <tr>
+              <th>VM</th>
+              <th>RX Mbps</th>
+              <th>TX Mbps</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(net?.points ?? []).map((point, index) => (
+              <tr key={`${point.name}-${index}`}>
+                <td>{point.name || '—'}</td>
+                <td>{point.rx_mbps == null ? '—' : point.rx_mbps.toFixed(3)}</td>
+                <td>{point.tx_mbps == null ? '—' : point.tx_mbps.toFixed(3)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!net?.points.length ? <p className="muted">No stream data for this window on MariaDB.</p> : null}
     </section>
   )
 }
