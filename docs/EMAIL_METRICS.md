@@ -81,7 +81,7 @@ EMAIL_MGMT_COL_STATUS=status
 EMAIL_MGMT_COL_DSN=dsn
 EMAIL_MGMT_COL_QUEUE_ID=queue_id
 EMAIL_MGMT_COL_HOST=server
-EMAIL_MGMT_HOST_SERVER_MAP=82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private
+EMAIL_MGMT_HOST_SERVER_MAP=82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private,campaign:email-mgmt-1,mail.worktual.pl:email-mgmt-1
 EMAIL_MGMT_DEFAULT_SERVER_NAME=email-mgmt-1
 ```
 

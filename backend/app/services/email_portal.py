@@ -67,6 +67,11 @@ QUEUE_COLS = (
     "top_senders",
 )
 MAIL_STATUS_KEYS = ("sent", "bounce", "deferred", "host_not_reachable")
+# Campaign DB uses these labels, not the public gateway IPs.
+HOST_ALIASES = {
+    "campaign": "email-mgmt-1",
+    "mail.worktual.pl": "email-mgmt-1",
+}
 
 
 def _empty(reason: str, *, hours: int = 24, database: str | None = None) -> dict:
@@ -191,12 +196,19 @@ def _iso(value: Any) -> str | None:
     return dt.isoformat(sep=" ") if dt else _str(value)
 
 
+def _host_map() -> dict[str, str]:
+    mapping = {key.lower(): value for key, value in settings.email_mgmt_host_map.items()}
+    for alias, name in HOST_ALIASES.items():
+        mapping.setdefault(alias, name)
+    return mapping
+
+
 def inventory_name(server: str | None, server_name: str | None) -> str | None:
-    host = (server or "").strip()
-    if host:
-        mapped = settings.email_mgmt_host_map.get(host)
-        if mapped:
-            return mapped
+    mapping = _host_map()
+    for candidate in (server, server_name):
+        key = (candidate or "").strip().lower()
+        if key and key in mapping:
+            return mapping[key]
     return _str(server_name) or _str(server)
 
 

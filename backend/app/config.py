@@ -78,7 +78,8 @@ class Settings(BaseSettings):
     email_mgmt_sync_interval_seconds: float = 120.0
     # Map remote host/IP values to inventory server_name: "82.113.72.84:email-mgmt-1,10.180.0.84:email-mgmt-private"
     email_mgmt_host_server_map: str = (
-        "82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private"
+        "82.113.72.84:email-mgmt-1,82.113.72.80:email-mgmt-2,10.180.0.84:email-mgmt-private,"
+        "campaign:email-mgmt-1,mail.worktual.pl:email-mgmt-1"
     )
     email_mgmt_default_server_name: str = "email-mgmt-1"
 

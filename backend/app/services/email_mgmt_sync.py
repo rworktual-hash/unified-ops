@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.email_mgmt_session import get_email_mgmt_engine
+from app.services.email_portal import inventory_name
 from app.models.email_log_event import EmailLogEvent
 from app.models.email_sync_state import EmailSyncState
 from app.models.server import Server
@@ -42,7 +43,7 @@ def _parse_remote_time(value) -> datetime:
 def _resolve_server_id(db: Session, host_value: str | None) -> int | None:
     if host_value:
         host_value = host_value.strip()
-        name = settings.email_mgmt_host_map.get(host_value)
+        name = inventory_name(host_value, None)
         if name:
             row = db.query(Server).filter(Server.server_name == name).first()
             if row:

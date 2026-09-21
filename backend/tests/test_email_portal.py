@@ -68,6 +68,8 @@ def test_inventory_name_uses_host_map(mock_settings):
     mock_settings.email_mgmt_host_map = {"82.113.72.84": "email-mgmt-1"}
     assert inventory_name("82.113.72.84", "mail-1") == "email-mgmt-1"
     assert inventory_name(None, "mail-2") == "mail-2"
+    assert inventory_name("campaign", "mail.worktual.pl") == "email-mgmt-1"
+    assert inventory_name(None, "mail.worktual.pl") == "email-mgmt-1"
 
 
 def test_latest_queue_and_sum():
