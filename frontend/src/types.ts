@@ -158,5 +158,6 @@ export type LiveAlert = {
   last_seen_at: string | null
   inventory_server_id: number | null
   inventory_server_name: string | null
+  inventory_active: boolean
   matched: boolean
 }

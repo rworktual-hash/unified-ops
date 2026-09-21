@@ -59,11 +59,16 @@ def test_attach_inventory_marks_match():
         ),
         map_alert_row({"id": 2, "title": "unknown", "s_ip_address": "9.9.9.9"}),
     ]
-    inventory = [{"id": 5, "server_name": "DR-GPU1-148", "ip_address": "81.17.61.148"}]
+    inventory = [
+        {"id": 5, "server_name": "DR-GPU1-148", "ip_address": "81.17.61.148", "is_active": True},
+        {"id": 8, "server_name": "AI-GPU-Server-1", "ip_address": "9.9.9.9", "is_active": False},
+    ]
     out = attach_inventory(alerts, inventory)
     assert out[0]["matched"] is True
     assert out[0]["inventory_server_id"] == 5
-    assert out[1]["matched"] is False
+    assert out[0]["inventory_active"] is True
+    assert out[1]["matched"] is True
+    assert out[1]["inventory_active"] is False
 
 
 @patch("app.services.live_alerts.get_cached", return_value=None)

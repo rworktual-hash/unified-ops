@@ -559,12 +559,23 @@ function App() {
                           </td>
                           <td>{a.title}</td>
                           <td>{a.message}</td>
-                          <td>{a.matched ? 'inventory' : 'unmatched'}</td>
+                          <td>
+                            {!a.matched
+                              ? 'unmatched'
+                              : a.inventory_active
+                                ? 'inventory'
+                                : 'inactive'}
+                          </td>
                           <td className="action-cell">
                             <button
                               type="button"
                               className="btn ghost"
-                              disabled={!a.matched || investigatingId === a.source_id}
+                              title={
+                                a.matched && !a.inventory_active
+                                  ? 'Host is paused (165/166) until SSH works'
+                                  : undefined
+                              }
+                              disabled={!a.matched || !a.inventory_active || investigatingId === a.source_id}
                               onClick={async () => {
                                 setInvestigatingId(a.source_id)
                                 setError(null)

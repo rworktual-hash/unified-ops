@@ -39,6 +39,7 @@ class LiveAlertRead(BaseModel):
     last_seen_at: datetime | str | None = None
     inventory_server_id: int | None = None
     inventory_server_name: str | None = None
+    inventory_active: bool = False
     matched: bool = False
 
 

@@ -14,6 +14,19 @@ from app.services.live_alerts import attach_inventory, fetch_ai_insights_alerts
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 
+def _inventory_hosts(db: Session) -> list[dict]:
+    return [
+        {
+            "id": row.id,
+            "server_name": row.server_name,
+            "ip_address": row.ip_address,
+            "hostname": row.server_name,
+            "is_active": row.is_active,
+        }
+        for row in db.query(Server).all()
+    ]
+
+
 @router.get("", response_model=list[AlertReadWithServer])
 def list_alerts(
     status_filter: str | None = Query(default=None, alias="status"),
@@ -52,16 +65,7 @@ def list_alerts(
 @router.get("/live", response_model=LiveAlertsRead)
 def list_live_alerts(db: Session = Depends(get_db)) -> LiveAlertsRead:
     payload = fetch_ai_insights_alerts()
-    inventory = [
-        {
-            "id": row.id,
-            "server_name": row.server_name,
-            "ip_address": row.ip_address,
-            "hostname": row.server_name,
-            "is_active": row.is_active,
-        }
-        for row in db.query(Server).all()
-    ]
+    inventory = _inventory_hosts(db)
     alerts = attach_inventory(payload.get("alerts") or [], inventory)
     return LiveAlertsRead(
         ok=bool(payload.get("ok")),
@@ -79,17 +83,7 @@ def investigate_live_alert(source_id: int, db: Session = Depends(get_db)) -> Inv
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=payload.get("reason") or "Live alerts unavailable",
         )
-    inventory = [
-        {
-            "id": row.id,
-            "server_name": row.server_name,
-            "ip_address": row.ip_address,
-            "hostname": row.server_name,
-            "is_active": row.is_active,
-        }
-        for row in db.query(Server).filter(Server.is_active.is_(True)).all()
-    ]
-    matched = attach_inventory(payload.get("alerts") or [], inventory)
+    matched = attach_inventory(payload.get("alerts") or [], _inventory_hosts(db))
     alert = next((row for row in matched if row.get("source_id") == source_id), None)
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live alert not found")
@@ -98,6 +92,11 @@ def investigate_live_alert(source_id: int, db: Session = Depends(get_db)) -> Inv
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No inventory host matches this .222 alert (IP then hostname).",
+        )
+    if not alert.get("inventory_active"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Matched host is inactive (165/166 paused until SSH works). Investigate stays off.",
         )
     try:
         return run_investigation(

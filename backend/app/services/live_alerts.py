@@ -87,6 +87,7 @@ def map_alert_row(row: dict) -> dict:
         "last_seen_at": _first(row, "updated_at", "last_seen_at", "created_at", "timestamp", "ts"),
         "inventory_server_id": None,
         "inventory_server_name": None,
+        "inventory_active": False,
         "matched": False,
     }
 
@@ -105,6 +106,7 @@ def attach_inventory(alerts: list[dict], inventory: list[dict]) -> list[dict]:
             row["inventory_server_id"] = hit.get("id")
             row["inventory_server_name"] = hit.get("server_name")
             row["ip_address"] = hit.get("ip_address") or row.get("ip_address") or ""
+            row["inventory_active"] = bool(hit.get("is_active", True))
             row["matched"] = True
         out.append(row)
     return out
