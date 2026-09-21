@@ -8,6 +8,9 @@ class CredentialError(Exception):
     pass
 
 
+_PLACEHOLDER = "/absolute/path/to/credentials/"
+
+
 def _ref_to_env_suffix(credential_ref: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]", "_", credential_ref.strip()).upper()
     if not normalized:
@@ -15,23 +18,31 @@ def _ref_to_env_suffix(credential_ref: str) -> str:
     return normalized
 
 
+def _usable_key(path: str | None) -> str | None:
+    if not path or _PLACEHOLDER in path:
+        return None
+    expanded = os.path.expanduser(path.strip())
+    if os.path.isfile(expanded):
+        return expanded
+    return None
+
+
 def resolve_private_key_path(credential_ref: str | None) -> str:
+    candidates: list[str | None] = []
     if credential_ref:
         env_name = f"CREDENTIAL_{_ref_to_env_suffix(credential_ref)}_PATH"
-        path = os.environ.get(env_name)
-        if not path:
-            raise CredentialError(
-                f"No private key configured for credential_ref '{credential_ref}'. "
-                f"Set env {env_name} or DEFAULT_SSH_PRIVATE_KEY_PATH."
-            )
-    elif settings.default_ssh_private_key_path:
-        path = settings.default_ssh_private_key_path
-    else:
-        raise CredentialError(
-            "Server has no credential_ref and DEFAULT_SSH_PRIVATE_KEY_PATH is not set."
-        )
+        candidates.append(os.environ.get(env_name))
+    candidates.append(os.environ.get("CREDENTIAL_GPU_KEY_1_PATH"))
+    candidates.append(settings.default_ssh_private_key_path)
+    candidates.append("/root/.ssh/id_rsa")
+    candidates.append(os.path.expanduser("~/.ssh/id_rsa"))
 
-    expanded = os.path.expanduser(path)
-    if not os.path.isfile(expanded):
-        raise CredentialError(f"Private key file not found: {expanded}")
-    return expanded
+    for raw in candidates:
+        hit = _usable_key(raw)
+        if hit:
+            return hit
+
+    raise CredentialError(
+        "Private key file not found. Set CREDENTIAL_GPU_KEY_1_PATH "
+        "(production: /root/.ssh/id_rsa) and credential_ref=gpu_key_1."
+    )
