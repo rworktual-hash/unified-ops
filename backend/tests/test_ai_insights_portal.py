@@ -1,8 +1,12 @@
+from datetime import datetime
 from unittest.mock import patch
 
 from app.services.ai_insights_portal import (
+    _metric_avgs,
     fetch_ai_insights_extras,
+    fetch_ai_insights_history,
     flatten_service_payload,
+    history_window,
     normalize_ai_group,
 )
 
@@ -47,4 +51,36 @@ def test_fetch_skips_without_url(mock_settings):
     out = fetch_ai_insights_extras()
     assert out["ok"] is False
     assert out["servers"] == []
+    assert "LEGACY_METRICS_DATABASE_URL" in (out["reason"] or "")
+
+
+def test_history_window_60m():
+    now = datetime(2026, 9, 22, 11, 0, 0)
+    since, until, bucket = history_window("60m", now, now.date())
+    assert until == now
+    assert since == datetime(2026, 9, 22, 10, 0, 0)
+    assert bucket == 60
+    hour_since, _, hour_bucket = history_window("1h", now, now.date())
+    assert hour_since == since
+    assert hour_bucket == 60
+
+
+def test_metric_avgs_picks_known_columns():
+    parts = _metric_avgs(["cpu_utilization", "mem_util", "gpu_temp", "password_hash"])
+    joined = " ".join(parts)
+    assert "cpu_utilization" in joined
+    assert "memory_utilization" in joined
+    assert "gpu_temperature" in joined
+    assert "password" not in joined
+
+
+@patch("app.services.ai_insights_portal.get_cached", return_value=None)
+@patch("app.services.ai_insights_portal.settings")
+def test_history_skips_without_url(mock_settings, _cache):
+    mock_settings.legacy_metrics_database_url = None
+    out = fetch_ai_insights_history("60m", "ai")
+    assert out["ok"] is False
+    assert out["points"] == []
+    assert out["range"] == "60m"
+    assert out["group"] == "ai"
     assert "LEGACY_METRICS_DATABASE_URL" in (out["reason"] or "")

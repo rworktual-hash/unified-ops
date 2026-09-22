@@ -1272,6 +1272,49 @@ export async function fetchAiInsightExtras(): Promise<AiInsightExtras> {
   return res.json()
 }
 
+export type AiInsightHistoryRange = '30m' | '60m' | '1h' | '2h' | 'today'
+
+export type AiInsightHistoryPoint = {
+  ts: string
+  cpu_utilization: number | null
+  memory_utilization: number | null
+  storage_utilization: number | null
+  load_average: number | null
+  gpu_utilization: number | null
+  gpu_temperature: number | null
+}
+
+export type AiInsightHistory = {
+  ok: boolean
+  database?: string | null
+  reason?: string | null
+  range: AiInsightHistoryRange | string
+  group: string
+  since: string | null
+  until?: string | null
+  bucket_seconds: number
+  host_count: number
+  point_count: number
+  points: AiInsightHistoryPoint[]
+  server_id?: number | null
+  host_name?: string | null
+  source_table?: string | null
+}
+
+export async function fetchAiInsightHistory(
+  range: AiInsightHistoryRange,
+  group = 'all',
+  serverId?: number | null,
+): Promise<AiInsightHistory> {
+  const params = new URLSearchParams({ range, group })
+  if (serverId != null) params.set('server_id', String(serverId))
+  const res = await apiFetch(`/legacy-metrics/ai-insights/history?${params}`, {
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!res.ok) throw new Error('Failed to load AI Insights history')
+  return res.json()
+}
+
 export function matchAiInsightExtra(
   extras: AiInsightExtra[] | undefined,
   ip: string,

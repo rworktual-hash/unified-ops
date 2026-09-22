@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models.legacy_metric_point import LegacyMetricPoint
 from app.schemas.legacy_metrics import (
     AiInsightExtrasRead,
+    AiInsightHistoryRead,
     BackupVaultDashboardRead,
     BackupVaultIncrementalRead,
     BackupVaultMonitoringRead,
@@ -25,7 +26,7 @@ from app.schemas.legacy_metrics import (
     LegacyStreamStatusRead,
     LegacySyncResultRead,
 )
-from app.services.ai_insights_portal import fetch_ai_insights_extras
+from app.services.ai_insights_portal import fetch_ai_insights_extras, fetch_ai_insights_history
 from app.services.backupvault_portal import (
     fetch_backupvault_dashboard,
     fetch_backupvault_incremental,
@@ -123,6 +124,17 @@ def inventory_catalog() -> InventoryCatalogRead:
 @router.get("/ai-insights/extras", response_model=AiInsightExtrasRead)
 def ai_insights_extras() -> AiInsightExtrasRead:
     return AiInsightExtrasRead.model_validate(fetch_ai_insights_extras())
+
+
+@router.get("/ai-insights/history", response_model=AiInsightHistoryRead)
+def ai_insights_history(
+    range_id: str = Query(default="60m", alias="range"),
+    group: str = Query(default="all"),
+    server_id: int | None = Query(default=None),
+) -> AiInsightHistoryRead:
+    return AiInsightHistoryRead.model_validate(
+        fetch_ai_insights_history(range_id, group, server_id)
+    )
 
 
 @router.get("/voicemg/extras", response_model=VoiceMgExtrasRead)

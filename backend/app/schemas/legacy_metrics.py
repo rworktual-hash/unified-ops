@@ -527,6 +527,33 @@ class AiInsightExtrasRead(BaseModel):
     servers: list[AiInsightExtraRead]
 
 
+class AiInsightHistoryPointRead(BaseModel):
+    ts: datetime
+    cpu_utilization: float | None = None
+    memory_utilization: float | None = None
+    storage_utilization: float | None = None
+    load_average: float | None = None
+    gpu_utilization: float | None = None
+    gpu_temperature: float | None = None
+
+
+class AiInsightHistoryRead(BaseModel):
+    ok: bool
+    database: str | None = None
+    reason: str | None = None
+    range: str
+    group: str
+    since: datetime | None = None
+    until: datetime | None = None
+    bucket_seconds: int = 60
+    host_count: int = 0
+    point_count: int = 0
+    points: list[AiInsightHistoryPointRead]
+    server_id: int | None = None
+    host_name: str | None = None
+    source_table: str | None = None
+
+
 class VoiceMgExtraRead(BaseModel):
     id: int
     hostname: str

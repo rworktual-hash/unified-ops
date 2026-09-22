@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.config import settings
 from app.db.legacy_metrics_session import get_legacy_metrics_engine
@@ -417,3 +418,247 @@ def _map_server(row, alerts: dict[int, int]) -> dict:
         "recorded_at": _first(row, "svc_created_at", "m_timestamp", "m_created_at", "h_created_at"),
         "extras": extras,
     }
+
+
+HISTORY_RANGES = {"30m", "60m", "1h", "2h", "today"}
+HISTORY_GROUPS = {gid for gid, _label in _GROUP_DEFS} | {"all", "other"}
+_METRIC_ALIASES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("cpu_utilization", "cpu_util", "cpu_pct"), "cpu_utilization"),
+    (("memory_utilization", "mem_util", "mem_pct"), "memory_utilization"),
+    (("storage_utilization", "disk_util", "disk_used_pct"), "storage_utilization"),
+    (("load_average", "load1", "load"), "load_average"),
+    (("gpu_utilization", "gpu_util"), "gpu_utilization"),
+    (("gpu_temperature", "gpu_temp"), "gpu_temperature"),
+)
+
+
+def history_window(range_id: str, now: datetime, today) -> tuple[datetime, datetime, int]:
+    start_of_today = datetime.combine(today, datetime.min.time())
+    if range_id == "30m":
+        return now - timedelta(minutes=30), now, 30
+    if range_id in {"60m", "1h"}:
+        return now - timedelta(hours=1), now, 60
+    if range_id == "2h":
+        return now - timedelta(hours=2), now, 60
+    if range_id == "today":
+        return start_of_today, now, 300
+    return now - timedelta(hours=1), now, 60
+
+
+def _empty_history(
+    reason: str,
+    range_id: str = "60m",
+    group: str = "all",
+    database: str | None = None,
+    server_id: int | None = None,
+) -> dict:
+    return {
+        "ok": False,
+        "reason": reason,
+        "database": database,
+        "range": range_id,
+        "group": group,
+        "since": None,
+        "until": None,
+        "bucket_seconds": 60,
+        "host_count": 0,
+        "point_count": 0,
+        "points": [],
+        "server_id": server_id,
+        "host_name": None,
+        "source_table": None,
+    }
+
+
+def _pick_ident(cols: list[str], *names: str) -> str | None:
+    for name in names:
+        if name and name in cols and _IDENT.match(name):
+            return name
+    return None
+
+
+def _history_table(conn) -> tuple[str | None, list[str]]:
+    seen: list[str] = []
+    preferred = settings.legacy_ai_insights_table or "ai_server_metrics"
+    for name in (preferred, "ai_server_metrics", "ai_server_metrics_history"):
+        if name in seen or not _IDENT.match(name):
+            continue
+        seen.append(name)
+        if _table_exists(conn, name):
+            cols = _safe_columns(conn, name)
+            if cols:
+                return name, cols
+    return None, []
+
+
+def _metric_avgs(cols: list[str]) -> list[str]:
+    used: set[str] = set()
+    parts: list[str] = []
+    for aliases, dest in _METRIC_ALIASES:
+        if dest in used:
+            continue
+        src = _pick_ident(cols, *aliases)
+        if src is None:
+            continue
+        parts.append(f"AVG(`{src}`) AS `{dest}`")
+        used.add(dest)
+    return parts
+
+
+def fetch_ai_insights_history(
+    range_id: str = "60m",
+    group: str = "all",
+    server_id: int | None = None,
+) -> dict:
+    range_id = range_id if range_id in HISTORY_RANGES else "60m"
+    group = group if group in HISTORY_GROUPS else "all"
+    cache_key = f"ai_insights_history:{range_id}:{group}:{server_id or 'all'}"
+    cached = get_cached(cache_key)
+    if cached is not None:
+        return cached
+    out = _fetch_ai_insights_history(range_id, group, server_id)
+    set_cached(cache_key, out)
+    return out
+
+
+def _fetch_ai_insights_history(range_id: str, group: str, server_id: int | None) -> dict:
+    engine, extra = _engine()
+    if engine is None:
+        return _empty_history(extra, range_id, group, server_id=server_id)
+    database = extra
+    try:
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("SET SESSION max_execution_time = 15000"))
+            except Exception:
+                pass
+            clock = conn.execute(text("SELECT NOW() AS now, CURDATE() AS today")).mappings().first()
+            now = clock["now"] if clock else datetime.now()
+            today = clock["today"] if clock else now.date()
+            since, until, bucket_seconds = history_window(range_id, now, today)
+            table, metric_cols = _history_table(conn)
+            if table is None:
+                return _empty_history(
+                    "ai_server_metrics table not found", range_id, group, database, server_id
+                )
+            time_col = _pick_ident(
+                metric_cols,
+                settings.legacy_ai_insights_col_time,
+                "timestamp",
+                "created_at",
+                "recorded_at",
+                "ts",
+            )
+            host_col = _pick_ident(
+                metric_cols,
+                settings.legacy_ai_insights_col_host,
+                "server_id",
+                "ai_server_id",
+            )
+            avgs = _metric_avgs(metric_cols)
+            if time_col is None or host_col is None or not avgs:
+                return _empty_history(
+                    "history columns missing", range_id, group, database, server_id
+                )
+            hosts = _history_hosts(conn)
+            selected: list[dict] = []
+            for host in hosts:
+                hid = host["id"]
+                if server_id is not None and hid != server_id:
+                    continue
+                if group != "all" and host["group_id"] != group:
+                    continue
+                selected.append(host)
+            if not selected:
+                empty = _empty_history("no matching host", range_id, group, database, server_id)
+                empty["ok"] = True
+                empty["reason"] = None
+                empty["since"] = since
+                empty["until"] = until
+                empty["bucket_seconds"] = bucket_seconds
+                empty["source_table"] = table
+                return empty
+            ids = [h["id"] for h in selected]
+            rows = (
+                conn.execute(
+                    text(
+                        f"SELECT FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(`{time_col}`) / :b) * :b) AS ts, "
+                        f"{', '.join(avgs)} FROM `{table}` "
+                        f"WHERE `{host_col}` IN :ids AND `{time_col}` >= :since AND `{time_col}` <= :until "
+                        "GROUP BY 1 ORDER BY 1 LIMIT 400"
+                    ).bindparams(bindparam("ids", expanding=True)),
+                    {"ids": ids, "since": since, "until": until, "b": bucket_seconds},
+                )
+                .mappings()
+                .all()
+            )
+            points = [
+                {
+                    "ts": row["ts"],
+                    "cpu_utilization": _num(row.get("cpu_utilization")),
+                    "memory_utilization": _num(row.get("memory_utilization")),
+                    "storage_utilization": _num(row.get("storage_utilization")),
+                    "load_average": _num(row.get("load_average")),
+                    "gpu_utilization": _num(row.get("gpu_utilization")),
+                    "gpu_temperature": _num(row.get("gpu_temperature")),
+                }
+                for row in rows
+                if row.get("ts") is not None
+            ]
+            matched = selected[0] if server_id is not None and len(selected) == 1 else None
+            return {
+                "ok": True,
+                "reason": None,
+                "database": database,
+                "range": range_id,
+                "group": group,
+                "since": since,
+                "until": until,
+                "bucket_seconds": bucket_seconds,
+                "host_count": len(selected),
+                "point_count": len(points),
+                "points": points,
+                "server_id": server_id,
+                "host_name": matched["name"] if matched else None,
+                "source_table": table,
+            }
+    except Exception as exc:
+        return _empty_history(str(exc), range_id, group, database, server_id)
+
+
+def _history_hosts(conn) -> list[dict]:
+    if not _table_exists(conn, "ai_servers"):
+        return []
+    server_cols = _safe_columns(conn, "ai_servers")
+    if "id" not in server_cols:
+        return []
+    group_cols = _safe_columns(conn, "ai_groups") if _table_exists(conn, "ai_groups") else []
+    join_col = next((c for c in ("group_id", "server_group", "group") if c in server_cols), None)
+    group_select = ""
+    group_join = ""
+    if group_cols and "id" in group_cols and join_col:
+        label_cols = [c for c in ("label", "description", "id") if c in group_cols]
+        group_select = ", " + _select("g", label_cols, "g_")
+        group_join = f" LEFT JOIN ai_groups g ON g.id = s.`{join_col}` "
+    order_col = "server_name" if "server_name" in server_cols else "id"
+    rows = (
+        conn.execute(
+            text(
+                f"SELECT {_select('s', server_cols)}{group_select} "
+                f"FROM ai_servers s{group_join} ORDER BY s.`{order_col}` LIMIT 80"
+            )
+        )
+        .mappings()
+        .all()
+    )
+    out: list[dict] = []
+    for row in rows:
+        hid = _int(row.get("id"))
+        if hid is None:
+            continue
+        name = _str(_first(row, "server_name", "hostname")) or f"ai-{hid}"
+        server_type = _str(_first(row, "server_type", "g_collector_kind"))
+        raw_group = _str(_first(row, "g_label", "g_id", "server_group", "group_id", "group"))
+        group_id, _label = normalize_ai_group(name, raw_group, server_type)
+        out.append({"id": hid, "name": name, "group_id": group_id})
+    return out

@@ -1928,6 +1928,25 @@ button.linkish {
   padding: 0.95rem 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.ai-group-card.active {
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 1px #6d28d9;
+}
+
+.ai-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0 0.25rem;
 }
 
 .ai-group-card h3 {

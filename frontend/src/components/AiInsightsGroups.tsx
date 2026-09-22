@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react'
-import type { AiInsightExtra } from '../api'
+import type { AiInsightExtra, AiInsightHistoryRange } from '../api'
 import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
 import { AiInsightsCharts, buildGroupRows } from './AiInsightsCharts'
+import { AiInsightsHistory } from './AiInsightsHistory'
+
+const HISTORY_RANGES: Array<{ id: AiInsightHistoryRange; label: string }> = [
+  { id: '30m', label: '30 min' },
+  { id: '60m', label: '60 min' },
+  { id: '2h', label: '2 hours' },
+  { id: 'today', label: 'Today' },
+]
 
 function healthClass(score: number | null): string {
   if (score == null) return 'unknown'
@@ -29,11 +37,14 @@ type Props = {
 
 export function AiInsightsGroups({ extras }: Props) {
   const [filter, setFilter] = useState('all')
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [historyRange, setHistoryRange] = useState<AiInsightHistoryRange>('60m')
   const groups = useMemo(() => buildGroupRows(extras), [extras])
   const rows = useMemo(() => {
     if (filter === 'all') return extras
     return extras.filter((row) => (row.group_id || 'other') === filter)
   }, [extras, filter])
+  const selected = rows.find((row) => row.id === selectedId) ?? null
   const title = filter === 'all' ? 'All Servers' : groups.find((g) => g.id === filter)?.label || 'Group'
   const kpis = {
     servers: rows.length,
@@ -54,8 +65,8 @@ export function AiInsightsGroups({ extras }: Props) {
           <h2>AI Insights groups</h2>
           <p className="muted">
             Live from MariaDB <code>ai_insights_platform</code> — updates every{' '}
-            {LIVE_EXTRAS_INTERVAL_MS / 1000}s. Same groups as aiservers.worktual.tech. Charts are a
-            live group breakdown, not the old pies.
+            {LIVE_EXTRAS_INTERVAL_MS / 1000}s. Same groups as aiservers.worktual.tech. Click a host
+            for a 60-minute series.
           </p>
         </div>
       </div>
@@ -113,9 +124,40 @@ export function AiInsightsGroups({ extras }: Props) {
         onSelectGroup={(id) => setFilter((prev) => (prev === id ? 'all' : id))}
       />
 
+      <div className="ai-history-toolbar">
+        <div className="bv-tabs" role="tablist" aria-label="AI Insights history range">
+          {HISTORY_RANGES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`bv-tab ${historyRange === item.id ? 'active' : ''}`}
+              onClick={() => setHistoryRange(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <p className="muted bv-sub">
+          {selected
+            ? `${selected.server_name} · click again to show fleet average`
+            : 'Fleet average for the group in view · click a host to isolate'}
+        </p>
+      </div>
+      <AiInsightsHistory
+        range={historyRange}
+        group={filter}
+        serverId={selected?.id ?? null}
+        hostName={selected?.server_name ?? null}
+      />
+
       <div className="ai-group-cards">
         {rows.map((row) => (
-          <article key={row.id} className="ai-group-card">
+          <button
+            key={row.id}
+            type="button"
+            className={`ai-group-card ${selectedId === row.id ? 'active' : ''}`}
+            onClick={() => setSelectedId((prev) => (prev === row.id ? null : row.id))}
+          >
             <div className="ai-extra-head">
               <span className="muted">{row.group || row.server_type || 'Host'}</span>
               <span className={`bv-pill bv-pill--${healthClass(row.health_score)}`}>
@@ -133,7 +175,7 @@ export function AiInsightsGroups({ extras }: Props) {
             {row.open_alerts > 0 ? (
               <p className="muted bv-sub">{row.open_alerts} open alerts</p>
             ) : null}
-          </article>
+          </button>
         ))}
       </div>
     </section>
