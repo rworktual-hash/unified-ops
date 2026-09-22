@@ -42,6 +42,8 @@ def build_diagnosis(
             "Read-only extras: "
             f"docker {extras.get('docker_active')} · containers {docker}"
         )
+        if extras.get("docker_active") is False:
+            lines.append("Docker is inactive on this GPU host.")
         if extras.get("process_sample"):
             lines.append(f"Process sample:\n{extras['process_sample']}")
         if extras.get("log_tail"):
@@ -57,42 +59,54 @@ def build_diagnosis(
                 + (f" · {g.get('error')}" if g.get("error") else "")
             )
 
-    guidance = _guidance_for_alert(alert_type)
+    guidance = _guidance_for_alert(alert_type, extras)
     lines.append("")
-    lines.append("Assessment (read-only, no changes made on server):")
+    lines.append("Assessment (no changes made yet):")
     lines.extend(guidance)
+    lines.append("")
+    lines.append(
+        "Next: the agent will open a pending approval that names the exact command "
+        "and impact. Nothing runs until a human Approve + Confirm run. "
+        "Reject or Cancel = no command."
+    )
 
     summary = guidance[0] if guidance else "Investigation completed (diagnosis only)."
     return summary, "\n".join(lines)
 
 
-def _guidance_for_alert(alert_type: str | None) -> list[str]:
+def _guidance_for_alert(alert_type: str | None, extras: dict[str, Any] | None = None) -> list[str]:
+    extras = extras or {}
+    if extras.get("docker_active") is False:
+        return [
+            "Docker is down on this GPU host — the agent will ask to run `sudo systemctl restart docker`.",
+            "That command waits for Approve + Confirm run. It does not reboot or reset GPUs.",
+        ]
     if not alert_type:
-        return ["Review metrics and alerts; no automatic remediation in Phase 5."]
+        return ["Review metrics and alerts. Agent will request a read-only recollect after approval."]
 
     if alert_type == "mem_high":
         return [
             "Memory usage is elevated — review top processes and recent workload changes.",
-            "Do not restart services automatically; escalate if sustained.",
+            "Agent will request a read-only recollect. No restart or process kill.",
         ]
     if alert_type == "disk_high":
         return [
             "Root filesystem usage is high — check logs, caches, and old artifacts.",
-            "Plan cleanup with server team; no destructive deletes from Unified Ops.",
+            "No destructive deletes from Unified Ops. Agent will request a read-only recollect.",
         ]
     if alert_type.startswith("gpu_temp_high"):
         return [
             "GPU temperature is high — verify cooling/airflow and workload.",
-            "No GPU reset or driver changes from the agent (admin manual only).",
+            "No GPU reset or driver changes. Agent will request a read-only recollect.",
         ]
     if alert_type.startswith("gpu_error") or alert_type == "gpu_missing":
         return [
-            "GPU check failed or missing — verify nvidia-smi with timeout, driver, and hung processes.",
-            "If nvidia-smi hangs, treat as incident and involve admin (no auto GPU reset).",
+            "GPU check failed or missing — verify nvidia-smi, driver, and hung processes.",
+            "If nvidia-smi hangs, treat as incident. No auto GPU reset.",
         ]
     if alert_type == "collect_failed":
         return [
             "Could not collect metrics — verify SSH key, user, port, and network path.",
-            "Re-run Test SSH from Unified Ops after fixing access.",
+            "Agent will request SSH verify after approval.",
         ]
-    return ["Review alert context and recent metrics; human follow-up recommended."]
+    return ["Review alert context and recent metrics. Agent will request a read-only recollect."]

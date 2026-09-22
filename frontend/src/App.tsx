@@ -80,6 +80,7 @@ function App() {
   const [approvalCatalog, setApprovalCatalog] = useState<ApprovalCatalog>({
     safe_actions: ['recollect_metrics', 'ssh_verify'],
     restart_services: [],
+    gpu_restart_services: [],
   })
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
@@ -255,6 +256,17 @@ function App() {
       }
     },
     [showAllApprovals],
+  )
+
+  const gpuRestartServices = useCallback(
+    (serverId: number | null | undefined) => {
+      const host = servers.find((s) => s.id === serverId)
+      if (!host || host.server_type !== 'gpu' || !host.is_active) return []
+      return approvalCatalog.gpu_restart_services?.length
+        ? approvalCatalog.gpu_restart_services
+        : ['docker']
+    },
+    [approvalCatalog.gpu_restart_services, servers],
   )
 
   const navItems: { id: NavId; label: string }[] = [
@@ -489,7 +501,7 @@ function App() {
                       setInvestigatingId(null)
                     }
                   }}
-                  restartServices={approvalCatalog.restart_services}
+                  restartServices={gpuRestartServices(s.id)}
                   onRequestRecollect={() => void requestApproval(s.id, 'recollect_metrics')}
                   onRequestSshVerify={() => void requestApproval(s.id, 'ssh_verify')}
                   onRequestRestart={(service) =>
@@ -627,7 +639,7 @@ function App() {
                             )}
                             {a.inventory_server_id && a.inventory_active ? (
                               <ApprovalRequestButtons
-                                restartServices={approvalCatalog.restart_services}
+                                restartServices={gpuRestartServices(a.inventory_server_id)}
                                 onRecollect={() =>
                                   void requestApproval(a.inventory_server_id!, 'recollect_metrics')
                                 }
@@ -718,7 +730,7 @@ function App() {
                                   Resolve
                                 </button>
                                 <ApprovalRequestButtons
-                                  restartServices={approvalCatalog.restart_services}
+                                  restartServices={gpuRestartServices(a.server_id)}
                                   onRecollect={() =>
                                     void requestApproval(a.server_id, 'recollect_metrics', undefined, a.id)
                                   }

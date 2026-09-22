@@ -42,7 +42,7 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
           <dd>{approval.alert_reason || approval.request_notes || 'Operator requested this check.'}</dd>
         </div>
       </dl>
-      <p className="approval-ask">Can the agent run this command?</p>
+      <p className="approval-ask">The agent wants to run this on the matched host. Approve, then Confirm run.</p>
       <pre className="readonly-sample">
         {approval.proposed_command || actionTitle(approval.action_key)}
       </pre>

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.approval_request import ApprovalRequest
 from app.models.server import Server
-from app.policies.executor_actions import SAFE_ACTION_KEYS, allowlisted_restart_services
+from app.policies.executor_actions import SAFE_ACTION_KEYS, gpu_restart_services
 from app.schemas.approval import (
     ApprovalCatalogRead,
     ApprovalCreate,
@@ -22,7 +22,8 @@ router = APIRouter(prefix="/approvals", tags=["approvals"])
 def approval_catalog() -> ApprovalCatalogRead:
     return ApprovalCatalogRead(
         safe_actions=sorted(SAFE_ACTION_KEYS),
-        restart_services=sorted(allowlisted_restart_services()),
+        restart_services=[],
+        gpu_restart_services=gpu_restart_services(),
     )
 
 

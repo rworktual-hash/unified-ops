@@ -48,4 +48,5 @@ class ApprovalDecision(BaseModel):
 
 class ApprovalCatalogRead(BaseModel):
     safe_actions: list[str]
-    restart_services: list[str]
+    restart_services: list[str] = []
+    gpu_restart_services: list[str] = []

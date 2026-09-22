@@ -101,6 +101,7 @@ def run_investigation(
     approval_id = None
     proposed_action = None
     try:
+        extras = (final.get("tool_results") or {}).get("check_readonly_extras") or {}
         approval = propose_after_investigation(
             db,
             server=server,
@@ -109,6 +110,7 @@ def run_investigation(
             alert_message=alert_message,
             diagnosis=final.get("diagnosis"),
             host_collect_error=(metrics.get("host") or {}).get("collect_error"),
+            extras=extras,
         )
         approval_id = approval.id
         proposed_action = approval.action_key

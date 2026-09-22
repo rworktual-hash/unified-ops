@@ -598,6 +598,7 @@ export async function listApprovals(status?: string): Promise<Approval[]> {
 export type ApprovalCatalog = {
   safe_actions: string[]
   restart_services: string[]
+  gpu_restart_services?: string[]
 }
 
 export async function fetchApprovalCatalog(): Promise<ApprovalCatalog> {

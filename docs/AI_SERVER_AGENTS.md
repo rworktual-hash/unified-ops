@@ -11,7 +11,7 @@ This file is the current contract. Update it when a Level 4 check or Level 5 com
 | Level | Name | May the agent run it alone? | Status |
 |-------|------|-----------------------------|--------|
 | 4 | Safe execution (read-only) | Yes, on the 5-minute collect (when Celery is on) or when you click Collect | **Live** |
-| 5 | Human approval | No. Investigate explains → pending approval → Approve → Confirm run | **Live (two commands only)** |
+| 5 | Human approval | No. Investigate explains → pending approval → Approve → Confirm run | **Live (recollect / SSH verify; Docker restart on GPU only)** |
 | 6 | Admin only | Never. Report and stop | **Blocked** |
 
 ---
@@ -52,12 +52,15 @@ After **Investigate** (server card, SSH Collect alert, or live `.222` alert matc
 
 ### Commands the agent may run today (after Confirm run)
 
-| Action | What it does | What it does not do |
-|--------|----------------|---------------------|
-| **Recollect metrics** | SSH collect CPU/RAM/disk/GPU, store, re-evaluate alerts | Restart, delete, change config |
-| **SSH verify** | SSH connection test | Any change on the host |
+| Action | Who | What it does | What it does not do |
+|--------|-----|----------------|---------------------|
+| **Recollect metrics** | Any active host | SSH collect CPU/RAM/disk/GPU, store, re-evaluate alerts | Restart, delete, change config |
+| **SSH verify** | Any active host | SSH connection test | Any change on the host |
+| **Restart Docker** | **Active GPU only** (148/149 today) | `sudo systemctl restart docker` when Docker is down | Reboot, `nvidia-smi -r`, driver/CUDA update, kill processes, write `.222` |
 
-If collect itself failed, the proposal is **SSH verify**. Otherwise it is **Recollect** (recheck numbers). Restart / Docker restart / kill GPU process / clear cache / delete logs / pause / failover / settings / repair scripts are **not wired**.
+Investigate writes the issue, the exact command, and the impact on the approval. Approve is not enough. Confirm run is required. Inactive GPU 165/166 stay skipped.
+
+If collect failed → **SSH verify**. If GPU Docker is inactive → **Restart Docker**. Otherwise → **Recollect**. Kill GPU process / clear cache / delete logs / pause / failover / repair scripts stay unwired.
 
 ---
 
@@ -72,5 +75,6 @@ Reboot, shutdown, GPU reset, NVIDIA/CUDA or OS update, format disk, change SSH k
 | Date | Change |
 |------|--------|
 | 2026-09-21 | Document created. Level 4 read-only collect + extras. Level 5 Investigate → explanation → two-step confirm for recollect / SSH verify only. |
+| 2026-09-22 | GPU-only remediations: agent explains issue + exact command; Docker restart (`sudo systemctl restart docker`) after Approve + Confirm run when Docker is down. Non-GPU hosts stay recollect / SSH verify. |
 
 Add a row here whenever we add a command or a collect check.

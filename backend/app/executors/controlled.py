@@ -33,7 +33,7 @@ def execute_approved_action(
     action_params_raw: str | None,
 ) -> ExecutionResult:
     params = _parse_params(action_params_raw)
-    allowed, reason = is_action_allowed(action_key, params)
+    allowed, reason = is_action_allowed(action_key, params, server=server)
     if not allowed:
         return ExecutionResult(success=False, message="Execution blocked by policy.", detail=reason)
 

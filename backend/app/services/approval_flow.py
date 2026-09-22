@@ -27,21 +27,26 @@ def create_approval_request(
     if not server.is_active:
         raise ValueError("Server is inactive")
 
-    allowed, reason = is_action_allowed(action_key, action_params)
+    allowed, reason = is_action_allowed(action_key, action_params, server=server)
     if not allowed:
         raise ValueError(reason)
 
     params = dict(action_params or {})
-    if action_key in SAFE_COMMANDS and not params.get("proposed_command"):
-        params.update(
-            build_guardrail_params(
-                server=server,
-                action_key=action_key,
-                alert_type=params.get("alert_type") or "manual",
-                alert_message=request_notes,
-                diagnosis=None,
+    if action_key in SAFE_COMMANDS or action_key == "systemctl_restart":
+        if not params.get("proposed_command"):
+            extra = {}
+            if action_key == "systemctl_restart":
+                extra["service_name"] = str(params.get("service_name") or "docker")
+            params.update(
+                build_guardrail_params(
+                    server=server,
+                    action_key=action_key,
+                    alert_type=params.get("alert_type") or "manual",
+                    alert_message=request_notes,
+                    diagnosis=None,
+                    extra_params=extra,
+                )
             )
-        )
 
     now = datetime.now(timezone.utc)
     row = ApprovalRequest(
