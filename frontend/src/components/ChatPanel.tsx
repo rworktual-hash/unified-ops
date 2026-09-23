@@ -13,6 +13,13 @@ type Props = {
   activeServers: Server[]
 }
 
+const SUGGESTIONS = [
+  'Which hosts are low on disk?',
+  'Which GPUs are busy?',
+  'What alerts are open?',
+  'Summarize host health',
+]
+
 export function ChatPanel({ activeServers }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -26,8 +33,8 @@ export function ChatPanel({ activeServers }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
-  const send = useCallback(async () => {
-    const text = input.trim()
+  const send = useCallback(async (raw?: string) => {
+    const text = (raw ?? input).trim()
     if (!text || sending) return
 
     setChatError(null)
@@ -72,6 +79,7 @@ export function ChatPanel({ activeServers }: Props) {
   return (
     <section className="chat-panel">
       <div className="chat-toolbar">
+        <span className="muted chat-toolbar-note">Latest collect for the scope you pick</span>
         <label className="chat-scope-label">
           Scope
           <select
@@ -92,7 +100,23 @@ export function ChatPanel({ activeServers }: Props) {
 
       <div className="chat-messages" aria-live="polite">
         {messages.length === 0 && !sending && (
-          <p className="chat-empty">Ask about health, GPUs, disk, or alerts for your connected servers.</p>
+          <div className="chat-empty">
+            <p className="chat-empty-title">Ask about the fleet</p>
+            <p>Health, disk, GPUs, and alerts for the hosts in scope.</p>
+            <div className="chat-suggestions">
+              {SUGGESTIONS.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  className="chat-suggestion"
+                  disabled={sending}
+                  onClick={() => void send(question)}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`chat-bubble ${m.role}`}>
