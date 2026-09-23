@@ -1817,11 +1817,11 @@ th {
   color: #92400e;
 }
 
-.alert-item .badge.warning {
-  animation: alert-warn-blink 1.15s ease-in-out infinite;
+.alert-item .badge.critical {
+  animation: alert-critical-blink 1.15s ease-in-out infinite;
 }
 
-@keyframes alert-warn-blink {
+@keyframes alert-critical-blink {
   0%,
   100% {
     opacity: 1;
@@ -1832,7 +1832,7 @@ th {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .alert-item .badge.warning {
+  .alert-item .badge.critical {
     animation: none;
   }
 }

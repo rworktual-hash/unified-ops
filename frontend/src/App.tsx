@@ -103,6 +103,7 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([])
   const [liveAlertsReason, setLiveAlertsReason] = useState<string | null>(null)
+  const [alertsLoaded, setAlertsLoaded] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
@@ -151,8 +152,24 @@ function App() {
       await fetchHealth()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Cannot reach API. Start the backend on port 8000.')
+      setAlertsLoaded(true)
       return
     }
+    const alertsTask = (async () => {
+      try {
+        setAlerts(await listAlerts(showResolved ? undefined : 'open'))
+        try {
+          const live = await listLiveAlerts()
+          setLiveAlerts(live.ok ? live.alerts : [])
+          setLiveAlertsReason(live.ok ? null : live.reason)
+        } catch {
+          setLiveAlerts([])
+          setLiveAlertsReason('Failed to load live .222 alerts')
+        }
+      } finally {
+        setAlertsLoaded(true)
+      }
+    })()
     try {
       const list = await listServers()
       setServers(list)
@@ -186,15 +203,7 @@ function App() {
       } catch {
         setFleetStatus(null)
       }
-      setAlerts(await listAlerts(showResolved ? undefined : 'open'))
-      try {
-        const live = await listLiveAlerts()
-        setLiveAlerts(live.ok ? live.alerts : [])
-        setLiveAlertsReason(live.ok ? null : live.reason)
-      } catch {
-        setLiveAlerts([])
-        setLiveAlertsReason('Failed to load live .222 alerts')
-      }
+      await alertsTask
       setAgentActions(await listAgentActions(15))
       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
     } catch (err) {
@@ -623,7 +632,11 @@ function App() {
           </div>
         )}
 
-        {nav === 'alerts' && (
+        {nav === 'alerts' && !alertsLoaded && (
+          <p className="muted">Loading alerts…</p>
+        )}
+
+        {nav === 'alerts' && alertsLoaded && (
           <>
             <header className="page-head servers-status">
               <p className="fleet-status-line">
