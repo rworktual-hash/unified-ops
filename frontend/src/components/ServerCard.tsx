@@ -11,6 +11,7 @@ function uniqueGpusByIndex(rows: GpuMetric[]): GpuMetric[] {
   return [...byIndex.values()].sort((a, b) => a.gpu_index - b.gpu_index)
 }
 import { ApprovalRequestButtons } from './ApprovalRequestButtons'
+import { HostServices } from './HostServices'
 import { MetricBar } from './MetricBar'
 import { ServerMetricsCharts } from './ServerMetricsCharts'
 
@@ -30,6 +31,7 @@ type Props = {
   onRequestRecollect: () => void
   onRequestSshVerify: () => void
   onRequestRestart?: (service: string) => void
+  variant?: 'card' | 'host'
 }
 
 export function ServerCard({
@@ -48,6 +50,7 @@ export function ServerCard({
   onRequestRecollect,
   onRequestSshVerify,
   onRequestRestart,
+  variant = 'card',
 }: Props) {
   const host = metrics?.host[0]
   const isGpu = server.server_type === 'gpu'
@@ -62,7 +65,49 @@ export function ServerCard({
 
   const loadDisplay = host?.load_1m != null ? host.load_1m.toFixed(2) : '—'
   const loadPct = host?.load_1m != null ? Math.min(100, (host.load_1m / 8) * 100) : null
-  const cpuUtil = insights?.cpu_util_pct ?? null
+  const cpuUtil = insights?.cpu_util_pct ?? extra?.cpu_utilization ?? null
+  const isHost = variant === 'host'
+  const memPct = host?.mem_used_pct ?? extra?.memory_utilization ?? null
+  const diskPct = host?.disk_root_pct ?? extra?.storage_utilization ?? null
+
+  const gpuCards = gpus.map((g) => (
+    <div key={g.gpu_index} className="gpu-per-card">
+      <strong>GPU {g.gpu_index}</strong>
+      <span>{g.utilization_pct != null ? `${g.utilization_pct.toFixed(0)}% util` : '—'}</span>
+      <span>
+        {g.mem_used_pct != null
+          ? `${g.mem_used_pct.toFixed(0)}% VRAM`
+          : g.mem_used_mb != null && g.mem_total_mb
+            ? `${((g.mem_used_mb / g.mem_total_mb) * 100).toFixed(0)}% VRAM`
+            : '—'}
+      </span>
+      <span>{g.temperature_c != null ? `${g.temperature_c.toFixed(0)}°C` : '—'}</span>
+      <span className="gpu-per-meta">
+        {g.power_w != null ? `${g.power_w.toFixed(0)} W` : '—'}
+        {g.clock_mhz != null ? ` · ${g.clock_mhz.toFixed(0)} MHz` : ''}
+      </span>
+    </div>
+  ))
+
+  const actions = (
+    <>
+      <button type="button" className="btn ghost" disabled={testing} onClick={onTest}>
+        {testing ? 'Testing…' : 'Test SSH'}
+      </button>
+      <button type="button" className="btn primary" disabled={collecting} onClick={onCollect}>
+        {collecting ? 'Collecting…' : 'Collect metrics'}
+      </button>
+      <button type="button" className="btn ghost" disabled={investigating} onClick={onInvestigate}>
+        {investigating ? 'Working…' : 'Investigate'}
+      </button>
+      <ApprovalRequestButtons
+        restartServices={restartServices}
+        onRecollect={onRequestRecollect}
+        onSshVerify={onRequestSshVerify}
+        onRestart={onRequestRestart}
+      />
+    </>
+  )
 
   return (
     <article className="server-card">
@@ -96,6 +141,34 @@ export function ServerCard({
 
       {server.is_active ? (
         <>
+          {isHost ? (
+            <>
+              <div className="host-kpis">
+                <div className="host-kpi">
+                  <span>CPU load</span>
+                  <strong>{loadDisplay}</strong>
+                </div>
+                <div className="host-kpi">
+                  <span>Memory</span>
+                  <strong>{memPct != null ? `${memPct.toFixed(0)}%` : '—'}</strong>
+                </div>
+                <div className="host-kpi">
+                  <span>Disk</span>
+                  <strong>{diskPct != null ? `${diskPct.toFixed(0)}%` : '—'}</strong>
+                </div>
+                <div className="host-kpi">
+                  <span>Health</span>
+                  <strong>{extra?.health_score != null ? extra.health_score : '—'}</strong>
+                </div>
+                <div className="host-kpi">
+                  <span>Open alerts</span>
+                  <strong>{extra?.open_alerts != null ? extra.open_alerts : '—'}</strong>
+                </div>
+              </div>
+              <HostServices server={server} dockerActive={product?.docker_active} />
+            </>
+          ) : null}
+
           <div className="metric-bars">
             <MetricBar
               label="CPU load"
@@ -106,13 +179,13 @@ export function ServerCard({
             />
             <MetricBar
               label="Memory"
-              valuePct={host?.mem_used_pct ?? null}
-              display={host?.mem_used_pct != null ? `${host.mem_used_pct.toFixed(1)}%` : '—'}
+              valuePct={memPct}
+              display={memPct != null ? `${memPct.toFixed(1)}%` : '—'}
             />
             <MetricBar
               label="Disk /"
-              valuePct={host?.disk_root_pct ?? null}
-              display={host?.disk_root_pct != null ? `${host.disk_root_pct.toFixed(1)}%` : '—'}
+              valuePct={diskPct}
+              display={diskPct != null ? `${diskPct.toFixed(1)}%` : '—'}
             />
             {cpuUtil != null ? (
               <MetricBar
@@ -155,31 +228,19 @@ export function ServerCard({
               </div>
 
               {gpus.length > 0 ? (
-                <details className="gpu-detail-fold">
-                  <summary>
-                    Per-GPU ({gpus.length} device{gpus.length === 1 ? '' : 's'} on this host)
-                  </summary>
-                  <div className="gpu-per-cards">
-                    {gpus.map((g) => (
-                      <div key={g.gpu_index} className="gpu-per-card">
-                        <strong>GPU {g.gpu_index}</strong>
-                        <span>{g.utilization_pct != null ? `${g.utilization_pct.toFixed(0)}% util` : '—'}</span>
-                        <span>
-                          {g.mem_used_pct != null
-                            ? `${g.mem_used_pct.toFixed(0)}% VRAM`
-                            : g.mem_used_mb != null && g.mem_total_mb
-                              ? `${((g.mem_used_mb / g.mem_total_mb) * 100).toFixed(0)}% VRAM`
-                              : '—'}
-                        </span>
-                        <span>{g.temperature_c != null ? `${g.temperature_c.toFixed(0)}°C` : '—'}</span>
-                        <span className="gpu-per-meta">
-                          {g.power_w != null ? `${g.power_w.toFixed(0)} W` : '—'}
-                          {g.clock_mhz != null ? ` · ${g.clock_mhz.toFixed(0)} MHz` : ''}
-                        </span>
-                      </div>
-                    ))}
+                isHost ? (
+                  <div className="host-gpu">
+                    <p className="metric-label">GPUs on this host</p>
+                    <div className="gpu-per-cards">{gpuCards}</div>
                   </div>
-                </details>
+                ) : (
+                  <details className="gpu-detail-fold">
+                    <summary>
+                      Per-GPU ({gpus.length} device{gpus.length === 1 ? '' : 's'} on this host)
+                    </summary>
+                    <div className="gpu-per-cards">{gpuCards}</div>
+                  </details>
+                )
               ) : null}
             </>
           )}
@@ -313,31 +374,29 @@ export function ServerCard({
             </p>
           ) : null}
 
-          <div className="server-toolbar">
-            <ServerMetricsCharts
-              serverId={server.id}
-              serverName={server.server_name}
-              isGpu={isGpu}
-            />
-
-            <div className="server-actions">
-              <button type="button" className="btn ghost" disabled={testing} onClick={onTest}>
-                {testing ? 'Testing…' : 'Test SSH'}
-              </button>
-              <button type="button" className="btn primary" disabled={collecting} onClick={onCollect}>
-                {collecting ? 'Collecting…' : 'Collect metrics'}
-              </button>
-              <button type="button" className="btn ghost" disabled={investigating} onClick={onInvestigate}>
-                {investigating ? 'Working…' : 'Investigate'}
-              </button>
-              <ApprovalRequestButtons
-                restartServices={restartServices}
-                onRecollect={onRequestRecollect}
-                onSshVerify={onRequestSshVerify}
-                onRestart={onRequestRestart}
+          {isHost ? (
+            <>
+              <ServerMetricsCharts
+                serverId={server.id}
+                serverName={server.server_name}
+                isGpu={isGpu}
+                defaultOpen
+                chartHeight={132}
               />
+              <div className="server-toolbar">
+                <div className="server-actions">{actions}</div>
+              </div>
+            </>
+          ) : (
+            <div className="server-toolbar">
+              <ServerMetricsCharts
+                serverId={server.id}
+                serverName={server.server_name}
+                isGpu={isGpu}
+              />
+              <div className="server-actions">{actions}</div>
             </div>
-          </div>
+          )}
         </>
       ) : (
         <p className="muted-block">

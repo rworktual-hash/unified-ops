@@ -552,6 +552,7 @@ function App() {
                     }
                   }}
                   restartServices={recoveryServices(detailServer.id)}
+                  variant={nav === 'hosts' ? 'host' : 'card'}
                   onRequestRecollect={() => void requestApproval(detailServer.id, 'recollect_metrics')}
                   onRequestSshVerify={() => void requestApproval(detailServer.id, 'ssh_verify')}
                   onRequestRestart={(service) =>

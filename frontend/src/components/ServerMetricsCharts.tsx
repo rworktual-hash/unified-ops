@@ -6,6 +6,8 @@ type Props = {
   serverId: number
   serverName: string
   isGpu: boolean
+  defaultOpen?: boolean
+  chartHeight?: number
 }
 
 function indexByTime<T extends { collected_at: string }>(rows: T[]): Map<string, number> {
@@ -17,9 +19,15 @@ function indexByTime<T extends { collected_at: string }>(rows: T[]): Map<string,
   return map
 }
 
-export function ServerMetricsCharts({ serverId, serverName, isGpu }: Props) {
-  const [hours, setHours] = useState(1)
-  const [open, setOpen] = useState(false)
+export function ServerMetricsCharts({
+  serverId,
+  serverName,
+  isGpu,
+  defaultOpen = false,
+  chartHeight = 72,
+}: Props) {
+  const [hours, setHours] = useState(defaultOpen ? 6 : 1)
+  const [open, setOpen] = useState(defaultOpen)
   const [data, setData] = useState<ServerMetricsHistory | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -115,10 +123,12 @@ export function ServerMetricsCharts({ serverId, serverName, isGpu }: Props) {
   }, [data])
 
   return (
-    <div className="server-charts-wrap">
-      <button type="button" className="btn ghost chart-toggle" onClick={() => setOpen((v) => !v)}>
-        {open ? 'Hide charts' : 'Metrics history'}
-      </button>
+    <div className={`server-charts-wrap${defaultOpen ? ' server-charts-wrap--open' : ''}`}>
+      {defaultOpen ? null : (
+        <button type="button" className="btn ghost chart-toggle" onClick={() => setOpen((v) => !v)}>
+          {open ? 'Hide charts' : 'Metrics history'}
+        </button>
+      )}
       {open ? (
         <div className="server-charts-panel">
           <div className="chart-toolbar">
@@ -140,22 +150,22 @@ export function ServerMetricsCharts({ serverId, serverName, isGpu }: Props) {
           <div className="charts-grid">
             {hostSeries ? (
               <>
-                <SimpleLineChart title="CPU load (1m)" points={hostSeries.load} unit="" />
-                <SimpleLineChart title="Memory" points={hostSeries.mem} unit="%" yMin={0} yMax={100} />
-                <SimpleLineChart title="Disk /" points={hostSeries.disk} unit="%" yMin={0} yMax={100} />
+                <SimpleLineChart title="CPU load (1m)" points={hostSeries.load} unit="" height={chartHeight} />
+                <SimpleLineChart title="Memory" points={hostSeries.mem} unit="%" yMin={0} yMax={100} height={chartHeight} />
+                <SimpleLineChart title="Disk /" points={hostSeries.disk} unit="%" yMin={0} yMax={100} height={chartHeight} />
               </>
             ) : null}
             {insightSeries?.cpu.length ? (
-              <SimpleLineChart title="CPU util" points={insightSeries.cpu} unit="%" yMin={0} yMax={100} />
+              <SimpleLineChart title="CPU util" points={insightSeries.cpu} unit="%" yMin={0} yMax={100} height={chartHeight} />
             ) : null}
             {isGpu && gpuUtilSeries.some((s) => s.points.length > 0) ? (
-              <MultiLineChart title="Per-GPU util" series={gpuUtilSeries} yMin={0} yMax={100} unit="%" />
+              <MultiLineChart title="Per-GPU util" series={gpuUtilSeries} yMin={0} yMax={100} unit="%" height={chartHeight} />
             ) : null}
             {isGpu && gpuVramSeries.some((s) => s.points.length > 0) ? (
-              <MultiLineChart title="Per-GPU VRAM" series={gpuVramSeries} yMin={0} yMax={100} unit="%" />
+              <MultiLineChart title="Per-GPU VRAM" series={gpuVramSeries} yMin={0} yMax={100} unit="%" height={chartHeight} />
             ) : null}
             {insightSeries?.gpuTemp.length ? (
-              <SimpleLineChart title="GPU temp avg" points={insightSeries.gpuTemp} unit="°C" />
+              <SimpleLineChart title="GPU temp avg" points={insightSeries.gpuTemp} unit="°C" height={chartHeight} />
             ) : null}
           </div>
           {!loading && !err && !data?.host.length && !data?.gpu.length ? (
