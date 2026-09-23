@@ -1869,6 +1869,13 @@ th {
   flex: 1 1 12rem;
 }
 
+.agent-log-when {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
 .agent-log-body {
   padding: 0 0 0.75rem;
 }
@@ -1920,6 +1927,12 @@ pre.diagnosis {
 .alert-title-line strong {
   font-size: 0.95rem;
   letter-spacing: -0.02em;
+}
+
+.alert-when {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 0.75rem;
 }
 
 .alert-title {

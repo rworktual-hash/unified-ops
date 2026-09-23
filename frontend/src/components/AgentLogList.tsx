@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { actionTitle } from '../agentLabels'
+import { formatWhen } from '../formatWhen'
 import type { AgentAction } from '../types'
 
 type Props = {
@@ -18,7 +19,7 @@ export function AgentLogList({ items }: Props) {
 
 function AgentLogItem({ item }: { item: AgentAction }) {
   const [open, setOpen] = useState(false)
-  const when = item.created_at ? new Date(item.created_at).toLocaleString() : ''
+  const when = formatWhen(item.created_at)
   return (
     <li className="agent-log-item">
       <button type="button" className="agent-log-head" onClick={() => setOpen((v) => !v)}>
@@ -26,10 +27,8 @@ function AgentLogItem({ item }: { item: AgentAction }) {
           {actionTitle(item.action_type)}
         </span>
         <strong>{item.summary}</strong>
-        <span className="muted">
-          Server #{item.server_id}
-          {when ? ` · ${when}` : ''}
-        </span>
+        <span className="muted">Server #{item.server_id}</span>
+        {when ? <time className="agent-log-when">{when}</time> : null}
       </button>
       {open ? (
         <div className="agent-log-body">

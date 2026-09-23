@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { actionTitle, alertTitle, statusTitle } from '../agentLabels'
+import { formatWhen } from '../formatWhen'
 import type { Approval } from '../types'
 
 type Props = {
@@ -12,6 +13,7 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
   const [step, setStep] = useState<'idle' | 'confirm'>('idle')
   const [busy, setBusy] = useState(false)
   const host = `${approval.server_name} · ${approval.ip_address}`
+  const when = formatWhen(approval.created_at)
   const reason = displayReason(approval)
   const command = (approval.proposed_command || '').trim()
   const shell = isShellCommand(command)
@@ -31,7 +33,10 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
       <header className="approval-card-head">
         <div>
           <p className="approval-card-title">{actionTitle(approval.action_key)}</p>
-          <p className="approval-card-host">{host}</p>
+          <p className="approval-card-host">
+            {host}
+            {when ? ` · ${when}` : ''}
+          </p>
         </div>
         <span className={`badge ${approval.status}`}>{statusTitle(approval.status)}</span>
       </header>
