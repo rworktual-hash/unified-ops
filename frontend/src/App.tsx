@@ -257,6 +257,8 @@ function App() {
       }
       if (project === 'email') return ['postfix']
       if (kind === 'nginx') return ['nginx']
+      if (kind === 'kong') return ['kong']
+      if (kind === 'monitoring') return ['grafana-server']
       return []
     },
     [servers],

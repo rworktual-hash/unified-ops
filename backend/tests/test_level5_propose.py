@@ -49,6 +49,8 @@ def test_each_project_proposes_only_its_down_unit():
         (_host(server_type="pbx", project="infrastructure"), {"docker_active": False}, "docker"),
         (_host(project="email"), {"postfix_active": False}, "postfix"),
         (_host(server_type="nginx", project="infrastructure"), {"nginx_active": False}, "nginx"),
+        (_host(server_type="kong", project="infrastructure"), {"kong_active": False}, "kong"),
+        (_host(server_type="monitoring", project="infrastructure"), {"grafana_active": False}, "grafana-server"),
     ]
     for host, extras, unit in cases:
         key, params = pick_proposal("service_down", None, server=host, extras=extras)
@@ -72,6 +74,12 @@ def test_wrong_flag_does_not_propose_another_unit():
     assert pick_proposal("mem_high", None, server=nginx, extras={"docker_active": False})[0] == "recollect_metrics"
     gpu = _host(server_type="gpu", project="ai")
     assert pick_proposal("mem_high", None, server=gpu, extras={"nginx_active": False})[0] == "recollect_metrics"
+    kong = _host(server_type="kong", project="infrastructure")
+    assert pick_proposal("mem_high", None, server=kong, extras={"docker_active": False})[0] == "recollect_metrics"
+    grafana = _host(server_type="monitoring", project="infrastructure")
+    assert pick_proposal("mem_high", None, server=grafana, extras={"kong_active": False})[0] == "recollect_metrics"
+    assert pick_proposal("mem_high", None, server=kong, extras={"kong_active": True})[0] == "recollect_metrics"
+    assert pick_proposal("mem_high", None, server=grafana, extras={})[0] == "recollect_metrics"
 
 
 def test_inactive_and_portal_do_not_propose_restart():

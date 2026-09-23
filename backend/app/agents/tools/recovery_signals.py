@@ -21,7 +21,7 @@ def tool_check_recovery_signals(server: Server) -> dict:
             from app.monitoring.voicemg_ssh_collectors import collect_voicemg_ssh_insights
 
             snap = collect_voicemg_ssh_insights(**kw, server_name=server.server_name)
-            return {"docker_active": snap.docker_active, "error": snap.error}
+            return {"docker_active": snap.docker_active, "error": snap.collect_error}
         if project == "email":
             from app.monitoring.email_ssh_collectors import collect_email_ssh_insights
 
@@ -33,16 +33,20 @@ def tool_check_recovery_signals(server: Server) -> dict:
             snap = collect_backupvault_ssh_insights(
                 **kw, server_name=server.server_name, server_type=server.server_type
             )
-            return {"docker_active": snap.docker_active, "error": snap.error}
-        if server_type in {"nginx", "sip", "pbx"}:
+            return {"docker_active": snap.docker_active, "error": snap.collect_error}
+        if server_type in {"nginx", "sip", "pbx", "kong", "monitoring"}:
             from app.monitoring.infrastructure_ssh_collectors import collect_infrastructure_ssh_insights
 
             snap = collect_infrastructure_ssh_insights(
                 **kw, server_name=server.server_name, server_type=server.server_type
             )
             if server_type == "nginx":
-                return {"nginx_active": snap.nginx_active, "error": snap.error}
-            return {"docker_active": snap.docker_active, "error": snap.error}
+                return {"nginx_active": snap.nginx_active, "error": snap.collect_error}
+            if server_type == "kong":
+                return {"kong_active": snap.kong_active, "error": snap.collect_error}
+            if server_type == "monitoring":
+                return {"grafana_active": snap.service_active, "error": snap.collect_error}
+            return {"docker_active": snap.docker_active, "error": snap.collect_error}
     except Exception as exc:
         return {"error": str(exc)[:300]}
     return {}

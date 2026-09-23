@@ -7,11 +7,13 @@ MUTATING_ACTION_KEYS = frozenset({"systemctl_restart"})
 ALL_ACTION_KEYS = SAFE_ACTION_KEYS | MUTATING_ACTION_KEYS
 
 # Exact units. No other systemd name is ever restarted.
-RECOVERY_UNITS = frozenset({"docker", "postfix", "nginx"})
+RECOVERY_UNITS = frozenset({"docker", "postfix", "nginx", "kong", "grafana-server"})
 EXACT_RESTART_COMMANDS = {
     "docker": "sudo systemctl restart docker",
     "postfix": "sudo systemctl restart postfix",
     "nginx": "sudo systemctl restart nginx",
+    "kong": "sudo systemctl restart kong",
+    "grafana-server": "sudo systemctl restart grafana-server",
 }
 PORTAL_DB_IP = "10.180.1.222"
 
@@ -53,6 +55,10 @@ def recovery_unit(server) -> str | None:
         return "nginx"
     if server_type in {"sip", "pbx"}:
         return "docker"
+    if server_type == "kong":
+        return "kong"
+    if server_type == "monitoring":
+        return "grafana-server"
     return None
 
 

@@ -55,12 +55,30 @@ RESTART_SPECS: dict[str, dict[str, str]] = {
             "Does not edit nginx config or restart any other unit."
         ),
     },
+    "kong": {
+        "label": "Restart Kong",
+        "command": EXACT_RESTART_COMMANDS["kong"],
+        "impact": (
+            "Restarts kong on this host only. API traffic may drop briefly. "
+            "Does not edit Kong config, reload other units, or restart the database."
+        ),
+    },
+    "grafana-server": {
+        "label": "Restart Grafana",
+        "command": EXACT_RESTART_COMMANDS["grafana-server"],
+        "impact": (
+            "Restarts grafana-server on this host only. The dashboard may be unreachable briefly. "
+            "Does not edit Grafana config or restart any other unit."
+        ),
+    },
 }
 
 _DOWN_FLAG = {
     "docker": "docker_active",
     "postfix": "postfix_active",
     "nginx": "nginx_active",
+    "kong": "kong_active",
+    "grafana-server": "grafana_active",
 }
 
 

@@ -11,7 +11,7 @@ This file is the current contract. Update it when a Level 4 check or Level 5 com
 | Level | Name | May the agent run it alone? | Status |
 |-------|------|-----------------------------|--------|
 | 4 | Safe execution (read-only) | Yes, on the 5-minute collect (when Celery is on) or when you click Collect | **Live** |
-| 5 | Human approval | No. Investigate explains → pending approval → Approve → Confirm run | **Live** for GPU, VoiceMG, Email, BackupVault, Nginx, SIP/PBX |
+| 5 | Human approval | No. Investigate explains → pending approval → Approve → Confirm run | **Live** for GPU, VoiceMG, Email, BackupVault, Nginx, SIP/PBX, Kong, Grafana |
 | 6 | Admin only | Never. Report and stop | **Blocked** |
 
 ---
@@ -59,6 +59,8 @@ After **Investigate** (server card, SSH Collect alert, or live `.222` alert matc
 | **Restart Docker** | Active GPU, VoiceMG, BackupVault, SIP, PBX | `sudo systemctl restart docker` only when Docker is explicitly down | Reboot, GPU reset, kill calls, write `.222` |
 | **Restart Postfix** | Active Email | `sudo systemctl restart postfix` only when Postfix is explicitly down | Queue delete, `postsuper`, send mail |
 | **Restart nginx** | Active `server_type=nginx` | `sudo systemctl restart nginx` only when nginx is explicitly down | Config edit, other units |
+| **Restart Kong** | Active `server_type=kong` | `sudo systemctl restart kong` only when Kong is explicitly down | Config edit, other units, database restart |
+| **Restart Grafana** | Active `server_type=monitoring` | `sudo systemctl restart grafana-server` only when Grafana is explicitly down | Config edit, other units |
 
 Investigate writes the issue, the exact command, and the impact. Approve does not run the command. Confirm run does, then recollects. Inactive hosts (including 165/166) are skipped. `10.180.1.222` is never an execution target.
 
@@ -79,5 +81,6 @@ Reboot, shutdown, GPU reset, NVIDIA/CUDA or OS update, format disk, change SSH k
 | 2026-09-21 | Document created. Level 4 read-only collect + extras. Level 5 Investigate → explanation → two-step confirm for recollect / SSH verify only. |
 | 2026-09-22 | GPU-only remediations: agent explains issue + exact command; Docker restart (`sudo systemctl restart docker`) after Approve + Confirm run when Docker is down. Non-GPU hosts stay recollect / SSH verify. |
 | 2026-09-23 | Same two-step contract for VoiceMG, Email, BackupVault, Nginx, SIP/PBX. One unit each: docker, postfix, or nginx. Collect failure stays SSH verify. Service up stays recollect. |
+| 2026-09-23 | Kong (`sudo systemctl restart kong`) and Grafana (`sudo systemctl restart grafana-server`) after Approve + Confirm run, only when that service is explicitly down. |
 
 Add a row here whenever we add a command or a collect check.

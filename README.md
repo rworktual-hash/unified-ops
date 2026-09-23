@@ -419,11 +419,13 @@ Flow on every project: **Investigate** explains the issue and opens one pending 
 | BackupVault | Docker down | `sudo systemctl restart docker` |
 | Nginx | nginx down | `sudo systemctl restart nginx` |
 | SIP / PBX | Docker down | `sudo systemctl restart docker` |
+| Kong | Kong down | `sudo systemctl restart kong` |
+| Grafana | Grafana down | `sudo systemctl restart grafana-server` |
 
 Collect failed → **SSH verify** only. Named service up, or no explicit down flag → **Recollect** only. A missing flag is not treated as down.
 
-Never proposed or executed: host reboot, GPU reset, killing calls, unknown VMG/STT units, mail delete, `postsuper`, restore, SFTP recovery, MySQL/Postgres restart, nginx config edits, reload of other units, unnamed SIP/PBX process restart, or any command outside this table.
+Never proposed or executed: host reboot, GPU reset, killing calls, unknown VMG/STT units, mail delete, `postsuper`, restore, SFTP recovery, MySQL/Postgres restart, nginx/Kong/Grafana config edits, reload of other units, unnamed SIP/PBX process restart, or any command outside this table.
 
-`ALLOWLIST_RESTART_SERVICES` cannot add units. It can only narrow `docker`, `postfix`, and `nginx`.
+`ALLOWLIST_RESTART_SERVICES` cannot add units. It can only narrow `docker`, `postfix`, `nginx`, `kong`, and `grafana-server`.
 
 API: `GET /approvals/catalog`, `POST /approvals`, `GET /approvals`, `POST /approvals/{id}/approve` (body `confirmed=true`), `POST /approvals/{id}/reject`.

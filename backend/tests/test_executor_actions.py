@@ -60,9 +60,28 @@ def test_postfix_only_on_email_and_nginx_only_on_nginx():
     assert ok is False and "not allowlisted for this host" in reason
 
 
+def test_kong_and_grafana_restart_only_on_their_hosts():
+    kong = _host(server_type="kong", project="infrastructure")
+    grafana = _host(server_type="monitoring", project="infrastructure")
+    database = _host(server_type="database", project="infrastructure")
+    assert is_action_allowed("systemctl_restart", {"service_name": "kong"}, server=kong) == (True, "ok")
+    assert is_action_allowed("systemctl_restart", {"service_name": "grafana-server"}, server=grafana) == (
+        True,
+        "ok",
+    )
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "grafana-server"}, server=kong)
+    assert ok is False and "not allowlisted for this host" in reason
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "kong"}, server=grafana)
+    assert ok is False and "not allowlisted for this host" in reason
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "mysql"}, server=database)
+    assert ok is False
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "kong"}, server=database)
+    assert ok is False and "not allowlisted for this host" in reason
+
+
 def test_wrong_unit_blocked_on_gpu():
     gpu = _host(server_type="gpu", project="ai")
-    for service in ("nginx", "postfix", "sshd", "mysql", "mariadb", "postgresql", "voicemg"):
+    for service in ("nginx", "postfix", "kong", "grafana-server", "sshd", "mysql", "mariadb", "postgresql", "voicemg"):
         ok, reason = is_action_allowed("systemctl_restart", {"service_name": service}, server=gpu)
         assert ok is False
         assert service in reason

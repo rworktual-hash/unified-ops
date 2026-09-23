@@ -51,6 +51,10 @@ def build_diagnosis(
             lines.append("Postfix is inactive on this host.")
         if extras.get("nginx_active") is False:
             lines.append("nginx is inactive on this host.")
+        if extras.get("kong_active") is False:
+            lines.append("Kong is inactive on this host.")
+        if extras.get("grafana_active") is False:
+            lines.append("Grafana is inactive on this host.")
         if extras.get("process_sample"):
             lines.append(f"Process sample:\n{extras['process_sample']}")
         if extras.get("log_tail"):
@@ -97,6 +101,16 @@ def _guidance_for_alert(alert_type: str | None, extras: dict[str, Any] | None = 
         return [
             "Docker is down — the agent will ask to run `sudo systemctl restart docker`.",
             "That waits for Approve + Confirm run. It does not reboot or reset GPUs.",
+        ]
+    if extras.get("kong_active") is False:
+        return [
+            "Kong is down — the agent will ask to run `sudo systemctl restart kong`.",
+            "That waits for Approve + Confirm run. It does not edit Kong config.",
+        ]
+    if extras.get("grafana_active") is False:
+        return [
+            "Grafana is down — the agent will ask to run `sudo systemctl restart grafana-server`.",
+            "That waits for Approve + Confirm run. It does not edit Grafana config.",
         ]
     if not alert_type:
         return ["Review metrics and alerts. Agent will request a read-only recollect after approval."]
