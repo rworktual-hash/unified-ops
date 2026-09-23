@@ -780,7 +780,13 @@ function App() {
           </>
         )}
 
-        {nav !== 'chat' && nav !== 'users' && nav !== 'approvals' && (
+        {nav !== 'chat' &&
+          nav !== 'users' &&
+          nav !== 'approvals' &&
+          nav !== 'infrastructure' &&
+          nav !== 'backupvault' &&
+          nav !== 'email' &&
+          nav !== 'voicemg' && (
           <p className="muted" style={{ marginTop: '1.5rem' }}>
             <button type="button" className="btn ghost" onClick={() => void load()}>
               Refresh all

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import type { VoiceMgExtra, VoiceMgHistoryGroup, VoiceMgHistoryRange } from '../api'
-import { LIVE_EXTRAS_INTERVAL_MS } from '../useLivePoll'
 import { SimpleBarChart } from './SimpleBarChart'
 import { VoiceMgHistory } from './VoiceMgHistory'
 
@@ -119,10 +118,7 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
       <div className="panel-head">
         <div>
           <h2>Live CCaaS / AI-CCaaS</h2>
-          <p className="muted">
-            Latest MariaDB <code>voicemg</code> row per host — updates every {LIVE_EXTRAS_INTERVAL_MS / 1000}s.
-            Click a host to switch the live/history series. Charts match voicemg.worktual.tech.
-          </p>
+          <p className="muted">Live portal metrics. Click a host for its series.</p>
         </div>
         <div className="bv-tabs">
           {(

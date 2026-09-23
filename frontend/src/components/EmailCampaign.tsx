@@ -55,9 +55,8 @@ export function EmailCampaign({ extras, loading = false, periodHours, onPeriodHo
         <div>
           <h2>Campaign Bulk Mail</h2>
           <p className="muted email-sync-meta">
-            Live SELECT from campaign-db <code>worktual_email_campaign</code>
-            {extras?.database ? ` · ${extras.database}` : ''} — updates every {LIVE_EXTRAS_INTERVAL_MS / 1000}s.
-            Gateways stay 84 / 80 for SSH.
+            Live campaign mail
+            {extras?.database ? ` · ${extras.database}` : ''} · every {LIVE_EXTRAS_INTERVAL_MS / 1000}s
           </p>
         </div>
         <div className="domain-tabs email-period-tabs" role="tablist" aria-label="Campaign period">

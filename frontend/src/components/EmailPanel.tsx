@@ -70,9 +70,10 @@ export function EmailPanel({ emailServers, session: _session }: Props) {
   return (
     <>
       <header className="page-head">
-        <h1>Email</h1>
-        <p>
-          Live Campaign from campaign-db <code>10.180.0.203</code>. Gateways 84 / 80 are SSH only.
+        <p className="fleet-status-line">
+          {extras
+            ? `${emailServers.length} gateways · ${extras.totals.sent} sent · ${extras.totals.bounce} bounced · ${campaignHours}h`
+            : `${emailServers.length} gateways`}
         </p>
       </header>
 
@@ -87,10 +88,7 @@ export function EmailPanel({ emailServers, session: _session }: Props) {
 
       {sshOverview ? (
         <section className="panel">
-          <h2>Gateways (SSH)</h2>
-          <p className="muted email-sync-meta">
-            Host health on 84 / 80 / 0.84. Refresh with Collect on Servers. Not the campaign DB.
-          </p>
+          <h2>Gateways</h2>
           {sshHasTotals ? (
             <div className="stat-row stat-row--email">
               <div className="stat-card">

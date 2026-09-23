@@ -157,10 +157,15 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
   return (
     <div className="bv-page">
       <header className="page-head">
-        <div>
-          <h1>BackupVault</h1>
-          <p>Read-only portal metrics from MariaDB — no restore, query, SFTP, or start backup.</p>
-        </div>
+        <p className="fleet-status-line">
+          {[
+            overview ? `${overview.collected_hosts}/${overview.total_hosts} hosts` : null,
+            targets.length ? `${targets.length} DB servers` : null,
+            nfs.length ? `${nfs.length} NFS` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'BackupVault'}
+        </p>
       </header>
 
       {error ? <p className="banner error">{error}</p> : null}
@@ -199,7 +204,7 @@ export function BackupVaultPanel({ isAdmin: _isAdmin = false }: Props) {
             <div>
               <h2>DB servers</h2>
               <p className="muted">
-                {targets.length} backup targets from the portal — read-only, no Backup / Edit / Remove.
+                {targets.length} DB servers
               </p>
             </div>
             <button

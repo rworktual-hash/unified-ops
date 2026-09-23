@@ -42,8 +42,7 @@ export function BackupVaultDashboard() {
         <div>
           <h2>Dashboard</h2>
           <p className="muted">
-            Read-only KPIs from MariaDB `backupvault` — no start / restore / query.
-            {data.checked_at ? ` · checked ${new Date(data.checked_at).toLocaleString()}` : ''}
+            {data.checked_at ? `Checked ${new Date(data.checked_at).toLocaleString()}` : 'Portal metrics'}
           </p>
         </div>
         <button type="button" className="btn ghost" disabled={loading} onClick={() => void load()}>

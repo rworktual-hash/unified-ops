@@ -244,13 +244,16 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
   return (
     <div className="bv-page">
       <header className="page-head">
-        <div>
-          <h1>Infrastructure</h1>
-          <p>
-            servers.worktual.tech inventory from MariaDB on 10.180.1.222 — servers, DID, SSL, and
-            domains — plus existing SSH snapshots. Read-only view lists only; no add / edit / upload.
-          </p>
-        </div>
+        <p className="fleet-status-line">
+          {[
+            counts.baremetal ? `${counts.baremetal} baremetal` : null,
+            counts.hosts ? `${counts.hosts} Proxmox` : null,
+            counts.vms ? `${counts.vms} VMs` : null,
+            catalog?.did_total ? `${catalog.did_total} DID` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Inventory'}
+        </p>
       </header>
 
       {error ? <p className="banner error">{error}</p> : null}

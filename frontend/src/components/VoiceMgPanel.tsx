@@ -89,15 +89,14 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
 
   return (
     <>
-      <header className="page-head">
-        <div>
-          <h1>VoiceMG</h1>
-          <p>
-            Read-only SSH for VMG and STT hosts: Docker, optional systemd units, process samples, and
-            GPU summary on STT. Portal extras are live from MariaDB <code>voicemg</code> (CPU, calls,
-            RTP). “Check failed” means our probe failed, not necessarily that the host is offline.
-          </p>
-        </div>
+      <header className="page-head servers-status">
+        <p className="fleet-status-line">
+          {overview
+            ? `${overview.collected_hosts}/${overview.total_hosts} hosts · ${overview.vmg_hosts} VMG · ${overview.stt_hosts} STT`
+            : loading
+              ? 'Loading…'
+              : 'VoiceMG'}
+        </p>
         <button type="button" className="btn ghost" disabled={loading} onClick={() => void load()}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
