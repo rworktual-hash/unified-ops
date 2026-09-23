@@ -40,7 +40,7 @@ export type AppUser = {
   is_active: boolean
 }
 
-export async function login(email: string, password: string): Promise<AppUser> {
+export async function login(email: string, password: string, remember = false): Promise<AppUser> {
   const res = await fetch(apiPath('/auth/login'), {
     method: 'POST',
     headers: jsonHeaders,
@@ -59,7 +59,7 @@ export async function login(email: string, password: string): Promise<AppUser> {
     throw new Error(detail)
   }
   const data = (await res.json()) as { access_token: string }
-  setStoredToken(data.access_token)
+  setStoredToken(data.access_token, remember)
   return fetchMe()
 }
 
