@@ -313,28 +313,30 @@ export function ServerCard({
             </p>
           ) : null}
 
-          <ServerMetricsCharts
-            serverId={server.id}
-            serverName={server.server_name}
-            isGpu={isGpu}
-          />
-
-          <div className="server-actions">
-            <button type="button" className="btn ghost" disabled={testing} onClick={onTest}>
-              {testing ? 'Testing…' : 'Test SSH'}
-            </button>
-            <button type="button" className="btn primary" disabled={collecting} onClick={onCollect}>
-              {collecting ? 'Collecting…' : 'Collect metrics'}
-            </button>
-            <button type="button" className="btn ghost" disabled={investigating} onClick={onInvestigate}>
-              {investigating ? 'Working…' : 'Investigate'}
-            </button>
-            <ApprovalRequestButtons
-              restartServices={restartServices}
-              onRecollect={onRequestRecollect}
-              onSshVerify={onRequestSshVerify}
-              onRestart={onRequestRestart}
+          <div className="server-toolbar">
+            <ServerMetricsCharts
+              serverId={server.id}
+              serverName={server.server_name}
+              isGpu={isGpu}
             />
+
+            <div className="server-actions">
+              <button type="button" className="btn ghost" disabled={testing} onClick={onTest}>
+                {testing ? 'Testing…' : 'Test SSH'}
+              </button>
+              <button type="button" className="btn primary" disabled={collecting} onClick={onCollect}>
+                {collecting ? 'Collecting…' : 'Collect metrics'}
+              </button>
+              <button type="button" className="btn ghost" disabled={investigating} onClick={onInvestigate}>
+                {investigating ? 'Working…' : 'Investigate'}
+              </button>
+              <ApprovalRequestButtons
+                restartServices={restartServices}
+                onRecollect={onRequestRecollect}
+                onSshVerify={onRequestSshVerify}
+                onRestart={onRequestRestart}
+              />
+            </div>
           </div>
         </>
       ) : (
