@@ -36,6 +36,7 @@ import { BackupVaultPanel } from './components/BackupVaultPanel'
 import { ChatPanel } from './components/ChatPanel'
 import { LoginPage } from './components/LoginPage'
 import { ServerCard } from './components/ServerCard'
+import { ServerDetail } from './components/ServerDetail'
 import { ServersByDomain } from './components/ServersByDomain'
 import type { DomainId } from './serverDomains'
 import { ApprovalDecisionCard } from './components/ApprovalDecisionCard'
@@ -97,6 +98,7 @@ function App() {
   const [collectingAll, setCollectingAll] = useState(false)
   const [fleetStatus, setFleetStatus] = useState<FleetCollectStatus | null>(null)
   const [serverDomain, setServerDomain] = useState<DomainId>('ai')
+  const [detailServerId, setDetailServerId] = useState<number | null>(null)
   const [aiExtras, setAiExtras] = useState<AiInsightExtra[]>([])
   const [voiceMgExtras, setVoiceMgExtras] = useState<VoiceMgExtra[]>([])
 
@@ -312,6 +314,27 @@ function App() {
     )
   }
 
+  const detailServer = monitoredServers.find((s) => s.id === detailServerId) ?? null
+
+  function insightFor(server: Server) {
+    return server.project === 'voicemg'
+      ? undefined
+      : matchAiInsightExtra(aiExtras, server.ip_address, server.server_name)
+  }
+
+  function openInsightHost(row: { ip_address: string; server_name: string; hostname: string | null }) {
+    const host =
+      monitoredServers.find((s) => row.ip_address && s.ip_address === row.ip_address) ||
+      monitoredServers.find(
+        (s) =>
+          s.server_name.toLowerCase() === row.server_name.toLowerCase() ||
+          s.server_name.toLowerCase() === (row.hostname || '').toLowerCase(),
+      )
+    if (!host) return false
+    setDetailServerId(host.id)
+    return true
+  }
+
   const pageTitle = nav === 'users' ? 'Users' : (navItems.find((item) => item.id === nav)?.label ?? 'Servers')
 
   return (
@@ -396,37 +419,31 @@ function App() {
               )}
             </header>
 
-            <AiInsightsGroups extras={aiExtras} />
-
-            <ServersByDomain
-              servers={monitoredServers}
-              domainFilter={serverDomain}
-              onDomainFilterChange={setServerDomain}
-              renderCard={(s) => (
+            {detailServer ? (
+              <ServerDetail
+                server={detailServer}
+                extra={insightFor(detailServer)}
+                onBack={() => setDetailServerId(null)}
+              >
                 <ServerCard
-                  key={s.id}
-                  server={s}
-                  metrics={metricsByServer[s.id] ?? null}
-                  extra={
-                    s.project === 'voicemg'
-                      ? undefined
-                      : matchAiInsightExtra(aiExtras, s.ip_address, s.server_name)
-                  }
+                  server={detailServer}
+                  metrics={metricsByServer[detailServer.id] ?? null}
+                  extra={insightFor(detailServer)}
                   voicemgExtra={
-                    s.project === 'voicemg'
-                      ? matchVoiceMgExtra(voiceMgExtras, s.ip_address, s.server_name)
+                    detailServer.project === 'voicemg'
+                      ? matchVoiceMgExtra(voiceMgExtras, detailServer.ip_address, detailServer.server_name)
                       : undefined
                   }
-                  testResult={testResults[s.id]}
-                  testing={testingId === s.id}
-                  collecting={collectingId === s.id}
-                  investigating={investigatingId === s.id}
+                  testResult={testResults[detailServer.id]}
+                  testing={testingId === detailServer.id}
+                  collecting={collectingId === detailServer.id}
+                  investigating={investigatingId === detailServer.id}
                   onTest={async () => {
-                    setTestingId(s.id)
+                    setTestingId(detailServer.id)
                     setError(null)
                     try {
-                      const result = await testServerConnection(s.id)
-                      setTestResults((prev) => ({ ...prev, [s.id]: result }))
+                      const result = await testServerConnection(detailServer.id)
+                      setTestResults((prev) => ({ ...prev, [detailServer.id]: result }))
                     } catch (err) {
                       setError(err instanceof Error ? err.message : 'Connection test failed')
                     } finally {
@@ -434,11 +451,11 @@ function App() {
                     }
                   }}
                   onCollect={async () => {
-                    setCollectingId(s.id)
+                    setCollectingId(detailServer.id)
                     setError(null)
                     try {
-                      const bundle = await collectServerMetrics(s.id)
-                      setMetricsByServer((prev) => ({ ...prev, [s.id]: bundle }))
+                      const bundle = await collectServerMetrics(detailServer.id)
+                      setMetricsByServer((prev) => ({ ...prev, [detailServer.id]: bundle }))
                       setAlerts(await listAlerts(showResolved ? undefined : 'open'))
                     } catch (err) {
                       setError(err instanceof Error ? err.message : 'Collect failed')
@@ -447,10 +464,10 @@ function App() {
                     }
                   }}
                   onInvestigate={async () => {
-                    setInvestigatingId(s.id)
+                    setInvestigatingId(detailServer.id)
                     setError(null)
                     try {
-                      await investigateServer(s.id)
+                      await investigateServer(detailServer.id)
                       setAgentActions(await listAgentActions(15))
                       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
                       setNav('approvals')
@@ -460,14 +477,42 @@ function App() {
                       setInvestigatingId(null)
                     }
                   }}
-                  restartServices={recoveryServices(s.id)}
-                  onRequestRecollect={() => void requestApproval(s.id, 'recollect_metrics')}
-                  onRequestSshVerify={() => void requestApproval(s.id, 'ssh_verify')}
+                  restartServices={recoveryServices(detailServer.id)}
+                  onRequestRecollect={() => void requestApproval(detailServer.id, 'recollect_metrics')}
+                  onRequestSshVerify={() => void requestApproval(detailServer.id, 'ssh_verify')}
                   onRequestRestart={(service) =>
-                    void requestApproval(s.id, 'systemctl_restart', { service_name: service })
+                    void requestApproval(detailServer.id, 'systemctl_restart', { service_name: service })
                   }
                 />
-              )}
+              </ServerDetail>
+            ) : (
+              <>
+            <AiInsightsGroups extras={aiExtras} onOpenHost={openInsightHost} />
+
+            <ServersByDomain
+              servers={monitoredServers}
+              domainFilter={serverDomain}
+              onDomainFilterChange={setServerDomain}
+              renderCard={(s) => {
+                const host = metricsByServer[s.id]?.host[0]
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="server-tile"
+                    onClick={() => setDetailServerId(s.id)}
+                  >
+                    <strong>{s.server_name}</strong>
+                    <span className="server-tile-ip">
+                      {s.ip_address}:{s.ssh_port}
+                    </span>
+                    <span className="server-tile-metrics">
+                      RAM {host?.mem_used_pct != null ? `${host.mem_used_pct.toFixed(0)}%` : '—'} · Disk{' '}
+                      {host?.disk_root_pct != null ? `${host.disk_root_pct.toFixed(0)}%` : '—'}
+                    </span>
+                  </button>
+                )
+              }}
             />
 
             {serverDomain === 'ai' && (
@@ -489,6 +534,8 @@ function App() {
                   ))}
                 </div>
               </section>
+            )}
+              </>
             )}
           </>
         )}

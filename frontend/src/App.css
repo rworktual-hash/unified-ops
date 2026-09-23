@@ -428,9 +428,42 @@
 
 .server-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.server-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.server-tile:hover {
+  border-color: #d4d4d8;
+}
+
+.server-tile strong {
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+}
+
+.server-tile-ip,
+.server-tile-metrics {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .domain-tabs {
@@ -1402,17 +1435,6 @@
   padding: 1rem 1.1rem 1.05rem;
   box-shadow: var(--shadow);
   min-height: 92px;
-}
-
-.stat-card::after {
-  content: '';
-  position: absolute;
-  top: 0.95rem;
-  right: 0.95rem;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-soft);
 }
 
 .stat-label {

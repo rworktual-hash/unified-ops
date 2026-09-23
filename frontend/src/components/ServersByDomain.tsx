@@ -53,7 +53,6 @@ export function ServersByDomain({ servers, domainFilter, onDomainFilterChange, r
               <section key={d.id} className={`domain-section domain-section--${d.id}`}>
                 <header className="domain-section-head">
                   <h2>{d.label}</h2>
-                  <p className="muted">{d.description}</p>
                   <span className="domain-section-count">{list.length} hosts</span>
                 </header>
                 <div className="server-grid">{list.map((s) => renderCard(s))}</div>
@@ -62,11 +61,10 @@ export function ServersByDomain({ servers, domainFilter, onDomainFilterChange, r
           })}
           {(counts.other ?? 0) > 0 ? (
             <section className="domain-section domain-section--other">
-              <header className="domain-section-head">
-                <h2>Other</h2>
-                <p className="muted">Untagged or custom project hosts.</p>
-                <span className="domain-section-count">{counts.other} hosts</span>
-              </header>
+            <header className="domain-section-head">
+              <h2>Other</h2>
+              <span className="domain-section-count">{counts.other} hosts</span>
+            </header>
               <div className="server-grid">{serversInDomain(servers, 'other').map((s) => renderCard(s))}</div>
             </section>
           ) : null}
@@ -76,13 +74,12 @@ export function ServersByDomain({ servers, domainFilter, onDomainFilterChange, r
           {SERVER_DOMAINS.filter((d) => d.id === domainFilter).map((d) => (
             <header key={d.id} className="domain-section-head">
               <h2>{d.label}</h2>
-              <p className="muted">{d.description}</p>
+              <span className="domain-section-count">{serversInDomain(servers, domainFilter).length} hosts</span>
             </header>
           ))}
           {domainFilter === 'other' ? (
             <header className="domain-section-head">
               <h2>Other</h2>
-              <p className="muted">Untagged or custom project hosts.</p>
             </header>
           ) : null}
           <div className="server-grid">

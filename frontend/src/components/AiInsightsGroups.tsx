@@ -33,9 +33,10 @@ function avg(values: Array<number | null | undefined>): number | null {
 
 type Props = {
   extras: AiInsightExtra[]
+  onOpenHost?: (row: AiInsightExtra) => boolean
 }
 
-export function AiInsightsGroups({ extras }: Props) {
+export function AiInsightsGroups({ extras, onOpenHost }: Props) {
   const [filter, setFilter] = useState('all')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [historyRange, setHistoryRange] = useState<AiInsightHistoryRange>('60m')
@@ -65,8 +66,7 @@ export function AiInsightsGroups({ extras }: Props) {
           <h2>AI Insights groups</h2>
           <p className="muted">
             Live from MariaDB <code>ai_insights_platform</code> — updates every{' '}
-            {LIVE_EXTRAS_INTERVAL_MS / 1000}s. Same groups as aiservers.worktual.tech. Click a host
-            for a 60-minute series.
+            {LIVE_EXTRAS_INTERVAL_MS / 1000}s. Click a host to open it.
           </p>
         </div>
       </div>
@@ -137,11 +137,7 @@ export function AiInsightsGroups({ extras }: Props) {
             </button>
           ))}
         </div>
-        <p className="muted bv-sub">
-          {selected
-            ? `${selected.server_name} · click again to show fleet average`
-            : 'Fleet average for the group in view · click a host to isolate'}
-        </p>
+        <p className="muted bv-sub">Click a host to open its charts and metrics.</p>
       </div>
       <AiInsightsHistory
         range={historyRange}
@@ -156,7 +152,10 @@ export function AiInsightsGroups({ extras }: Props) {
             key={row.id}
             type="button"
             className={`ai-group-card ${selectedId === row.id ? 'active' : ''}`}
-            onClick={() => setSelectedId((prev) => (prev === row.id ? null : row.id))}
+            onClick={() => {
+              if (onOpenHost?.(row)) return
+              setSelectedId((prev) => (prev === row.id ? null : row.id))
+            }}
           >
             <div className="ai-extra-head">
               <span className="muted">{row.group || row.server_type || 'Host'}</span>
