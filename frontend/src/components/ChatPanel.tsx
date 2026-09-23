@@ -50,7 +50,7 @@ export function ChatPanel({ activeServers }: Props) {
       const res = await sendChatMessage(text, sid, controller.signal)
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: res.reply, servers: res.servers_in_context },
+        { role: 'assistant', text: res.reply },
       ])
     } catch (err) {
       const msg =
@@ -125,15 +125,15 @@ export function ChatPanel({ activeServers }: Props) {
             ) : (
               <p className="chat-user-text">{m.text}</p>
             )}
-            {m.servers?.length ? (
-              <span className="chat-context-tag">{m.servers.join(', ')}</span>
-            ) : null}
           </div>
         ))}
         {sending && (
-          <div className="chat-bubble assistant chat-pending">
-            <span className="chat-spinner" aria-hidden />
-            Getting answer… this can take up to 2 minutes.
+          <div className="chat-bubble assistant chat-pending" aria-label="Waiting for answer">
+            <span className="chat-dots" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </span>
           </div>
         )}
         <div ref={bottomRef} />
