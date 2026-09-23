@@ -71,10 +71,12 @@ export function ServerCard({
           <p className="server-card-label">
             {server.project ?? 'ai'} · {server.server_type ?? 'host'}
           </p>
-          <h3>{server.server_name}</h3>
-          <p className="server-card-meta">
-            {server.ip_address}:{server.ssh_port} · {server.ssh_username}
-          </p>
+          <h3 className="server-card-title">
+            <span>{server.server_name}</span>
+            <span className="server-card-ip">
+              {server.ip_address}:{server.ssh_port}
+            </span>
+          </h3>
         </div>
         <div className="server-card-pills">
           {extra?.health_score != null ? (

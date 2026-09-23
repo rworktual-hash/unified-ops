@@ -50,6 +50,20 @@ import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, LiveAlert, MetricsBundle, Server } from './types'
 import './App.css'
 
+function fleetStatusLine(hostCount: number, status: FleetCollectStatus | null) {
+  const hosts = `${hostCount} host${hostCount === 1 ? '' : 's'}`
+  if (!status?.last_run_at) return `${hosts} · No collect yet`
+  const when = new Date(status.last_run_at).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const ok = status.last_servers_ok ?? 0
+  const failed = status.last_servers_failed ?? 0
+  return `${hosts} · Last collect ${when} · ${ok} ok · ${failed} failed`
+}
+
 type NavId =
   | 'servers'
   | 'infrastructure'
@@ -347,7 +361,6 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div className="topbar-title">
-            <span className="topbar-orb" aria-hidden />
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-user" title={session.email}>
@@ -359,42 +372,8 @@ function App() {
 
         {nav === 'servers' && (
           <>
-            <header className="page-head">
-              <div>
-                <h1>Servers</h1>
-                <p>
-                  Host metrics (CPU load, memory, disk) for {monitoredServers.length} active hosts. Domain
-                  tabs filter this grid; use sidebar{' '}
-                  {infrastructureServers.length > 0 ? (
-                    <>
-                      <button
-                        type="button"
-                        className="linkish"
-                        onClick={() => setNav('infrastructure')}
-                      >
-                        Infrastructure
-                      </button>
-                      ,{' '}
-                    </>
-                  ) : null}
-                  BackupVault, Email, and VoiceMG for SSH role dashboards.
-                </p>
-                {fleetStatus ? (
-                  <p className="muted fleet-collect-line">
-                    Scheduled collect:{' '}
-                    {fleetStatus.scheduled_collect_enabled
-                      ? `every ${Math.round(fleetStatus.interval_seconds / 60)} min · read-only (no restart)`
-                      : 'off — set METRICS_SCHEDULED_COLLECT_ENABLED=true on API host'}
-                    {fleetStatus.last_run_at
-                      ? ` · Last run ${new Date(fleetStatus.last_run_at).toLocaleString()} (${fleetStatus.last_servers_ok ?? 0} ok${
-                          fleetStatus.last_servers_failed
-                            ? `, ${fleetStatus.last_servers_failed} failed`
-                            : ''
-                        }, ${fleetStatus.last_trigger ?? '?'})`
-                      : ' · No fleet run logged yet'}
-                  </p>
-                ) : null}
-              </div>
+            <header className="page-head servers-status">
+              <p className="fleet-status-line">{fleetStatusLine(monitoredServers.length, fleetStatus)}</p>
               {session.role === 'admin' && (
                 <button
                   type="button"
