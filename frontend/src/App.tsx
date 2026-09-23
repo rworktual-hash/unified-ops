@@ -511,9 +511,8 @@ function App() {
 
         {nav === 'chat' && (
           <div className="chat-page">
-            <header className="page-head page-head-compact">
-              <h1>Chat</h1>
-              <p className="muted">Uses server inventory, metrics, and alerts from this dashboard.</p>
+            <header className="page-head">
+              <p className="fleet-status-line">{activeServers.length} hosts</p>
             </header>
             <ChatPanel activeServers={activeServers} />
           </div>
@@ -521,20 +520,26 @@ function App() {
 
         {nav === 'alerts' && (
           <>
-            <header className="page-head">
-              <h1>Alerts</h1>
-              <p>
-                Live portal alerts and SSH Collect. Investigate is read-only. Changing a host always
-                waits on Approvals.
+            <header className="page-head servers-status">
+              <p className="fleet-status-line">
+                {liveAlerts.length} live · {alerts.filter((a) => a.status === 'open').length} SSH
               </p>
+              <label className="checkbox inline">
+                <input
+                  type="checkbox"
+                  checked={showResolved}
+                  onChange={(e) => setShowResolved(e.target.checked)}
+                />
+                Show resolved
+              </label>
             </header>
             <section className="panel">
               <div className="panel-head">
-                <h2>Live .222 ({liveAlerts.length})</h2>
+                <h2>Live</h2>
               </div>
               {liveAlertsReason ? <p className="muted">{liveAlertsReason}</p> : null}
               {liveAlerts.length === 0 && !liveAlertsReason ? (
-                <p className="muted">No open AI Insights alerts on .222, or none matched yet.</p>
+                <p className="muted">No open live alerts.</p>
               ) : liveAlerts.length > 0 ? (
                 <div className="table-wrap">
                   <table>
@@ -620,18 +625,10 @@ function App() {
             </section>
             <section className="panel">
               <div className="panel-head">
-                <h2>SSH Collect ({alerts.filter((a) => a.status === 'open').length})</h2>
-                <label className="checkbox inline">
-                  <input
-                    type="checkbox"
-                    checked={showResolved}
-                    onChange={(e) => setShowResolved(e.target.checked)}
-                  />
-                  Show resolved
-                </label>
+                <h2>SSH Collect</h2>
               </div>
               {alerts.length === 0 ? (
-                <p className="muted">No alerts. Collect metrics on 148 or 149 to evaluate rules.</p>
+                <p className="muted">No SSH alerts.</p>
               ) : (
                 <div className="table-wrap">
                   <table>
@@ -767,12 +764,13 @@ function App() {
         {nav === 'activity' && (
           <>
             <header className="page-head">
-              <h1>Agent log</h1>
-              <p>Investigations and approved runs. Click a row for the full report.</p>
+              <p className="fleet-status-line">
+                {agentActions.length === 0 ? 'No entries' : `${agentActions.length} entries`}
+              </p>
             </header>
             <section className="panel">
               {agentActions.length === 0 ? (
-                <p className="muted">No activity yet. Run Investigate on a connected server.</p>
+                <p className="muted">No entries yet.</p>
               ) : (
                 <AgentLogList items={agentActions} />
               )}
@@ -786,7 +784,9 @@ function App() {
           nav !== 'infrastructure' &&
           nav !== 'backupvault' &&
           nav !== 'email' &&
-          nav !== 'voicemg' && (
+          nav !== 'voicemg' &&
+          nav !== 'alerts' &&
+          nav !== 'activity' && (
           <p className="muted" style={{ marginTop: '1.5rem' }}>
             <button type="button" className="btn ghost" onClick={() => void load()}>
               Refresh all
