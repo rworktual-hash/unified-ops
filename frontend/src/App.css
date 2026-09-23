@@ -1437,10 +1437,89 @@ pre.diagnosis {
 }
 
 .login-lead {
-  margin: 0.35rem 0 1.5rem;
+  margin: 0.35rem 0 1.35rem;
   text-align: center;
   color: #6b6b73;
   font-size: 0.95rem;
+}
+
+.login-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.login-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  height: 46px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-provider svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.login-provider--google {
+  background: #4c9be8;
+}
+
+.login-provider--google:hover {
+  background: #3b8ad8;
+}
+
+.login-provider--microsoft {
+  background: #3a3a3c;
+}
+
+.login-provider--microsoft:hover {
+  background: #2c2c2e;
+}
+
+.login-provider--apple {
+  background: #1c1c1e;
+}
+
+.login-provider--apple:hover {
+  background: #000;
+}
+
+.login-notice {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0 0.9rem;
+  color: #a1a1aa;
+  font-size: 0.8125rem;
+}
+
+.login-or::before,
+.login-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e4e4e7;
 }
 
 .login-field {
