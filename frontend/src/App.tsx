@@ -720,48 +720,45 @@ function App() {
 
         {nav === 'approvals' && (
           <>
-            <header className="page-head">
-              <h1>Approvals</h1>
-              <p>
-                Review the alert and the exact command. Approve, then Confirm run. Reject stops it.
+            <header className="page-head servers-status">
+              <p className="fleet-status-line">
+                {showAllApprovals
+                  ? `${approvals.length} shown · ${approvals.filter((a) => a.status === 'pending').length} waiting`
+                  : approvals.length === 0
+                    ? 'Nothing waiting'
+                    : `${approvals.length} waiting`}
               </p>
+              <label className="checkbox inline">
+                <input
+                  type="checkbox"
+                  checked={showAllApprovals}
+                  onChange={(e) => setShowAllApprovals(e.target.checked)}
+                />
+                Show history
+              </label>
             </header>
-            <section className="panel">
-              <div className="panel-head">
-                <h2>Queue ({approvals.filter((a) => a.status === 'pending').length} pending)</h2>
-                <label className="checkbox inline">
-                  <input
-                    type="checkbox"
-                    checked={showAllApprovals}
-                    onChange={(e) => setShowAllApprovals(e.target.checked)}
+            {approvals.length === 0 ? (
+              <section className="panel">
+                <p className="muted">Nothing waiting. Investigate a host to propose a command.</p>
+              </section>
+            ) : (
+              <div className="approval-card-list">
+                {approvals.map((ap) => (
+                  <ApprovalDecisionCard
+                    key={ap.id}
+                    approval={ap}
+                    onApprove={async (id) => {
+                      await approveApproval(id)
+                      await load()
+                    }}
+                    onReject={async (id) => {
+                      await rejectApproval(id)
+                      setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+                    }}
                   />
-                  Show all history
-                </label>
+                ))}
               </div>
-              {approvals.length === 0 ? (
-                <p className="muted">
-                  No approvals. Run Investigate on an AI server alert — the agent will propose a
-                  command here.
-                </p>
-              ) : (
-                <div className="approval-card-list">
-                  {approvals.map((ap) => (
-                    <ApprovalDecisionCard
-                      key={ap.id}
-                      approval={ap}
-                      onApprove={async (id) => {
-                        await approveApproval(id)
-                        await load()
-                      }}
-                      onReject={async (id) => {
-                        await rejectApproval(id)
-                        setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
+            )}
           </>
         )}
 
@@ -783,7 +780,7 @@ function App() {
           </>
         )}
 
-        {nav !== 'chat' && nav !== 'users' && (
+        {nav !== 'chat' && nav !== 'users' && nav !== 'approvals' && (
           <p className="muted" style={{ marginTop: '1.5rem' }}>
             <button type="button" className="btn ghost" onClick={() => void load()}>
               Refresh all

@@ -34,19 +34,20 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
       </header>
       <dl className="approval-meta">
         <div>
-          <dt>Alert</dt>
-          <dd>{alertTitle(approval.alert_type, approval.action_key)}</dd>
-        </div>
-        <div>
-          <dt>Reason</dt>
-          <dd>{approval.alert_reason || approval.request_notes || 'Operator requested this check.'}</dd>
+          <dt>Problem</dt>
+          <dd>{approval.alert_reason || approval.request_notes || alertTitle(approval.alert_type, approval.action_key)}</dd>
         </div>
       </dl>
-      <p className="approval-ask">The agent wants to run this on the matched host. Approve, then Confirm run.</p>
-      <pre className="readonly-sample">
+      <p className="approval-card-kicker">Command</p>
+      <pre className="readonly-sample approval-command">
         {approval.proposed_command || actionTitle(approval.action_key)}
       </pre>
-      {approval.impact ? <p className="muted approval-impact">{approval.impact}</p> : null}
+      {approval.impact ? (
+        <>
+          <p className="approval-card-kicker">Impact</p>
+          <p className="approval-impact">{approval.impact}</p>
+        </>
+      ) : null}
 
       {approval.status === 'pending' ? (
         <div className="approval-request-row">
