@@ -23,20 +23,31 @@ export function buildSeriesFromValues(
   return out
 }
 
+function ordered(points: Point[]): Point[] {
+  return [...points].sort((a, b) => a.x - b.x)
+}
+
+function linePath(points: Point[], minX: number, spanX: number, minY: number, spanY: number): string {
+  const plotW = 100
+  const plotH = 100
+  return ordered(points)
+    .map((p, i) => {
+      const px = ((p.x - minX) / spanX) * plotW
+      const py = plotH - ((p.y - minY) / spanY) * plotH
+      return `${i === 0 ? 'M' : 'L'} ${px.toFixed(2)} ${py.toFixed(2)}`
+    })
+    .join(' ')
+}
+
 export function SimpleLineChart({
   title,
   points,
   yMin,
   yMax,
   unit = '',
-  height = 72,
+  height = 120,
   emptyLabel = 'No data yet — run scheduled collect or Collect metrics',
 }: Props) {
-  const width = 280
-  const pad = { t: 8, r: 8, b: 18, l: 36 }
-  const innerW = width - pad.l - pad.r
-  const innerH = height - pad.t - pad.b
-
   if (points.length === 0) {
     return (
       <div className="chart-block">
@@ -46,24 +57,15 @@ export function SimpleLineChart({
     )
   }
 
-  const ys = points.map((p) => p.y)
+  const series = ordered(points)
+  const ys = series.map((p) => p.y)
   const minY = yMin ?? Math.min(...ys)
   const maxY = yMax ?? Math.max(...ys)
   const spanY = maxY - minY || 1
-  const minX = points[0].x
-  const maxX = points[points.length - 1].x
+  const minX = series[0].x
+  const maxX = series[series.length - 1].x
   const spanX = maxX - minX || 1
-
-  const toPath = (pts: Point[]) =>
-    pts
-      .map((p, i) => {
-        const px = pad.l + ((p.x - minX) / spanX) * innerW
-        const py = pad.t + innerH - ((p.y - minY) / spanY) * innerH
-        return `${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${py.toFixed(1)}`
-      })
-      .join(' ')
-
-  const last = points[points.length - 1]
+  const last = series[series.length - 1]
 
   return (
     <div className="chart-block">
@@ -74,17 +76,27 @@ export function SimpleLineChart({
           {unit}
         </span>
       </div>
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img">
-        <text x={pad.l} y={height - 4} className="chart-axis-label">
-          {minY.toFixed(0)}
-          {unit}
-        </text>
-        <text x={width - pad.r - 24} y={height - 4} className="chart-axis-label">
-          {maxY.toFixed(0)}
-          {unit}
-        </text>
-        <path d={toPath(points)} fill="none" stroke={COLORS[0]} strokeWidth="1.5" />
-      </svg>
+      <div className="chart-plot">
+        <div className="chart-scale">
+          <span>
+            {maxY.toFixed(0)}
+            {unit}
+          </span>
+          <span>
+            {minY.toFixed(0)}
+            {unit}
+          </span>
+        </div>
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="chart-svg"
+          style={{ height }}
+          role="img"
+        >
+          <path d={linePath(series, minX, spanX, minY, spanY)} fill="none" stroke={COLORS[0]} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
     </div>
   )
 }
@@ -106,10 +118,6 @@ export function MultiLineChart({
   height?: number
   emptyLabel?: string
 }) {
-  const width = 280
-  const pad = { t: 8, r: 8, b: 18, l: 8 }
-  const innerW = width - pad.l - pad.r
-  const innerH = height - pad.t - pad.b
   const all = series.flatMap((s) => s.points)
   if (all.length === 0) {
     return (
@@ -125,18 +133,16 @@ export function MultiLineChart({
   const maxY = yMax ?? Math.max(yMin + 1, ...all.map((p) => p.y))
   const spanY = maxY - yMin || 1
 
-  const pathFor = (pts: Point[]) =>
-    pts
-      .map((p, i) => {
-        const px = pad.l + ((p.x - minX) / spanX) * innerW
-        const py = pad.t + innerH - ((p.y - yMin) / spanY) * innerH
-        return `${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${py.toFixed(1)}`
-      })
-      .join(' ')
-
   return (
-    <div className="chart-block chart-block-wide">
-      <div className="chart-title">{title}</div>
+    <div className="chart-block">
+      <div className="chart-head">
+        <span className="chart-title">{title}</span>
+        <span className="chart-last">
+          {yMin}
+          {unit} – {maxY}
+          {unit}
+        </span>
+      </div>
       <div className="chart-legend">
         {series.map((s, i) => (
           <span key={s.label} className="chart-legend-item">
@@ -148,24 +154,38 @@ export function MultiLineChart({
           </span>
         ))}
       </div>
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="chart-svg" role="img">
-        {series.map((s, i) =>
-          s.points.length > 0 ? (
-            <path
-              key={s.label}
-              d={pathFor(s.points)}
-              fill="none"
-              stroke={COLORS[s.colorIndex ?? i % COLORS.length]}
-              strokeWidth="1.2"
-            />
-          ) : null,
-        )}
-      </svg>
-      <span className="chart-axis-hint">
-        {yMin}
-        {unit} – {maxY}
-        {unit}
-      </span>
+      <div className="chart-plot">
+        <div className="chart-scale">
+          <span>
+            {maxY}
+            {unit}
+          </span>
+          <span>
+            {yMin}
+            {unit}
+          </span>
+        </div>
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="chart-svg"
+          style={{ height }}
+          role="img"
+        >
+          {series.map((s, i) =>
+            s.points.length > 0 ? (
+              <path
+                key={s.label}
+                d={linePath(s.points, minX, spanX, yMin, spanY)}
+                fill="none"
+                stroke={COLORS[s.colorIndex ?? i % COLORS.length]}
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null,
+          )}
+        </svg>
+      </div>
     </div>
   )
 }

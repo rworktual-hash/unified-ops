@@ -11,11 +11,11 @@ type Props = {
 }
 
 function indexByTime<T extends { collected_at: string }>(rows: T[]): Map<string, number> {
-  const sorted = [...rows].sort(
-    (a, b) => new Date(a.collected_at).getTime() - new Date(b.collected_at).getTime(),
+  const times = [...new Set(rows.map((row) => row.collected_at))].sort(
+    (a, b) => new Date(a).getTime() - new Date(b).getTime(),
   )
   const map = new Map<string, number>()
-  sorted.forEach((r, i) => map.set(r.collected_at, i))
+  times.forEach((time, index) => map.set(time, index))
   return map
 }
 

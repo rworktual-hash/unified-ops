@@ -381,7 +381,7 @@ export function ServerCard({
                 serverName={server.server_name}
                 isGpu={isGpu}
                 defaultOpen
-                chartHeight={132}
+                chartHeight={140}
               />
               <div className="server-toolbar">
                 <div className="server-actions">{actions}</div>
