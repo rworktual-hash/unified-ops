@@ -25,6 +25,20 @@ function fmtPct(value: number | null | undefined): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)}%`
 }
 
+function fmtRate(mbps: number | null | undefined): string {
+  if (mbps == null || Number.isNaN(mbps)) return '—'
+  const sign = mbps < 0 ? '-' : ''
+  let value = Math.abs(mbps)
+  const units = ['Mbps', 'Gbps', 'Tbps', 'Pbps']
+  let unit = 0
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000
+    unit += 1
+  }
+  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2
+  return `${sign}${value.toFixed(digits)} ${units[unit]}`
+}
+
 function barClass(pct: number | null | undefined): string {
   if (pct == null) return 'bv-bar-fill'
   if (pct >= 90) return 'bv-bar-fill crit'
@@ -52,9 +66,9 @@ function UtilBar({
         <span className="bv-mono">{fmtPct(pct)}</span>
       </div>
       <p className="muted bv-sub">
-        {used == null ? '—' : `${fmtNum(used, used >= 10 ? 0 : 1)}${unit}`}
+        {used == null ? '—' : unit === ' GB' ? fmtGb(used) : `${fmtNum(used, used >= 10 ? 0 : 1)}${unit}`}
         {' / '}
-        {total == null ? '—' : `${fmtNum(total, total >= 10 ? 0 : 1)}${unit}`}
+        {total == null ? '—' : unit === ' GB' ? fmtGb(total) : `${fmtNum(total, total >= 10 ? 0 : 1)}${unit}`}
       </p>
       <div className="bv-bar" aria-hidden>
         <div className={barClass(pct)} style={{ width: `${Math.min(100, pct ?? 0)}%` }} />
@@ -158,10 +172,10 @@ function Dashboard({
     <section className="bv-portal">
       <div className="bv-portal-toolbar">
         <div>
-          <h2>Inventory dashboard</h2>
+          <h2>Dashboard</h2>
           <p className="muted">
-            Live SELECT from MariaDB <code>{data.database || 'server_inventory'}</code> — no
-            passwords. Totals are baremetal + Proxmox nodes + VMs.
+            {dash.online_servers} of {dash.total_servers} servers online · {dash.active_vms} of{' '}
+            {dash.total_vms} VMs active
           </p>
         </div>
         <button type="button" className="btn ghost" disabled={loading} onClick={onRefresh}>
@@ -176,6 +190,11 @@ function Dashboard({
         <div className="stat-card">
           <span className="stat-label">Online</span>
           <span className="stat-value accent">{dash.online_servers}</span>
+          <span className="muted bv-sub">
+            {dash.total_servers
+              ? `${Math.round((100 * dash.online_servers) / dash.total_servers)}% of servers`
+              : '—'}
+          </span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Total VMs</span>
@@ -184,6 +203,11 @@ function Dashboard({
         <div className="stat-card">
           <span className="stat-label">Active VMs</span>
           <span className="stat-value accent">{dash.active_vms}</span>
+          <span className="muted bv-sub">
+            {dash.total_vms
+              ? `${Math.round((100 * dash.active_vms) / dash.total_vms)}% of VMs`
+              : '—'}
+          </span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Baremetal</span>
@@ -194,7 +218,7 @@ function Dashboard({
           <span className="stat-value">{dash.host_count}</span>
         </div>
       </div>
-      <h3 className="bv-group-title">Resource utilization</h3>
+      <h3 className="bv-group-title">Capacity</h3>
       <div className="bv-card-grid">
         <UtilBar
           label="CPU pool"
@@ -284,10 +308,11 @@ function ClusterCard({ cluster }: { cluster: InventoryCluster }) {
     <article className="bv-card bv-storage-card">
       <div className="bv-card-top">
         <strong>{cluster.cluster_label || cluster.cluster_name}</strong>
-        <span className="bv-pill bv-pill--unknown">{cluster.total_nodes} nodes</span>
+        <span className="bv-mono">{fmtPct(cluster.cpu_pct)} CPU</span>
       </div>
       <p className="muted bv-sub">
         {cluster.cluster_name}
+        {cluster.total_nodes ? ` · ${cluster.total_nodes} nodes` : ''}
         {cluster.total_vms ? ` · ${cluster.total_vms} VMs` : ''}
       </p>
       <p className="bv-card-meta">
@@ -820,13 +845,22 @@ function NetworkView({
   onRefresh: () => void
 }) {
   const net = data.network
+  const points = [...(net?.points ?? [])]
+    .filter((point) => (point.rx_mbps ?? 0) > 0 || (point.tx_mbps ?? 0) > 0)
+    .sort((a, b) => (b.rx_mbps ?? 0) + (b.tx_mbps ?? 0) - ((a.rx_mbps ?? 0) + (a.tx_mbps ?? 0)))
+  const peak = Math.max(
+    1,
+    ...points.map((point) => Math.max(point.rx_mbps ?? 0, point.tx_mbps ?? 0)),
+  )
+  const busiest = points[0]
   return (
     <section className="bv-portal">
       <div className="bv-portal-toolbar">
         <div>
-          <h2>Network statistics</h2>
+          <h2>Network</h2>
           <p className="muted">
-            Peak RX/TX from live VM telemetry{net?.source ? ` · ${net.source}` : ''} — no waveform if `.222` has no history rows.
+            {points.length} VMs with traffic
+            {busiest?.name ? ` · busiest ${busiest.name}` : ''}
           </p>
         </div>
         <button type="button" className="btn ghost" disabled={loading} onClick={onRefresh}>
@@ -835,35 +869,48 @@ function NetworkView({
       </div>
       <div className="stat-row backupvault-stat-row">
         <div className="stat-card">
-          <span className="stat-label">Peak inbound (RX)</span>
-          <span className="stat-value">{net?.peak_rx_mbps == null ? '—' : `${net.peak_rx_mbps.toFixed(2)} Mbps`}</span>
+          <span className="stat-label">Combined inbound</span>
+          <span className="stat-value">{fmtRate(net?.peak_rx_mbps)}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Peak outbound (TX)</span>
-          <span className="stat-value">{net?.peak_tx_mbps == null ? '—' : `${net.peak_tx_mbps.toFixed(2)} Mbps`}</span>
+          <span className="stat-label">Combined outbound</span>
+          <span className="stat-value">{fmtRate(net?.peak_tx_mbps)}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Busiest inbound</span>
+          <span className="stat-value">{fmtRate(busiest?.rx_mbps)}</span>
+          <span className="muted bv-sub">{busiest?.name || '—'}</span>
         </div>
       </div>
-      <div className="table-wrap bv-runs-table">
-        <table>
-          <thead>
-            <tr>
-              <th>VM</th>
-              <th>RX Mbps</th>
-              <th>TX Mbps</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(net?.points ?? []).map((point, index) => (
-              <tr key={`${point.name}-${index}`}>
-                <td>{point.name || '—'}</td>
-                <td>{point.rx_mbps == null ? '—' : point.rx_mbps.toFixed(3)}</td>
-                <td>{point.tx_mbps == null ? '—' : point.tx_mbps.toFixed(3)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!net?.points.length ? <p className="muted">No stream data for this window on MariaDB.</p> : null}
+      {points.length ? (
+        <div className="net-rank">
+          <div className="net-rank-legend">
+            <span><i className="net-swatch net-swatch--rx" /> Inbound</span>
+            <span><i className="net-swatch net-swatch--tx" /> Outbound</span>
+          </div>
+          {points.slice(0, 15).map((point, index) => (
+            <div className="net-rank-row" key={`${point.name}-${index}`}>
+              <span className="net-rank-name">{point.name || '—'}</span>
+              <div className="net-rank-track">
+                <div
+                  className="net-rank-fill net-rank-fill--rx"
+                  style={{ width: `${Math.min(100, ((point.rx_mbps ?? 0) / peak) * 100)}%` }}
+                />
+                <div
+                  className="net-rank-fill net-rank-fill--tx"
+                  style={{ width: `${Math.min(100, ((point.tx_mbps ?? 0) / peak) * 100)}%` }}
+                />
+              </div>
+              <span className="net-rank-value">
+                {fmtRate(point.rx_mbps)}
+                <span className="muted"> / {fmtRate(point.tx_mbps)}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">No VM traffic in the latest inventory read.</p>
+      )}
     </section>
   )
 }
