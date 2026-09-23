@@ -38,42 +38,25 @@
 
 .brand-lockup {
   display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.25rem 0.55rem 1.15rem;
-}
-
-.brand-mark-img {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-}
-
-.brand-words {
-  display: flex;
   flex-direction: column;
-  line-height: 1.1;
-  min-width: 0;
+  align-items: flex-start;
+  gap: 0.28rem;
+  padding: 0.35rem 0.55rem 1.15rem;
 }
 
-.brand-name {
-  font-weight: 650;
-  font-size: 1.02rem;
-  letter-spacing: -0.035em;
-  color: #fff;
+.brand-logo-img {
+  width: 148px;
+  height: auto;
+  display: block;
 }
 
 .brand-sub {
-  margin-top: 0.18rem;
+  margin: 0;
   font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #9a9aa0;
-}
-
-.brand-lockup--login .brand-name {
-  color: #fff;
 }
 
 .nav-kicker {
@@ -1976,13 +1959,8 @@ pre.diagnosis {
   padding: 0;
 }
 
-.login-topbar .brand-sub {
-  display: none;
-}
-
-.login-topbar .brand-name {
-  font-size: 1.2rem;
-  font-weight: 650;
+.login-topbar .brand-logo-img {
+  width: 132px;
 }
 
 .login-main {
