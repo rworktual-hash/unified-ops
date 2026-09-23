@@ -2619,11 +2619,20 @@ button.linkish {
   text-overflow: ellipsis;
 }
 
-.vmg-ccaas-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 0.85rem;
-  margin: 0.85rem 0 1rem;
+.vmg-host-table {
+  margin: 0.25rem 0 1rem;
+}
+
+.vmg-host-table tbody tr {
+  cursor: pointer;
+}
+
+.vmg-host-table tbody tr.vmg-host-row--selected {
+  background: var(--bg);
+}
+
+.vmg-host-table td {
+  font-variant-numeric: tabular-nums;
 }
 
 .vmg-ccaas-mini {

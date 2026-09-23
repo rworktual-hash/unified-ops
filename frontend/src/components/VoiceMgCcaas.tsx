@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import type { VoiceMgExtra, VoiceMgHistoryGroup, VoiceMgHistoryRange } from '../api'
-import { SimpleBarChart } from './SimpleBarChart'
 import { VoiceMgHistory } from './VoiceMgHistory'
 
 type FilterId = VoiceMgHistoryGroup
@@ -81,8 +80,6 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
     if (filter === 'all') return servers
     return servers.filter((row) => (row.group || 'ccaas') === filter)
   }, [filter, servers])
-  const vmg = rows.filter((row) => (row.role || row.hostname).toLowerCase().includes('stt') === false)
-  const stt = rows.filter((row) => (row.role || row.hostname).toLowerCase().includes('stt'))
   const selected = rows.find((row) => row.id === selectedHostId) ?? null
   const scoped = selected ? [selected] : rows
   const kpis = {
@@ -100,25 +97,17 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
   const toggleHost = (id: number) => {
     setSelectedHostId((prev) => (prev === id ? null : id))
   }
-  const productBars = useMemo(() => {
-    const byProduct = new Map<string, number>()
-    for (const row of scoped) {
-      const key = row.product || row.group || 'unknown'
-      byProduct.set(key, (byProduct.get(key) ?? 0) + (row.active_calls ?? 0))
-    }
-    return [...byProduct.entries()].map(([label, value]) => ({ label, value }))
-  }, [scoped])
-  const diskBars = scoped.map((row) => ({
-    label: row.hostname,
-    value: row.disk_used_pct,
-  }))
 
   return (
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h2>Live CCaaS / AI-CCaaS</h2>
-          <p className="muted">Live portal metrics. Click a host for its series.</p>
+          <h2>Calls</h2>
+          <p className="muted">
+            {rows.length} hosts · {kpis.calls} calls
+            {kpis.mos != null ? ` · MOS ${fmt(kpis.mos, 2)}` : ''}
+            {selected ? ` · ${selected.hostname}` : ''}
+          </p>
         </div>
         <div className="bv-tabs">
           {(
@@ -142,52 +131,67 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
 
       {loading && !servers.length ? <p className="muted">Loading live portal metrics…</p> : null}
 
-      <div className="vmg-ccaas-grid">
-        <div>
-          <p className="metric-label">VoiceMG</p>
-          {vmg.map((row) => (
-            <HostMini
-              key={row.id}
-              row={row}
-              selected={selectedHostId === row.id}
-              onSelect={() => toggleHost(row.id)}
-            />
-          ))}
-          {!vmg.length ? <p className="muted">No VoiceMG hosts in this filter.</p> : null}
-        </div>
-        <div>
-          <p className="metric-label">STT</p>
-          {stt.map((row) => (
-            <HostMini
-              key={row.id}
-              row={row}
-              selected={selectedHostId === row.id}
-              onSelect={() => toggleHost(row.id)}
-            />
-          ))}
-          {!stt.length ? <p className="muted">No STT hosts in this filter.</p> : null}
-        </div>
-      </div>
-
       <div className="stat-row backupvault-stat-row">
         <Kpi label="Active calls" value={String(kpis.calls)} />
-        <Kpi label="Stalled UDP" value={String(kpis.stall)} />
         <Kpi
-          label="MOS (1–4.5)"
+          label="MOS"
           value={kpis.mos == null ? '—' : fmt(kpis.mos, 2)}
           hint={kpis.mos == null ? undefined : mosLabel(kpis.mos)}
+          tone={mosTone(kpis.mos)}
         />
-        <Kpi label="Jitter ms" value={fmt(kpis.jitter, 1)} />
-        <Kpi label="Packet loss %" value={kpis.loss == null ? '—' : `${fmt(kpis.loss, 2)}%`} />
-        <Kpi label="RTP Mbps" value={fmt(kpis.rtp, 1)} />
-        <Kpi label="Avg CPU %" value={kpis.cpu == null ? '—' : `${fmt(kpis.cpu, 0)}%`} />
-        <Kpi label="Disk %" value={kpis.disk == null ? '—' : `${fmt(kpis.disk, 0)}%`} />
+        <Kpi label="Jitter" value={kpis.jitter == null ? '—' : `${fmt(kpis.jitter, 1)} ms`} />
+        <Kpi label="Packet loss" value={kpis.loss == null ? '—' : `${fmt(kpis.loss, 2)}%`} />
+        <Kpi label="Stalled" value={String(kpis.stall)} tone={kpis.stall > 0 ? 'warn' : undefined} />
+        <Kpi label="RTP" value={kpis.rtp == null ? '—' : `${fmt(kpis.rtp, 1)} Mbps`} />
+      </div>
+      <div className="stat-row backupvault-stat-row">
+        <Kpi label="CPU" value={kpis.cpu == null ? '—' : `${fmt(kpis.cpu, 0)}%`} />
+        <Kpi label="Disk" value={kpis.disk == null ? '—' : `${fmt(kpis.disk, 0)}%`} />
         <Kpi label="UDP sockets" value={String(kpis.udp)} />
-        <Kpi label="RTP GB" value={fmt(kpis.rtpGb, 2)} />
+        <Kpi label="RTP volume" value={kpis.rtpGb == null ? '—' : `${fmt(kpis.rtpGb, 2)} GB`} />
+      </div>
+
+      <div className="table-wrap vmg-host-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Calls</th>
+              <th>MOS</th>
+              <th>Jitter</th>
+              <th>Loss</th>
+              <th>RTP</th>
+              <th>Disk</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                className={selectedHostId === row.id ? 'vmg-host-row--selected' : undefined}
+                onClick={() => toggleHost(row.id)}
+              >
+                <td>
+                  <strong>{row.hostname}</strong>
+                  <div className="muted bv-sub">{hostRole(row)}</div>
+                </td>
+                <td>{row.active_calls ?? 0}</td>
+                <td className={mosTone(row.mos) === 'ok' ? 'email-status-ok' : mosTone(row.mos) === 'warn' ? 'email-status-warn' : undefined}>
+                  {row.mos == null ? '—' : fmt(row.mos, 2)}
+                </td>
+                <td>{row.jitter_ms == null ? '—' : `${fmt(row.jitter_ms, 1)} ms`}</td>
+                <td>{row.packet_loss_pct == null ? '—' : `${fmt(row.packet_loss_pct, 2)}%`}</td>
+                <td>{rtpMbps(row) == null ? '—' : `${fmt(rtpMbps(row), 1)}`}</td>
+                <td>{row.disk_used_pct == null ? '—' : `${fmt(row.disk_used_pct, 0)}%`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!rows.length ? <p className="muted">No hosts in this group.</p> : null}
       </div>
 
       <div className="chart-toolbar vmg-range-toolbar">
-        <span className="muted">History from MariaDB</span>
+        <span className="muted">{selected ? selected.hostname : 'All hosts'}</span>
         <div className="bv-tabs">
           {HISTORY_RANGES.map(([id, label]) => (
             <button
@@ -221,17 +225,6 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
           </label>
         </div>
       ) : null}
-      {selected ? (
-        <p className="muted">
-          Showing {selected.hostname}. Click the host again for fleet view.
-        </p>
-      ) : (
-        <p className="muted">Fleet view. Click a host card to switch its live charts.</p>
-      )}
-      <div className="charts-grid">
-        <SimpleBarChart title="Disk % by server" rows={diskBars} unit="%" max={100} />
-        <SimpleBarChart title="Calls by product" rows={productBars} unit="" />
-      </div>
       <VoiceMgHistory
         range={range}
         group={filter}
@@ -240,115 +233,38 @@ export function VoiceMgCcaas({ servers, loading = false }: Props) {
         serverId={selected?.id ?? null}
         hostName={selected?.hostname ?? null}
       />
-
-      <div className="vmg-ccaas-cards">
-        {rows.map((row) => (
-          <HostCard
-            key={row.id}
-            row={row}
-            selected={selectedHostId === row.id}
-            onSelect={() => toggleHost(row.id)}
-          />
-        ))}
-      </div>
     </section>
   )
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function mosTone(value: number | null | undefined): 'ok' | 'warn' | undefined {
+  if (value == null) return undefined
+  if (value >= 3.6) return 'ok'
+  return 'warn'
+}
+
+function hostRole(row: VoiceMgExtra): string {
+  const role = (row.role || (row.hostname.toLowerCase().includes('stt') ? 'stt' : 'vmg')).toUpperCase()
+  const quality = qualityBadge(row)
+  return quality ? `${role} · ${quality}` : role
+}
+
+function Kpi({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string
+  value: string
+  hint?: string
+  tone?: 'ok' | 'warn'
+}) {
   return (
     <div className="stat-card">
       <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
+      <span className={`stat-value${tone ? ` ${tone}` : ''}`}>{value}</span>
       {hint ? <span className="muted bv-sub">{hint}</span> : null}
     </div>
-  )
-}
-
-function HostMini({
-  row,
-  selected,
-  onSelect,
-}: {
-  row: VoiceMgExtra
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`vmg-ccaas-mini${selected ? ' vmg-ccaas-mini--selected' : ''}`}
-      onClick={onSelect}
-    >
-      <strong>{row.hostname}</strong>
-      <span className="muted">
-        {row.active_calls ?? 0} calls
-        {row.stall != null ? ` · ${row.stall} stall` : ''}
-        {row.mos != null ? ` · ${fmt(row.mos, 2)} MOS` : ' · MOS n/a'}
-        {qualityBadge(row) ? ` · ${qualityBadge(row)}` : ''}
-      </span>
-    </button>
-  )
-}
-
-function HostCard({
-  row,
-  selected,
-  onSelect,
-}: {
-  row: VoiceMgExtra
-  selected: boolean
-  onSelect: () => void
-}) {
-  const rtp = rtpMbps(row)
-  return (
-    <article
-      className={`vmg-ccaas-card${selected ? ' vmg-ccaas-card--selected' : ''}`}
-      onClick={onSelect}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onSelect()
-        }
-      }}
-    >
-      <div className="ai-extra-head">
-        <strong>{row.hostname}</strong>
-        <span className="bv-pill bv-pill--ok">
-          {(row.role || (row.hostname.toLowerCase().includes('stt') ? 'stt' : 'vmg')).toUpperCase()}
-          {qualityBadge(row) ? ` · ${qualityBadge(row)}` : ''}
-        </span>
-      </div>
-      <p className="muted bv-sub">
-        {row.active_calls ?? 0} calls
-        {row.mos != null ? ` · ${fmt(row.mos, 2)} MOS` : ' · MOS n/a'}
-        {row.jitter_ms != null ? ` · ${fmt(row.jitter_ms, 1)} ms jitter` : ''}
-        {row.packet_loss_pct != null ? ` · ${fmt(row.packet_loss_pct, 2)}% loss` : ''}
-      </p>
-      <p className="muted bv-sub">
-        {row.cpu_pct != null ? `CPU ${fmt(row.cpu_pct, 0)}%` : 'CPU —'}
-        {row.mem_pct != null ? ` · MEM ${fmt(row.mem_pct, 0)}%` : row.mem ? ` · ${row.mem}` : ''}
-      </p>
-      <p className="muted bv-sub">
-        UDP {row.udp_active ?? '—'} live
-        {row.udp_inactive != null || row.stall != null
-          ? ` · ${row.stall ?? row.udp_inactive} stall`
-          : ''}
-        {rtp != null ? ` · ${fmt(rtp, 1)} Mbps` : ''}
-        {row.rtp_mbps_exp != null ? ` · exp ${fmt(row.rtp_mbps_exp, 1)}` : ''}
-        {row.udp_sockets != null ? ` · ${row.udp_sockets} sockets` : ''}
-      </p>
-      <p className="muted bv-sub">
-        {row.disk_used_pct != null ? `Disk ${fmt(row.disk_used_pct, 0)}%` : 'Disk —'}
-        {row.open_fds != null ? ` · FDs ${row.open_fds}` : ''}
-        {row.threads != null ? ` · thr ${row.threads}` : ''}
-        {row.rx_errors != null ? ` · RX err ${fmt(row.rx_errors, 0)}` : ''}
-        {row.nic_rx_mbps != null || row.nic_tx_mbps != null
-          ? ` · NIC ${fmt(row.nic_rx_mbps, 1)}/${fmt(row.nic_tx_mbps, 1)}`
-          : ''}
-      </p>
-    </article>
   )
 }
