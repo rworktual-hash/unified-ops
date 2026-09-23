@@ -9,14 +9,15 @@ type Props = {
 
 export function AccountMenu({ user, onLogout, onOpenUsers }: Props) {
   const [open, setOpen] = useState(false)
-  const [settings, setSettings] = useState(false)
+  const [view, setView] = useState<'menu' | 'settings'>('menu')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const initials = user.email.slice(0, 2).toUpperCase()
+  const initial = (user.email.trim()[0] || 'U').toUpperCase()
   const role = user.role === 'admin' ? 'Admin' : 'User'
 
   useEffect(() => {
@@ -42,41 +43,68 @@ export function AccountMenu({ user, onLogout, onOpenUsers }: Props) {
         className="account-trigger"
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label={`Account ${user.email}`}
         onClick={() => {
           setOpen((value) => !value)
+          setView('menu')
           setMessage(null)
           setError(null)
         }}
       >
         <span className="account-avatar" aria-hidden>
-          {initials}
-        </span>
-        <span className="account-id">
-          <strong>{user.email}</strong>
-          <span>{role}</span>
+          {initial}
+          <span className="account-presence" />
         </span>
       </button>
       {open ? (
         <div className="account-panel" role="dialog" aria-label="Account">
-          <p className="account-panel-kicker">Profile</p>
-          <p className="account-panel-email">{user.email}</p>
-          <p className="account-panel-role">{role}</p>
-          <button
-            type="button"
-            className="account-action"
-            onClick={() => {
-              setSettings((value) => !value)
-              setMessage(null)
-              setError(null)
-            }}
-          >
-            Settings
-          </button>
-          {settings ? (
+          <div className="account-head">
+            <span className="account-avatar account-avatar--lg" aria-hidden>
+              {initial}
+            </span>
+            <div>
+              <p className="account-panel-email">{user.email}</p>
+              <p className="account-panel-role">
+                <span className="account-presence account-presence--inline" />
+                {role}
+                {user.is_active ? ' · Active' : ' · Inactive'}
+              </p>
+            </div>
+          </div>
+          {view === 'menu' ? (
+            <div className="account-list">
+              <button type="button" className="account-action" onClick={() => setView('settings')}>
+                <span>Settings</span>
+                <span className="account-action-hint">Password and account</span>
+              </button>
+              {onOpenUsers ? (
+                <button
+                  type="button"
+                  className="account-action"
+                  onClick={() => {
+                    setOpen(false)
+                    onOpenUsers()
+                  }}
+                >
+                  <span>Users</span>
+                  <span className="account-action-hint">Who can sign in</span>
+                </button>
+              ) : null}
+              <button type="button" className="account-action account-action--logout" onClick={onLogout}>
+                <span>Log out</span>
+                <span className="account-action-hint">End this session</span>
+              </button>
+            </div>
+          ) : (
             <form
               className="account-settings"
               onSubmit={async (event) => {
                 event.preventDefault()
+                if (newPassword !== confirmPassword) {
+                  setError('New password and confirmation do not match.')
+                  setMessage(null)
+                  return
+                }
                 setBusy(true)
                 setMessage(null)
                 setError(null)
@@ -84,6 +112,7 @@ export function AccountMenu({ user, onLogout, onOpenUsers }: Props) {
                   await changePassword(currentPassword, newPassword)
                   setCurrentPassword('')
                   setNewPassword('')
+                  setConfirmPassword('')
                   setMessage('Password updated.')
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Could not update password')
@@ -92,6 +121,25 @@ export function AccountMenu({ user, onLogout, onOpenUsers }: Props) {
                 }
               }}
             >
+              <button type="button" className="account-back" onClick={() => setView('menu')}>
+                Back
+              </button>
+              <p className="account-section">Account</p>
+              <dl className="account-facts">
+                <div>
+                  <dt>Email</dt>
+                  <dd>{user.email}</dd>
+                </div>
+                <div>
+                  <dt>Role</dt>
+                  <dd>{role}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{user.is_active ? 'Active' : 'Inactive'}</dd>
+                </div>
+              </dl>
+              <p className="account-section">Security</p>
               <label className="field-label">
                 Current password
                 <input
@@ -114,28 +162,24 @@ export function AccountMenu({ user, onLogout, onOpenUsers }: Props) {
                   minLength={8}
                 />
               </label>
+              <label className="field-label">
+                Confirm new password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  required
+                  minLength={8}
+                />
+              </label>
               {error ? <p className="account-form-error">{error}</p> : null}
               {message ? <p className="account-form-ok">{message}</p> : null}
               <button type="submit" className="btn primary" disabled={busy}>
                 {busy ? 'Saving…' : 'Update password'}
               </button>
             </form>
-          ) : null}
-          {onOpenUsers ? (
-            <button
-              type="button"
-              className="account-action"
-              onClick={() => {
-                setOpen(false)
-                onOpenUsers()
-              }}
-            >
-              Users
-            </button>
-          ) : null}
-          <button type="button" className="account-action account-action--logout" onClick={onLogout}>
-            Log out
-          </button>
+          )}
         </div>
       ) : null}
     </div>
