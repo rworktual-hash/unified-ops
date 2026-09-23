@@ -14,7 +14,6 @@ import { useLivePoll } from '../useLivePoll'
 import { AiInsightExtras } from './AiInsightExtras'
 import { InventoryCatalog } from './InventoryCatalog'
 import { InventoryPortal } from './InventoryPortal'
-import { LegacyMetricsSection } from './LegacyMetricsSection'
 
 type InventoryTab =
   | 'dashboard'
@@ -155,10 +154,9 @@ function formatBytes(value: number | null): string {
 
 type Props = {
   extras?: AiInsightExtra[]
-  isAdmin?: boolean
 }
 
-export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
+export function InfrastructurePanel({ extras = [] }: Props) {
   const [tab, setTab] = useState<TabId>('dashboard')
   const [overview, setOverview] = useState<InfrastructureOverview | null>(null)
   const [inventory, setInventory] = useState<InventoryPortalData | null>(null)
@@ -428,12 +426,6 @@ export function InfrastructurePanel({ extras = [], isAdmin = false }: Props) {
           ) : loadingSsh ? (
             <p className="muted">Loading SSH snapshots…</p>
           ) : null}
-
-          <LegacyMetricsSection
-            domain="infrastructure"
-            title="Legacy server-inventory portal (MariaDB sync)"
-            isAdmin={isAdmin}
-          />
         </>
       )}
     </div>

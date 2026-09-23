@@ -8,7 +8,6 @@ import {
   type VoiceMgSnapshot,
 } from '../api'
 import { useLivePoll } from '../useLivePoll'
-import { LegacyMetricsSection } from './LegacyMetricsSection'
 import { VoiceMgCcaas } from './VoiceMgCcaas'
 import { VoiceMgExtras } from './VoiceMgExtras'
 
@@ -43,11 +42,7 @@ function services(snapshot: VoiceMgSnapshot): string {
   return parts.join(' · ') || '—'
 }
 
-type Props = {
-  isAdmin?: boolean
-}
-
-export function VoiceMgPanel({ isAdmin = false }: Props) {
+export function VoiceMgPanel() {
   const [overview, setOverview] = useState<VoiceMgOverview | null>(null)
   const [extras, setExtras] = useState<VoiceMgExtra[]>([])
   const [extrasLoading, setExtrasLoading] = useState(true)
@@ -227,12 +222,6 @@ export function VoiceMgPanel({ isAdmin = false }: Props) {
               </table>
             </div>
           </section>
-
-          <LegacyMetricsSection
-            domain="voicemg"
-            title="Legacy VoiceMG portal (MariaDB sync)"
-            isAdmin={isAdmin}
-          />
         </>
       ) : null}
     </>

@@ -46,7 +46,6 @@ import { AccountMenu } from './components/AccountMenu'
 import { AgentLogList } from './components/AgentLogList'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
-import { LegacyMetricsSection } from './components/LegacyMetricsSection'
 import { VoiceMgPanel } from './components/VoiceMgPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type { AgentAction, Alert, Approval, ConnectionTestResult, LiveAlert, MetricsBundle, Server } from './types'
@@ -440,11 +439,6 @@ function App() {
               )}
             </header>
             <AiInsightsGroups extras={aiExtras} onOpenHost={openInsightHost} />
-            <LegacyMetricsSection
-              domain="ai_insights"
-              title="Legacy AI Insights portal (MariaDB sync)"
-              isAdmin={session?.role === 'admin'}
-            />
           </>
         )}
 
@@ -567,7 +561,7 @@ function App() {
         )}
 
         {nav === 'infrastructure' && infrastructureServers.length > 0 && (
-          <InfrastructurePanel extras={aiExtras} isAdmin={session?.role === 'admin'} />
+          <InfrastructurePanel extras={aiExtras} />
         )}
 
         {nav === 'backupvault' && backupVaultServers.length > 0 && (
@@ -575,7 +569,7 @@ function App() {
         )}
 
         {nav === 'voicemg' && voiceMgServers.length > 0 && (
-          <VoiceMgPanel isAdmin={session?.role === 'admin'} />
+          <VoiceMgPanel />
         )}
 
         {nav === 'chat' && (
