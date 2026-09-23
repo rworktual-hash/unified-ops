@@ -17,14 +17,14 @@ export function UsersPanel() {
   }, [load])
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Users</h1>
-        <p>Add Gmail addresses and passwords for people who may use this dashboard.</p>
-      </header>
-
+    <div className="users-page">
       <section className="panel">
-        <h2>Add user</h2>
+        <div className="panel-head">
+          <div>
+            <h2>Add user</h2>
+            <p className="users-lead">They sign in with this email and password.</p>
+          </div>
+        </div>
         <form
           className="user-add-form"
           onSubmit={async (e) => {
@@ -45,12 +45,21 @@ export function UsersPanel() {
         >
           <label className="field-label">
             Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input
+              type="email"
+              autoComplete="off"
+              placeholder="name@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </label>
           <label className="field-label">
             Password
             <input
               type="password"
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -58,33 +67,44 @@ export function UsersPanel() {
             />
           </label>
           <button type="submit" className="btn primary" disabled={busy}>
-            Add user
+            {busy ? 'Adding…' : 'Add user'}
           </button>
         </form>
         {error && <p className="banner error">{error}</p>}
       </section>
 
       <section className="panel">
-        <h2>Allowed users ({users.length})</h2>
+        <div className="panel-head">
+          <h2>People with access</h2>
+          <span className="users-count">{users.length}</span>
+        </div>
         {users.length === 0 ? (
           <p className="muted">No users yet.</p>
         ) : (
           <div className="table-wrap">
-            <table>
+            <table className="users-table">
               <thead>
                 <tr>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Active</th>
+                  <th>Status</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.email}</td>
-                    <td>{u.role}</td>
-                    <td>{u.is_active ? 'Yes' : 'No'}</td>
+                    <td className="users-email">{u.email}</td>
+                    <td>
+                      <span className={`users-pill ${u.role === 'admin' ? 'users-pill--admin' : ''}`}>
+                        {u.role === 'admin' ? 'Admin' : 'User'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`users-pill ${u.is_active ? 'users-pill--on' : 'users-pill--off'}`}>
+                        {u.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
                     <td className="action-cell">
                       {u.is_active && u.role !== 'admin' && (
                         <button
@@ -106,6 +126,6 @@ export function UsersPanel() {
           </div>
         )}
       </section>
-    </>
+    </div>
   )
 }
