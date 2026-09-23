@@ -659,15 +659,13 @@ function App() {
                           >
                             {!a.matched ? 'Unmatched' : a.inventory_active ? 'Inventory' : 'Paused'}
                           </span>
-                          <time className="muted alert-when">
-                            {formatWhen(a.last_seen_at || a.first_seen_at)}
-                          </time>
                         </div>
                         <p className="alert-title">{a.title}</p>
                         <p className="alert-message" title={a.message}>
                           {a.message}
                         </p>
                       </div>
+                      <time className="alert-when">{formatWhen(a.last_seen_at || a.first_seen_at)}</time>
                       <div className="alert-actions">
                         <button
                           type="button"
@@ -797,13 +795,13 @@ function App() {
                           <span className={`badge ${a.status === 'open' ? 'pending' : 'executed'}`}>
                             {a.status}
                           </span>
-                          <time className="muted alert-when">{formatWhen(a.last_seen_at)}</time>
                         </div>
                         <p className="alert-title">{a.title}</p>
                         <p className="alert-message" title={a.message}>
                           {a.message}
                         </p>
                       </div>
+                      <time className="alert-when">{formatWhen(a.last_seen_at)}</time>
                       <div className="alert-actions">
                         {a.status === 'open' && (
                           <>
