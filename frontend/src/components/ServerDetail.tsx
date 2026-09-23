@@ -22,12 +22,12 @@ export function ServerDetail({ server, extra, onBack, children }: Props) {
 
   return (
     <div className="server-detail">
-      <header className="page-head servers-status">
+      <header className="page-head servers-status server-detail-bar">
         <p className="fleet-status-line">
           {server.server_name} · {server.ip_address}:{server.ssh_port}
         </p>
         <button type="button" className="btn ghost" onClick={onBack}>
-          All servers
+          Back
         </button>
       </header>
       {extra ? (

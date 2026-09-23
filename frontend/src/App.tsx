@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   approveApproval,
   collectAllServerMetrics,
@@ -68,6 +68,7 @@ function fleetStatusLine(hostCount: number, status: FleetCollectStatus | null) {
 
 type NavId =
   | 'servers'
+  | 'hosts'
   | 'infrastructure'
   | 'backupvault'
   | 'email'
@@ -99,6 +100,8 @@ function App() {
   const [fleetStatus, setFleetStatus] = useState<FleetCollectStatus | null>(null)
   const [serverDomain, setServerDomain] = useState<DomainId>('ai')
   const [detailServerId, setDetailServerId] = useState<number | null>(null)
+  const mainBodyRef = useRef<HTMLDivElement>(null)
+  const listScrollRef = useRef(0)
   const [aiExtras, setAiExtras] = useState<AiInsightExtra[]>([])
   const [voiceMgExtras, setVoiceMgExtras] = useState<VoiceMgExtra[]>([])
 
@@ -280,6 +283,7 @@ function App() {
 
   const navItems: { id: NavId; label: string }[] = [
     { id: 'servers', label: 'Servers' },
+    { id: 'hosts', label: 'Hosts' },
     ...(infrastructureServers.length > 0
       ? [{ id: 'infrastructure' as const, label: 'Infrastructure' }]
       : []),
@@ -331,8 +335,22 @@ function App() {
           s.server_name.toLowerCase() === (row.hostname || '').toLowerCase(),
       )
     if (!host) return false
-    setDetailServerId(host.id)
+    openHost(host.id)
     return true
+  }
+
+  function openHost(id: number) {
+    listScrollRef.current = mainBodyRef.current?.scrollTop ?? 0
+    setDetailServerId(id)
+    requestAnimationFrame(() => mainBodyRef.current?.scrollTo({ top: 0 }))
+  }
+
+  function closeHost() {
+    const top = listScrollRef.current
+    setDetailServerId(null)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => mainBodyRef.current?.scrollTo({ top }))
+    })
   }
 
   const pageTitle = nav === 'users' ? 'Users' : (navItems.find((item) => item.id === nav)?.label ?? 'Servers')
@@ -347,7 +365,10 @@ function App() {
               key={item.id}
               type="button"
               className={`nav-item ${nav === item.id ? 'active' : ''}`}
-              onClick={() => setNav(item.id)}
+              onClick={() => {
+                setDetailServerId(null)
+                setNav(item.id)
+              }}
             >
               {item.label}
             </button>
@@ -375,10 +396,10 @@ function App() {
             }
           />
         </header>
-        <div className="main-body">
+        <div className="main-body" ref={mainBodyRef}>
         {error && <p className="banner error">{error}</p>}
 
-        {nav === 'servers' && (
+        {nav === 'servers' && !detailServer && (
           <>
             <header className="page-head servers-status">
               <p className="fleet-status-line">{fleetStatusLine(monitoredServers.length, fleetStatus)}</p>
@@ -418,12 +439,65 @@ function App() {
                 </button>
               )}
             </header>
+            <AiInsightsGroups extras={aiExtras} onOpenHost={openInsightHost} />
+            <LegacyMetricsSection
+              domain="ai_insights"
+              title="Legacy AI Insights portal (MariaDB sync)"
+              isAdmin={session?.role === 'admin'}
+            />
+          </>
+        )}
 
-            {detailServer ? (
+        {nav === 'hosts' && !detailServer && (
+          <>
+            <header className="page-head">
+              <p className="fleet-status-line">{monitoredServers.length} hosts</p>
+            </header>
+            <ServersByDomain
+              servers={monitoredServers}
+              domainFilter={serverDomain}
+              onDomainFilterChange={setServerDomain}
+              renderCard={(s) => {
+                const host = metricsByServer[s.id]?.host[0]
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="server-tile"
+                    onClick={() => openHost(s.id)}
+                  >
+                    <strong>{s.server_name}</strong>
+                    <span className="server-tile-ip">
+                      {s.ip_address}:{s.ssh_port}
+                    </span>
+                    <span className="server-tile-metrics">
+                      RAM {host?.mem_used_pct != null ? `${host.mem_used_pct.toFixed(0)}%` : '—'} · Disk{' '}
+                      {host?.disk_root_pct != null ? `${host.disk_root_pct.toFixed(0)}%` : '—'}
+                    </span>
+                  </button>
+                )
+              }}
+            />
+            {pendingServers.length > 0 && (
+              <section className="pending-section">
+                <h2>Pending SSH access</h2>
+                <div className="pending-list">
+                  {pendingServers.map((s) => (
+                    <span key={s.id} className="pending-chip">
+                      {s.server_name} · {s.ip_address}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+
+        {detailServer && (nav === 'servers' || nav === 'hosts') && (
               <ServerDetail
                 server={detailServer}
                 extra={insightFor(detailServer)}
-                onBack={() => setDetailServerId(null)}
+                onBack={closeHost}
               >
                 <ServerCard
                   server={detailServer}
@@ -485,59 +559,6 @@ function App() {
                   }
                 />
               </ServerDetail>
-            ) : (
-              <>
-            <AiInsightsGroups extras={aiExtras} onOpenHost={openInsightHost} />
-
-            <ServersByDomain
-              servers={monitoredServers}
-              domainFilter={serverDomain}
-              onDomainFilterChange={setServerDomain}
-              renderCard={(s) => {
-                const host = metricsByServer[s.id]?.host[0]
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className="server-tile"
-                    onClick={() => setDetailServerId(s.id)}
-                  >
-                    <strong>{s.server_name}</strong>
-                    <span className="server-tile-ip">
-                      {s.ip_address}:{s.ssh_port}
-                    </span>
-                    <span className="server-tile-metrics">
-                      RAM {host?.mem_used_pct != null ? `${host.mem_used_pct.toFixed(0)}%` : '—'} · Disk{' '}
-                      {host?.disk_root_pct != null ? `${host.disk_root_pct.toFixed(0)}%` : '—'}
-                    </span>
-                  </button>
-                )
-              }}
-            />
-
-            {serverDomain === 'ai' && (
-              <LegacyMetricsSection
-                domain="ai_insights"
-                title="Legacy AI Insights portal (MariaDB sync)"
-                isAdmin={session?.role === 'admin'}
-              />
-            )}
-
-            {pendingServers.length > 0 && (
-              <section className="pending-section">
-                <h2>Pending SSH access</h2>
-                <div className="pending-list">
-                  {pendingServers.map((s) => (
-                    <span key={s.id} className="pending-chip">
-                      {s.server_name} · {s.ip_address}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
-              </>
-            )}
-          </>
         )}
 
         {nav === 'email' && session && emailServers.length > 0 && (
@@ -832,6 +853,7 @@ function App() {
           nav !== 'backupvault' &&
           nav !== 'email' &&
           nav !== 'voicemg' &&
+          nav !== 'hosts' &&
           nav !== 'alerts' &&
           nav !== 'activity' && (
           <p className="muted" style={{ marginTop: '1.5rem' }}>

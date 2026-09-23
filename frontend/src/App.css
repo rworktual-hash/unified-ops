@@ -433,6 +433,15 @@
   margin-bottom: 1.5rem;
 }
 
+.server-detail-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 0 1rem;
+  padding: 0.35rem 0 0.75rem;
+  background: var(--bg);
+}
+
 .server-tile {
   display: flex;
   flex-direction: column;
