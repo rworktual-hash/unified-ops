@@ -580,9 +580,6 @@ function App() {
 
         {nav === 'chat' && (
           <div className="chat-page">
-            <header className="page-head">
-              <p className="fleet-status-line">{activeServers.length} hosts</p>
-            </header>
             <ChatPanel activeServers={activeServers} />
           </div>
         )}
