@@ -20,6 +20,7 @@ import {
   listAlerts,
   listLiveAlerts,
   listApprovals,
+  suggestLiveAlert,
   listServers,
   rejectApproval,
   resolveAlert,
@@ -48,7 +49,16 @@ import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { VoiceMgPanel } from './components/VoiceMgPanel'
 import { UsersPanel } from './components/UsersPanel'
-import type { AgentAction, Alert, Approval, ConnectionTestResult, LiveAlert, MetricsBundle, Server } from './types'
+import type {
+  AgentAction,
+  Alert,
+  AlertSuggestion,
+  Approval,
+  ConnectionTestResult,
+  LiveAlert,
+  MetricsBundle,
+  Server,
+} from './types'
 import './App.css'
 
 function fleetStatusLine(hostCount: number, status: FleetCollectStatus | null) {
@@ -93,6 +103,9 @@ function App() {
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
+  const [suggestingId, setSuggestingId] = useState<number | null>(null)
+  const [suggestions, setSuggestions] = useState<Record<number, AlertSuggestion>>({})
+  const [suggestErrors, setSuggestErrors] = useState<Record<number, string>>({})
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [showAllApprovals, setShowAllApprovals] = useState(false)
   const [collectingAll, setCollectingAll] = useState(false)
@@ -623,6 +636,37 @@ function App() {
                         </p>
                       </div>
                       <div className="alert-actions">
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          disabled={suggestingId === a.source_id}
+                          onClick={async () => {
+                            setSuggestingId(a.source_id)
+                            setSuggestErrors((prev) => {
+                              const next = { ...prev }
+                              delete next[a.source_id]
+                              return next
+                            })
+                            try {
+                              const suggestion = await suggestLiveAlert(a.source_id)
+                              setSuggestions((prev) => ({ ...prev, [a.source_id]: suggestion }))
+                            } catch (err) {
+                              setSuggestErrors((prev) => ({
+                                ...prev,
+                                [a.source_id]:
+                                  err instanceof Error ? err.message : 'Suggestion failed',
+                              }))
+                            } finally {
+                              setSuggestingId(null)
+                            }
+                          }}
+                        >
+                          {suggestingId === a.source_id
+                            ? 'Suggesting…'
+                            : suggestions[a.source_id]
+                              ? 'Refresh suggestion'
+                              : 'Suggest'}
+                        </button>
                         {!a.matched || !a.inventory_active ? (
                           <span className="muted">No agent</span>
                         ) : (
@@ -663,6 +707,33 @@ function App() {
                           />
                         ) : null}
                       </div>
+                      {suggestions[a.source_id] ? (
+                        <div className="alert-suggest">
+                          <p>
+                            <span>Why</span>
+                            {suggestions[a.source_id].why}
+                          </p>
+                          <p>
+                            <span>Fix</span>
+                            {suggestions[a.source_id].solution}
+                          </p>
+                          <p>
+                            <span>Team</span>
+                            {suggestions[a.source_id].team}
+                          </p>
+                          <p>
+                            <span>Time</span>
+                            {suggestions[a.source_id].time_estimate}
+                          </p>
+                          <p className="muted alert-suggest-note">
+                            {suggestions[a.source_id].from_model
+                              ? 'Estimate only. A restart still needs Approve and Confirm run.'
+                              : 'The model was unavailable, so this is a short read of the alert. A restart still needs Approve and Confirm run.'}
+                          </p>
+                        </div>
+                      ) : suggestErrors[a.source_id] ? (
+                        <p className="alert-suggest-note banner error">{suggestErrors[a.source_id]}</p>
+                      ) : null}
                     </article>
                   ))}
                 </div>

@@ -156,6 +156,15 @@ export type Alert = {
   source?: string
 }
 
+export type AlertSuggestion = {
+  source_id: number
+  why: string
+  solution: string
+  team: string
+  time_estimate: string
+  from_model: boolean
+}
+
 export type LiveAlert = {
   source_id: number
   source: string

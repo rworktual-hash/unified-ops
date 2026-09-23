@@ -48,3 +48,12 @@ class LiveAlertsRead(BaseModel):
     database: str | None = None
     reason: str | None = None
     alerts: list[LiveAlertRead]
+
+
+class AlertSuggestionRead(BaseModel):
+    source_id: int
+    why: str
+    solution: str
+    team: str
+    time_estimate: str
+    from_model: bool = False

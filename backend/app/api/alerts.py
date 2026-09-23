@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.alert import Alert
 from app.models.server import Server
-from app.schemas.alert import AlertRead, AlertReadWithServer, LiveAlertsRead
+from app.schemas.alert import AlertRead, AlertReadWithServer, AlertSuggestionRead, LiveAlertsRead
 from app.schemas.agent_action import InvestigationResponse
+from app.services.alert_suggestion import suggest_live_alert
 from app.services.investigation import InvestigationNotAllowed, run_investigation
 from app.services.live_alerts import attach_inventory, fetch_ai_insights_alerts
 
@@ -75,8 +76,7 @@ def list_live_alerts(db: Session = Depends(get_db)) -> LiveAlertsRead:
     )
 
 
-@router.post("/live/{source_id}/investigate", response_model=InvestigationResponse)
-def investigate_live_alert(source_id: int, db: Session = Depends(get_db)) -> InvestigationResponse:
+def _matched_live_alert(db: Session, source_id: int) -> dict:
     payload = fetch_ai_insights_alerts()
     if not payload.get("ok"):
         raise HTTPException(
@@ -87,6 +87,19 @@ def investigate_live_alert(source_id: int, db: Session = Depends(get_db)) -> Inv
     alert = next((row for row in matched if row.get("source_id") == source_id), None)
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live alert not found")
+    return alert
+
+
+@router.post("/live/{source_id}/suggest", response_model=AlertSuggestionRead)
+def suggest_live(source_id: int, db: Session = Depends(get_db)) -> AlertSuggestionRead:
+    alert = _matched_live_alert(db, source_id)
+    suggestion = suggest_live_alert(db, alert)
+    return AlertSuggestionRead(source_id=source_id, **suggestion)
+
+
+@router.post("/live/{source_id}/investigate", response_model=InvestigationResponse)
+def investigate_live_alert(source_id: int, db: Session = Depends(get_db)) -> InvestigationResponse:
+    alert = _matched_live_alert(db, source_id)
     server_id = alert.get("inventory_server_id")
     if not server_id:
         raise HTTPException(

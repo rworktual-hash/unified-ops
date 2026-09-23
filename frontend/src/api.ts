@@ -3,6 +3,7 @@ import { authHeaders, setStoredToken } from './authStorage'
 import type {
   AgentAction,
   Alert,
+  AlertSuggestion,
   Approval,
   InvestigationResult,
   LiveAlert,
@@ -696,6 +697,17 @@ export async function listLiveAlerts(): Promise<{
 }> {
   const res = await apiFetch('/alerts/live')
   if (!res.ok) throw new Error('Failed to load live .222 alerts')
+  return res.json()
+}
+
+export type { AlertSuggestion }
+
+export async function suggestLiveAlert(sourceId: number): Promise<AlertSuggestion> {
+  const res = await apiFetch(`/alerts/live/${sourceId}/suggest`, { method: 'POST' })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || 'Suggestion failed')
+  }
   return res.json()
 }
 
