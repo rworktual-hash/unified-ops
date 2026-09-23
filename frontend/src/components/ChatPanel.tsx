@@ -20,7 +20,33 @@ const SUGGESTIONS = [
   'Summarize host health',
 ]
 
+const CHAT_STORE = 'worktual_observability_chats'
+
+type ChatThread = {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  updatedAt: number
+}
+
+function newThreadId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function loadThreads(): ChatThread[] {
+  try {
+    const raw = localStorage.getItem(CHAT_STORE)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as ChatThread[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 export function ChatPanel({ activeServers }: Props) {
+  const [threads, setThreads] = useState<ChatThread[]>(() => loadThreads())
+  const [activeId, setActiveId] = useState(newThreadId)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [serverId, setServerId] = useState<string>('all')
@@ -32,6 +58,39 @@ export function ChatPanel({ activeServers }: Props) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
+
+  useEffect(() => {
+    const saved = messages.filter((message) => message.text.trim())
+    if (saved.length === 0) return
+    const title = (saved.find((message) => message.role === 'user')?.text || 'New chat').slice(0, 48)
+    const handle = window.setTimeout(() => {
+      setThreads((prev) => {
+        const next = [
+          { id: activeId, title, messages: saved, updatedAt: Date.now() },
+          ...prev.filter((thread) => thread.id !== activeId),
+        ].slice(0, 40)
+        localStorage.setItem(CHAT_STORE, JSON.stringify(next))
+        return next
+      })
+    }, 400)
+    return () => window.clearTimeout(handle)
+  }, [messages, activeId])
+
+  function openThread(thread: ChatThread) {
+    if (sending || thread.id === activeId) return
+    setChatError(null)
+    setInput('')
+    setActiveId(thread.id)
+    setMessages(thread.messages)
+  }
+
+  function startThread() {
+    if (sending) return
+    setChatError(null)
+    setInput('')
+    setActiveId(newThreadId())
+    setMessages([])
+  }
 
   const send = useCallback(async (raw?: string) => {
     const text = (raw ?? input).trim()
@@ -138,6 +197,29 @@ export function ChatPanel({ activeServers }: Props) {
   }
 
   return (
+    <div className="chat-shell">
+      <aside className="chat-history">
+        <button type="button" className="chat-history-new" onClick={startThread} disabled={sending}>
+          New chat
+        </button>
+        <div className="chat-history-list">
+          {threads.length === 0 ? (
+            <p className="muted chat-history-empty">No earlier chats</p>
+          ) : (
+            threads.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                className={`chat-history-item${thread.id === activeId ? ' active' : ''}`}
+                onClick={() => openThread(thread)}
+                disabled={sending}
+              >
+                {thread.title}
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
     <section className="chat-panel">
       <div className="chat-toolbar">
         <span className="muted chat-toolbar-note">Latest collect for the scope you pick</span>
@@ -224,5 +306,6 @@ export function ChatPanel({ activeServers }: Props) {
         </button>
       </div>
     </section>
+    </div>
   )
 }

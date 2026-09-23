@@ -1131,6 +1131,79 @@
   background: var(--surface);
 }
 
+.chat-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.chat-history {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  padding: 0.85rem 0.7rem;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.chat-history-new {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-history-new:hover:not(:disabled) {
+  border-color: #d4d4d8;
+}
+
+.chat-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+.chat-history-empty {
+  margin: 0.45rem 0.35rem;
+  font-size: 0.75rem;
+}
+
+.chat-history-item {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-history-item:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.chat-history-item.active {
+  background: var(--surface);
+  font-weight: 600;
+}
+
 .main-body:has(.chat-page) {
   display: flex;
   flex-direction: column;
