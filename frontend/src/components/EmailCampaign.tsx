@@ -82,7 +82,7 @@ export function EmailCampaign({ extras, loading = false, periodHours, onPeriodHo
       ) : null}
 
       <div className="stat-row stat-row--email">
-        <Kpi label="Sent" value={totals?.sent} accent />
+        <Kpi label="Sent" value={totals?.sent} ok />
         <Kpi label="Bounce" value={totals?.bounce} warn />
         <Kpi label="Deferred" value={totals?.deferred} />
         <Kpi label="Unreachable" value={totals?.host_not_reachable} warn />
@@ -93,11 +93,11 @@ export function EmailCampaign({ extras, loading = false, periodHours, onPeriodHo
       </div>
 
       {mix.sum > 0 ? (
-        <div className="email-mix" aria-label="Delivery mix">
-          <MixSeg label="Sent" value={mix.sent} total={mix.sum} color="#6d28d9" />
-          <MixSeg label="Bounce" value={mix.bounce} total={mix.sum} color="#e11d48" />
-          <MixSeg label="Deferred" value={mix.deferred} total={mix.sum} color="#d97706" />
-          <MixSeg label="Unreachable" value={mix.unreachable} total={mix.sum} color="#334155" />
+        <div className="email-outcome" aria-label="Delivery mix">
+          <Outcome label="Sent" value={mix.sent} total={mix.sum} kind="sent" />
+          <Outcome label="Bounce" value={mix.bounce} total={mix.sum} kind="bounce" />
+          <Outcome label="Deferred" value={mix.deferred} total={mix.sum} kind="deferred" />
+          <Outcome label="Unreachable" value={mix.unreachable} total={mix.sum} kind="unreachable" />
         </div>
       ) : null}
 
@@ -234,40 +234,44 @@ function eventHaystack(row: EmailExtraEvent): string {
 function Kpi({
   label,
   value,
-  accent,
+  ok,
   warn,
 }: {
   label: string
   value: number | null | undefined
-  accent?: boolean
+  ok?: boolean
   warn?: boolean
 }) {
   return (
     <div className="stat-card">
       <span className="stat-label">{label}</span>
-      <span className={`stat-value${accent ? ' accent' : ''}${warn ? ' warn' : ''}`}>
+      <span className={`stat-value${ok ? ' ok' : ''}${warn ? ' warn' : ''}`}>
         {value == null ? '—' : value}
       </span>
     </div>
   )
 }
 
-function MixSeg({
+function Outcome({
   label,
   value,
   total,
-  color,
+  kind,
 }: {
   label: string
   value: number
   total: number
-  color: string
+  kind: 'sent' | 'bounce' | 'deferred' | 'unreachable'
 }) {
   const pct = total ? Math.round((value / total) * 100) : 0
-  if (!value) return null
   return (
-    <div className="email-mix-seg" style={{ flexGrow: value, background: color }} title={`${label} ${value} (${pct}%)`}>
-      {pct >= 12 ? `${label} ${pct}%` : ''}
+    <div className="email-outcome-row">
+      <span className="email-outcome-label">{label}</span>
+      <span className="email-outcome-count">{value}</span>
+      <div className="email-outcome-track" aria-hidden>
+        <div className={`email-outcome-fill email-outcome-fill--${kind}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="email-outcome-pct">{pct}%</span>
     </div>
   )
 }
