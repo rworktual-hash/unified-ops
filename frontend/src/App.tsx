@@ -93,7 +93,7 @@ type NavId =
 
 function App() {
   const [session, setSession] = useState<AppUser | null | 'pending'>('pending')
-  const [nav, setNav] = useState<NavId>('servers')
+  const [nav, setNav] = useState<NavId>('alerts')
   const [servers, setServers] = useState<Server[]>([])
   const [error, setError] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<number | null>(null)

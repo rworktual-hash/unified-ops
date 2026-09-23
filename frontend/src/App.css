@@ -1817,6 +1817,26 @@ th {
   color: #92400e;
 }
 
+.alert-item .badge.warning {
+  animation: alert-warn-blink 1.15s ease-in-out infinite;
+}
+
+@keyframes alert-warn-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alert-item .badge.warning {
+    animation: none;
+  }
+}
+
 .badge.pending {
   background: #f3e8ff;
   color: #6b21a8;
