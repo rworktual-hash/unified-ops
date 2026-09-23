@@ -607,85 +607,70 @@ function App() {
               {liveAlerts.length === 0 && !liveAlertsReason ? (
                 <p className="muted">No open live alerts.</p>
               ) : liveAlerts.length > 0 ? (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Severity</th>
-                        <th>Host</th>
-                        <th>Title</th>
-                        <th>Message</th>
-                        <th>Match</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {liveAlerts.map((a) => (
-                        <tr key={`live-${a.source_id}`}>
-                          <td>
-                            <span className={`badge ${a.severity}`}>{a.severity}</span>
-                          </td>
-                          <td>
-                            {a.inventory_server_name || a.portal_server_name || '—'}
-                            <br />
-                            <span className="muted">{a.ip_address || a.hostname || '—'}</span>
-                          </td>
-                          <td>{a.title}</td>
-                          <td>{a.message}</td>
-                          <td>
-                            <span
-                              className={`badge ${
-                                !a.matched ? 'rejected' : a.inventory_active ? 'executed' : 'pending'
-                              }`}
-                            >
-                              {!a.matched ? 'Unmatched' : a.inventory_active ? 'Inventory' : 'Paused'}
-                            </span>
-                          </td>
-                          <td className="action-cell">
-                            {!a.matched || !a.inventory_active ? (
-                              <span className="muted">No agent</span>
-                            ) : (
-                            <button
-                              type="button"
-                              className="btn ghost"
-                              disabled={investigatingId === a.source_id}
-                              onClick={async () => {
-                                setInvestigatingId(a.source_id)
-                                setError(null)
-                                try {
-                                  await investigateLiveAlert(a.source_id)
-                                  setAgentActions(await listAgentActions(15))
-                                  setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
-                                  setNav('approvals')
-                                } catch (err) {
-                                  setError(err instanceof Error ? err.message : 'Investigate failed')
-                                } finally {
-                                  setInvestigatingId(null)
-                                }
-                              }}
-                            >
-                              Investigate
-                            </button>
-                            )}
-                            {a.inventory_server_id && a.inventory_active ? (
-                              <ApprovalRequestButtons
-                                restartServices={recoveryServices(a.inventory_server_id)}
-                                onRecollect={() =>
-                                  void requestApproval(a.inventory_server_id!, 'recollect_metrics')
-                                }
-                                onSshVerify={() => void requestApproval(a.inventory_server_id!, 'ssh_verify')}
-                                onRestart={(service) =>
-                                  void requestApproval(a.inventory_server_id!, 'systemctl_restart', {
-                                    service_name: service,
-                                  })
-                                }
-                              />
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="alert-list">
+                  {liveAlerts.map((a) => (
+                    <article className="alert-item" key={`live-${a.source_id}`}>
+                      <span className={`badge ${a.severity}`}>{a.severity}</span>
+                      <div className="alert-copy">
+                        <div className="alert-title-line">
+                          <strong>{a.inventory_server_name || a.portal_server_name || '—'}</strong>
+                          <span className="muted">{a.ip_address || a.hostname || '—'}</span>
+                          <span
+                            className={`badge ${
+                              !a.matched ? 'rejected' : a.inventory_active ? 'executed' : 'pending'
+                            }`}
+                          >
+                            {!a.matched ? 'Unmatched' : a.inventory_active ? 'Inventory' : 'Paused'}
+                          </span>
+                        </div>
+                        <p className="alert-title">{a.title}</p>
+                        <p className="alert-message" title={a.message}>
+                          {a.message}
+                        </p>
+                      </div>
+                      <div className="alert-actions">
+                        {!a.matched || !a.inventory_active ? (
+                          <span className="muted">No agent</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn ghost"
+                            disabled={investigatingId === a.source_id}
+                            onClick={async () => {
+                              setInvestigatingId(a.source_id)
+                              setError(null)
+                              try {
+                                await investigateLiveAlert(a.source_id)
+                                setAgentActions(await listAgentActions(15))
+                                setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
+                                setNav('approvals')
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : 'Investigate failed')
+                              } finally {
+                                setInvestigatingId(null)
+                              }
+                            }}
+                          >
+                            Investigate
+                          </button>
+                        )}
+                        {a.inventory_server_id && a.inventory_active ? (
+                          <ApprovalRequestButtons
+                            restartServices={recoveryServices(a.inventory_server_id)}
+                            onRecollect={() =>
+                              void requestApproval(a.inventory_server_id!, 'recollect_metrics')
+                            }
+                            onSshVerify={() => void requestApproval(a.inventory_server_id!, 'ssh_verify')}
+                            onRestart={(service) =>
+                              void requestApproval(a.inventory_server_id!, 'systemctl_restart', {
+                                service_name: service,
+                              })
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
                 </div>
               ) : null}
             </section>
@@ -696,85 +681,78 @@ function App() {
               {alerts.length === 0 ? (
                 <p className="muted">No SSH alerts.</p>
               ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Severity</th>
-                        <th>Server</th>
-                        <th>Title</th>
-                        <th>Message</th>
-                        <th>Status</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {alerts.map((a) => (
-                        <tr key={a.id}>
-                          <td>
-                            <span className={`badge ${a.severity}`}>{a.severity}</span>
-                          </td>
-                          <td>{a.server_name}</td>
-                          <td>{a.title}</td>
-                          <td>{a.message}</td>
-                          <td>{a.status}</td>
-                          <td className="action-cell">
-                            {a.status === 'open' && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn ghost"
-                                  disabled={investigatingId === a.id}
-                                  onClick={async () => {
-                                    setInvestigatingId(a.id)
-                                    try {
-                                      await investigateAlert(a.id)
-                                      setAgentActions(await listAgentActions(15))
-                                      setApprovals(
-                                        await listApprovals(showAllApprovals ? undefined : 'pending'),
-                                      )
-                                      setNav('approvals')
-                                    } finally {
-                                      setInvestigatingId(null)
-                                    }
-                                  }}
-                                >
-                                  Investigate
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn ghost"
-                                  onClick={async () => {
-                                    await resolveAlert(a.id)
-                                    setAlerts(await listAlerts(showResolved ? undefined : 'open'))
-                                  }}
-                                >
-                                  Resolve
-                                </button>
-                                <ApprovalRequestButtons
-                                  restartServices={recoveryServices(a.server_id)}
-                                  onRecollect={() =>
-                                    void requestApproval(a.server_id, 'recollect_metrics', undefined, a.id)
-                                  }
-                                  onSshVerify={() =>
-                                    void requestApproval(a.server_id, 'ssh_verify', undefined, a.id)
-                                  }
-                                  onRestart={(service) =>
-                                    void requestApproval(
-                                      a.server_id,
-                                      'systemctl_restart',
-                                      { service_name: service },
-                                      a.id,
-                                    )
-                                  }
-                                />
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="alert-list">
+                  {alerts.map((a) => (
+                    <article className="alert-item" key={a.id}>
+                      <span className={`badge ${a.severity}`}>{a.severity}</span>
+                      <div className="alert-copy">
+                        <div className="alert-title-line">
+                          <strong>{a.server_name}</strong>
+                          <span className="muted">{a.ip_address}</span>
+                          <span className={`badge ${a.status === 'open' ? 'pending' : 'executed'}`}>
+                            {a.status}
+                          </span>
+                        </div>
+                        <p className="alert-title">{a.title}</p>
+                        <p className="alert-message" title={a.message}>
+                          {a.message}
+                        </p>
+                      </div>
+                      <div className="alert-actions">
+                        {a.status === 'open' && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              disabled={investigatingId === a.id}
+                              onClick={async () => {
+                                setInvestigatingId(a.id)
+                                try {
+                                  await investigateAlert(a.id)
+                                  setAgentActions(await listAgentActions(15))
+                                  setApprovals(
+                                    await listApprovals(showAllApprovals ? undefined : 'pending'),
+                                  )
+                                  setNav('approvals')
+                                } finally {
+                                  setInvestigatingId(null)
+                                }
+                              }}
+                            >
+                              Investigate
+                            </button>
+                            <button
+                              type="button"
+                              className="btn ghost"
+                              onClick={async () => {
+                                await resolveAlert(a.id)
+                                setAlerts(await listAlerts(showResolved ? undefined : 'open'))
+                              }}
+                            >
+                              Resolve
+                            </button>
+                            <ApprovalRequestButtons
+                              restartServices={recoveryServices(a.server_id)}
+                              onRecollect={() =>
+                                void requestApproval(a.server_id, 'recollect_metrics', undefined, a.id)
+                              }
+                              onSshVerify={() =>
+                                void requestApproval(a.server_id, 'ssh_verify', undefined, a.id)
+                              }
+                              onRestart={(service) =>
+                                void requestApproval(
+                                  a.server_id,
+                                  'systemctl_restart',
+                                  { service_name: service },
+                                  a.id,
+                                )
+                              }
+                            />
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  ))}
                 </div>
               )}
             </section>

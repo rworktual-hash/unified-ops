@@ -1878,6 +1878,85 @@ pre.diagnosis {
   margin-bottom: 0.25rem;
 }
 
+.alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.alert-item {
+  display: grid;
+  grid-template-columns: 6.2rem minmax(0, 1fr);
+  gap: 0.35rem 0.85rem;
+  align-items: start;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.alert-copy {
+  min-width: 0;
+}
+
+.alert-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+}
+
+.alert-title-line strong {
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+}
+
+.alert-title {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+}
+
+.alert-message {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alert-actions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.alert-actions .approval-request-row {
+  display: contents;
+  margin: 0;
+}
+
+.alert-actions .btn {
+  height: 32px;
+  min-height: 32px;
+  margin: 0;
+}
+
+@media (min-width: 1100px) {
+  .alert-item {
+    grid-template-columns: 6.2rem minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .alert-actions {
+    grid-column: auto;
+    justify-content: flex-end;
+    max-width: 26rem;
+  }
+}
+
 .login-shell {
   min-height: 100vh;
   display: flex;
