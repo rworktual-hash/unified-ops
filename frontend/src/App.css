@@ -77,6 +77,9 @@
 }
 
 .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   border: none;
   border-left: 3px solid transparent;
   background: transparent;
@@ -86,6 +89,10 @@
   color: var(--sidebar-muted);
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.nav-item svg {
+  flex-shrink: 0;
 }
 
 .nav-item:hover {

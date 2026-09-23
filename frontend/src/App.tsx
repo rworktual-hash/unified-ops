@@ -45,6 +45,7 @@ import type { DomainId } from './serverDomains'
 import { ApprovalDecisionCard } from './components/ApprovalDecisionCard'
 import { ApprovalRequestButtons } from './components/ApprovalRequestButtons'
 import { BrandLockup } from './components/BrandLockup'
+import { NavIcon } from './components/NavIcon'
 import { AccountMenu } from './components/AccountMenu'
 import { AgentLogList } from './components/AgentLogList'
 import { EmailPanel } from './components/EmailPanel'
@@ -412,6 +413,7 @@ function App() {
                 setNav(item.id)
               }}
             >
+              <NavIcon id={item.id} />
               {item.label}
             </button>
           ))}
