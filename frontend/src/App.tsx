@@ -779,9 +779,7 @@ function App() {
               </label>
             </header>
             {approvals.length === 0 ? (
-              <section className="panel">
-                <p className="muted">Nothing waiting. Investigate a host to propose a command.</p>
-              </section>
+              <p className="muted">Nothing waiting.</p>
             ) : (
               <div className="approval-card-list">
                 {approvals.map((ap) => (

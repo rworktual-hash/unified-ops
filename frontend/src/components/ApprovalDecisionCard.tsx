@@ -32,25 +32,14 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
         </div>
         <span className={`badge ${approval.status}`}>{statusTitle(approval.status)}</span>
       </header>
-      <dl className="approval-meta">
-        <div>
-          <dt>Problem</dt>
-          <dd>{approval.alert_reason || approval.request_notes || alertTitle(approval.alert_type, approval.action_key)}</dd>
-        </div>
-      </dl>
-      <p className="approval-card-kicker">Command</p>
-      <pre className="readonly-sample approval-command">
-        {approval.proposed_command || actionTitle(approval.action_key)}
-      </pre>
-      {approval.impact ? (
-        <>
-          <p className="approval-card-kicker">Impact</p>
-          <p className="approval-impact">{approval.impact}</p>
-        </>
-      ) : null}
+      <p className="approval-problem">
+        {approval.alert_reason || approval.request_notes || alertTitle(approval.alert_type, approval.action_key)}
+      </p>
+      <p className="approval-command">{approval.proposed_command || actionTitle(approval.action_key)}</p>
+      {approval.impact ? <p className="approval-impact">{approval.impact}</p> : null}
 
       {approval.status === 'pending' ? (
-        <div className="approval-request-row">
+        <div className="approval-actions">
           {step === 'idle' ? (
             <>
               <button type="button" className="btn primary" disabled={busy} onClick={() => setStep('confirm')}>
@@ -85,7 +74,7 @@ export function ApprovalDecisionCard({ approval, onApprove, onReject }: Props) {
           )}
         </div>
       ) : approval.execution_result ? (
-        <p className="muted">{prettyResult(approval.execution_result)}</p>
+        <p className="muted approval-impact">{prettyResult(approval.execution_result)}</p>
       ) : null}
     </article>
   )

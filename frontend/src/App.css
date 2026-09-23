@@ -1429,49 +1429,54 @@
 }
 
 .approval-card {
-  padding: 1.15rem 1.2rem 1.2rem;
+  padding: 1rem 1.1rem;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
 }
 
 .approval-card-kicker {
-  margin: 0 0 0.2rem;
-  font-size: 0.72rem;
+  margin: 0 0 0.15rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--muted);
 }
 
-.approval-meta {
-  margin: 0.75rem 0 0.85rem;
-  display: grid;
-  gap: 0.55rem;
-}
-
-.approval-meta dt {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.approval-meta dd {
+.approval-problem {
   margin: 0.15rem 0 0;
   font-size: 0.9rem;
+  line-height: 1.45;
 }
 
-.approval-ask {
-  margin: 0 0 0.4rem;
+.approval-command {
+  margin: 0.65rem 0 0;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8125rem;
-  font-weight: 600;
+  color: var(--text);
 }
 
 .approval-impact,
 .approval-confirm-copy {
-  margin: 0.45rem 0 0.15rem;
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.approval-actions .approval-confirm-copy {
+  flex: 1 1 100%;
+  margin: 0;
 }
 
 .approval-card-head {
@@ -1502,12 +1507,6 @@
   white-space: pre-wrap;
   max-height: 140px;
   overflow: auto;
-}
-
-.approval-command {
-  margin-top: 0.15rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--text);
 }
 
 .approval-request-row {
