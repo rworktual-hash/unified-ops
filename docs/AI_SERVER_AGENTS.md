@@ -11,7 +11,7 @@ This file is the current contract. Update it when a Level 4 check or Level 5 com
 | Level | Name | May the agent run it alone? | Status |
 |-------|------|-----------------------------|--------|
 | 4 | Safe execution (read-only) | Yes, on the 5-minute collect (when Celery is on) or when you click Collect | **Live** |
-| 5 | Human approval | No. Investigate explains → pending approval → Approve → Confirm run | **Live (recollect / SSH verify; Docker restart on GPU only)** |
+| 5 | Human approval | No. Investigate explains → pending approval → Approve → Confirm run | **Live** for GPU, VoiceMG, Email, BackupVault, Nginx, SIP/PBX |
 | 6 | Admin only | Never. Report and stop | **Blocked** |
 
 ---
@@ -54,13 +54,15 @@ After **Investigate** (server card, SSH Collect alert, or live `.222` alert matc
 
 | Action | Who | What it does | What it does not do |
 |--------|-----|----------------|---------------------|
-| **Recollect metrics** | Any active host | SSH collect CPU/RAM/disk/GPU, store, re-evaluate alerts | Restart, delete, change config |
+| **Recollect metrics** | Any active host | SSH collect, store, re-evaluate alerts | Restart, delete, change config |
 | **SSH verify** | Any active host | SSH connection test | Any change on the host |
-| **Restart Docker** | **Active GPU only** (148/149 today) | `sudo systemctl restart docker` when Docker is down | Reboot, `nvidia-smi -r`, driver/CUDA update, kill processes, write `.222` |
+| **Restart Docker** | Active GPU, VoiceMG, BackupVault, SIP, PBX | `sudo systemctl restart docker` only when Docker is explicitly down | Reboot, GPU reset, kill calls, write `.222` |
+| **Restart Postfix** | Active Email | `sudo systemctl restart postfix` only when Postfix is explicitly down | Queue delete, `postsuper`, send mail |
+| **Restart nginx** | Active `server_type=nginx` | `sudo systemctl restart nginx` only when nginx is explicitly down | Config edit, other units |
 
-Investigate writes the issue, the exact command, and the impact on the approval. Approve is not enough. Confirm run is required. Inactive GPU 165/166 stay skipped.
+Investigate writes the issue, the exact command, and the impact. Approve does not run the command. Confirm run does, then recollects. Inactive hosts (including 165/166) are skipped. `10.180.1.222` is never an execution target.
 
-If collect failed → **SSH verify**. If GPU Docker is inactive → **Restart Docker**. Otherwise → **Recollect**. Kill GPU process / clear cache / delete logs / pause / failover / repair scripts stay unwired.
+If collect failed → **SSH verify**. If the one allowlisted unit for that host is explicitly down → that restart. Otherwise → **Recollect**. A missing status is not "down".
 
 ---
 
@@ -76,5 +78,6 @@ Reboot, shutdown, GPU reset, NVIDIA/CUDA or OS update, format disk, change SSH k
 |------|--------|
 | 2026-09-21 | Document created. Level 4 read-only collect + extras. Level 5 Investigate → explanation → two-step confirm for recollect / SSH verify only. |
 | 2026-09-22 | GPU-only remediations: agent explains issue + exact command; Docker restart (`sudo systemctl restart docker`) after Approve + Confirm run when Docker is down. Non-GPU hosts stay recollect / SSH verify. |
+| 2026-09-23 | Same two-step contract for VoiceMG, Email, BackupVault, Nginx, SIP/PBX. One unit each: docker, postfix, or nginx. Collect failure stays SSH verify. Service up stays recollect. |
 
 Add a row here whenever we add a command or a collect check.

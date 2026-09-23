@@ -33,7 +33,10 @@ def build_diagnosis(
             f"load {host_tool.get('load_1m')}"
         )
 
-    extras = tool_results.get("check_readonly_extras") or {}
+    extras = {
+        **(tool_results.get("check_readonly_extras") or {}),
+        **(tool_results.get("check_recovery_signals") or {}),
+    }
     if extras.get("error"):
         lines.append(f"Read-only extras error: {extras['error']}")
     elif extras:
@@ -43,7 +46,11 @@ def build_diagnosis(
             f"docker {extras.get('docker_active')} · containers {docker}"
         )
         if extras.get("docker_active") is False:
-            lines.append("Docker is inactive on this GPU host.")
+            lines.append("Docker is inactive on this host.")
+        if extras.get("postfix_active") is False:
+            lines.append("Postfix is inactive on this host.")
+        if extras.get("nginx_active") is False:
+            lines.append("nginx is inactive on this host.")
         if extras.get("process_sample"):
             lines.append(f"Process sample:\n{extras['process_sample']}")
         if extras.get("log_tail"):
@@ -76,10 +83,20 @@ def build_diagnosis(
 
 def _guidance_for_alert(alert_type: str | None, extras: dict[str, Any] | None = None) -> list[str]:
     extras = extras or {}
+    if extras.get("postfix_active") is False:
+        return [
+            "Postfix is down — the agent will ask to run `sudo systemctl restart postfix`.",
+            "That waits for Approve + Confirm run. It does not delete mail or run postsuper.",
+        ]
+    if extras.get("nginx_active") is False:
+        return [
+            "nginx is down — the agent will ask to run `sudo systemctl restart nginx`.",
+            "That waits for Approve + Confirm run. It does not edit nginx config.",
+        ]
     if extras.get("docker_active") is False:
         return [
-            "Docker is down on this GPU host — the agent will ask to run `sudo systemctl restart docker`.",
-            "That command waits for Approve + Confirm run. It does not reboot or reset GPUs.",
+            "Docker is down — the agent will ask to run `sudo systemctl restart docker`.",
+            "That waits for Approve + Confirm run. It does not reboot or reset GPUs.",
         ]
     if not alert_type:
         return ["Review metrics and alerts. Agent will request a read-only recollect after approval."]

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.server import Server
 from app.monitoring.ssh_test import test_ssh_connection
-from app.policies.executor_actions import is_action_allowed
+from app.policies.executor_actions import EXACT_RESTART_COMMANDS, is_action_allowed
 from app.services.metrics_collect import collect_and_store_metrics
 from app.services.server_ssh import ssh_kwargs_from_server
 
@@ -54,10 +54,16 @@ def execute_approved_action(
         )
 
     if action_key == "systemctl_restart":
-        service = params["service_name"].strip()
+        service = str(params.get("service_name") or "").strip()
+        cmd = EXACT_RESTART_COMMANDS.get(service)
+        if cmd is None:
+            return ExecutionResult(
+                success=False,
+                message="Execution blocked by policy.",
+                detail=f"Service '{service}' is not an allowlisted recovery unit.",
+            )
         from app.monitoring.ssh_client import ssh_session
 
-        cmd = f"sudo systemctl restart {service}"
         try:
             with ssh_session(**ssh_kwargs_from_server(server)) as client:
                 _stdin, stdout, stderr = client.exec_command(cmd, timeout=60)
@@ -70,8 +76,18 @@ def execute_approved_action(
                         message=f"systemctl restart failed (exit {code})",
                         detail=err or out,
                     )
-                return ExecutionResult(success=True, message=f"Restarted {service}", detail=out or "ok")
         except Exception as exc:
             return ExecutionResult(success=False, message="Restart command failed", detail=str(exc))
+        recollect = ""
+        try:
+            host, _gpus = collect_and_store_metrics(db, server)
+            recollect = f"recollect host_metric_id={host.id}"
+        except Exception as exc:
+            recollect = f"recollect failed: {exc}"
+        return ExecutionResult(
+            success=True,
+            message=f"Restarted {service}. {recollect}",
+            detail=out or "ok",
+        )
 
     return ExecutionResult(success=False, message="Unknown action", detail=action_key)

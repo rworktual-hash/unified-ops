@@ -35,7 +35,7 @@ The **five domain guides** (AI/GPU, VoiceMG, BackupVault, Email, Infrastructure)
 | Level | Today | Later |
 |-------|--------|--------|
 | Safe automatic | **Read-only only** — 5‑min Celery collect (CPU/RAM/disk/GPU + Docker/process/logs/listen). **No restart.** Failures log, no recovery. | Allowlisted restarts only if the team later accepts the risk |
-| Human approval | Investigate → explain alert/reason/command → Approve → **Confirm run**. Only **recollect** and **SSH verify**. Living doc: [`docs/AI_SERVER_AGENTS.md`](./docs/AI_SERVER_AGENTS.md) | More Level 5 commands only when added to that doc + allowlist |
+| Human approval | Investigate → explain host, problem, exact command, impact → **Approve** → **Confirm run** → execute → recollect. Allowlist below. Living doc: [`docs/AI_SERVER_AGENTS.md`](./docs/AI_SERVER_AGENTS.md) | No further restart units unless this table changes |
 | Admin / alert only | **Yes** — Collect alerts **and** live `.222` `ai_server_alerts` → IP match → **Investigate** (read-only) | Never reboot / GPU reset / format / unknown scripts |
 
 **Agreed target for agents (not fully built):**
@@ -60,7 +60,7 @@ Never write or execute on `.222`. SSH Collect alerts stay as a second input (hos
 ### Still to do (agreed order)
 
 1. **GPU 165 / 166** — only when SSH password works. **Do last.**
-2. Optional later: systemd for uvicorn; more Level 5 approval tools (never Level 6).
+2. Optional later: systemd for uvicorn. Level 6 stays blocked. Level 5 restarts are only the units in the Phase 6 table.
 
 Docs: [`docs/AI_SERVER_AGENTS.md`](./docs/AI_SERVER_AGENTS.md) (AI Level 4/5 living doc), [`docs/LEGACY_METRICS.md`](./docs/LEGACY_METRICS.md), [`docs/VOICEMG_METRICS.md`](./docs/VOICEMG_METRICS.md), five `*_agent_actions_guide.docx` + KT.
 
@@ -407,15 +407,23 @@ After each collect, rules run (defaults: RAM ≥85%, disk ≥85% warn / ≥92% c
 - **UI:** **Investigate** on alerts/servers; results in **Agent audit log**.
 - Optional later: set `OPENAI_API_KEY` for LLM-enriched text (not required in Phase 5).
 
-### Phase 6 — Approvals & executor
+### Phase 6 — Approvals & executor (Level 5)
 
-Allowlisted actions: `recollect_metrics`, `ssh_verify`, `systemctl_restart` (only if service ∈ `ALLOWLIST_RESTART_SERVICES`).
+Flow on every project: **Investigate** explains the issue and opens one pending approval (host, problem, exact command, impact). **Approve** does not run anything. **Confirm run** (`confirmed=true`) executes, then recollects. Reject or Cancel runs nothing. Inactive hosts, including GPU 165/166, are skipped. Nothing is executed on MariaDB `10.180.1.222`.
 
-1. **Request recollect** or **Request SSH verify** on a server card or alert → **pending** approval.
-2. **Request restart** appears only when `ALLOWLIST_RESTART_SERVICES` is set (hidden if empty).
-3. **Approve** runs the executor on the inventory host and logs `execute` in agent audit.
-4. **Reject** closes the request without running anything.
+| Project | When | Only command |
+|---------|------|----------------|
+| GPU | Docker down | `sudo systemctl restart docker` |
+| VoiceMG | Docker down | `sudo systemctl restart docker` |
+| Email | Postfix down | `sudo systemctl restart postfix` |
+| BackupVault | Docker down | `sudo systemctl restart docker` |
+| Nginx | nginx down | `sudo systemctl restart nginx` |
+| SIP / PBX | Docker down | `sudo systemctl restart docker` |
 
-Safe automatic stay off. Nothing mutates until you Approve.
+Collect failed → **SSH verify** only. Named service up, or no explicit down flag → **Recollect** only. A missing flag is not treated as down.
 
-API: `GET /approvals/catalog`, `POST /approvals`, `GET /approvals`, `POST /approvals/{id}/approve`, `POST /approvals/{id}/reject`.
+Never proposed or executed: host reboot, GPU reset, killing calls, unknown VMG/STT units, mail delete, `postsuper`, restore, SFTP recovery, MySQL/Postgres restart, nginx config edits, reload of other units, unnamed SIP/PBX process restart, or any command outside this table.
+
+`ALLOWLIST_RESTART_SERVICES` cannot add units. It can only narrow `docker`, `postfix`, and `nginx`.
+
+API: `GET /approvals/catalog`, `POST /approvals`, `GET /approvals`, `POST /approvals/{id}/approve` (body `confirmed=true`), `POST /approvals/{id}/reject`.

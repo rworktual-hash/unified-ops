@@ -4,7 +4,6 @@ import {
   collectAllServerMetrics,
   collectServerMetrics,
   createApproval,
-  fetchApprovalCatalog,
   fetchFleetCollectStatus,
   fetchHealth,
   type FleetCollectStatus,
@@ -28,7 +27,6 @@ import {
   UnauthorizedError,
   type AiInsightExtra,
   type AppUser,
-  type ApprovalCatalog,
   type VoiceMgExtra,
 } from './api'
 import { clearStoredToken } from './authStorage'
@@ -77,11 +75,6 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([])
   const [liveAlertsReason, setLiveAlertsReason] = useState<string | null>(null)
-  const [approvalCatalog, setApprovalCatalog] = useState<ApprovalCatalog>({
-    safe_actions: ['recollect_metrics', 'ssh_verify'],
-    restart_services: [],
-    gpu_restart_services: [],
-  })
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
@@ -171,11 +164,6 @@ function App() {
       }
       setAgentActions(await listAgentActions(15))
       setApprovals(await listApprovals(showAllApprovals ? undefined : 'pending'))
-      try {
-        setApprovalCatalog(await fetchApprovalCatalog())
-      } catch {
-        /* keep defaults */
-      }
     } catch (err) {
       if (err instanceof UnauthorizedError) {
         clearStoredToken()
@@ -258,15 +246,20 @@ function App() {
     [showAllApprovals],
   )
 
-  const gpuRestartServices = useCallback(
+  const recoveryServices = useCallback(
     (serverId: number | null | undefined) => {
       const host = servers.find((s) => s.id === serverId)
-      if (!host || host.server_type !== 'gpu' || !host.is_active) return []
-      return approvalCatalog.gpu_restart_services?.length
-        ? approvalCatalog.gpu_restart_services
-        : ['docker']
+      if (!host?.is_active || host.ip_address === '10.180.1.222') return []
+      const project = (host.project || '').toLowerCase()
+      const kind = (host.server_type || '').toLowerCase()
+      if (kind === 'gpu' || project === 'voicemg' || project === 'backupvault' || kind === 'sip' || kind === 'pbx') {
+        return ['docker']
+      }
+      if (project === 'email') return ['postfix']
+      if (kind === 'nginx') return ['nginx']
+      return []
     },
-    [approvalCatalog.gpu_restart_services, servers],
+    [servers],
   )
 
   const navItems: { id: NavId; label: string }[] = [
@@ -501,7 +494,7 @@ function App() {
                       setInvestigatingId(null)
                     }
                   }}
-                  restartServices={gpuRestartServices(s.id)}
+                  restartServices={recoveryServices(s.id)}
                   onRequestRecollect={() => void requestApproval(s.id, 'recollect_metrics')}
                   onRequestSshVerify={() => void requestApproval(s.id, 'ssh_verify')}
                   onRequestRestart={(service) =>
@@ -639,7 +632,7 @@ function App() {
                             )}
                             {a.inventory_server_id && a.inventory_active ? (
                               <ApprovalRequestButtons
-                                restartServices={gpuRestartServices(a.inventory_server_id)}
+                                restartServices={recoveryServices(a.inventory_server_id)}
                                 onRecollect={() =>
                                   void requestApproval(a.inventory_server_id!, 'recollect_metrics')
                                 }
@@ -730,7 +723,7 @@ function App() {
                                   Resolve
                                 </button>
                                 <ApprovalRequestButtons
-                                  restartServices={gpuRestartServices(a.server_id)}
+                                  restartServices={recoveryServices(a.server_id)}
                                   onRecollect={() =>
                                     void requestApproval(a.server_id, 'recollect_metrics', undefined, a.id)
                                   }

@@ -101,7 +101,11 @@ def run_investigation(
     approval_id = None
     proposed_action = None
     try:
-        extras = (final.get("tool_results") or {}).get("check_readonly_extras") or {}
+        tool_results = final.get("tool_results") or {}
+        extras = {
+            **(tool_results.get("check_readonly_extras") or {}),
+            **(tool_results.get("check_recovery_signals") or {}),
+        }
         approval = propose_after_investigation(
             db,
             server=server,

@@ -34,9 +34,12 @@ def create_approval_request(
     params = dict(action_params or {})
     if action_key in SAFE_COMMANDS or action_key == "systemctl_restart":
         if not params.get("proposed_command"):
-            extra = {}
+            extra = None
             if action_key == "systemctl_restart":
-                extra["service_name"] = str(params.get("service_name") or "docker")
+                service = str(params.get("service_name") or "").strip()
+                if not service:
+                    raise ValueError("service_name is required for systemctl_restart.")
+                extra = {"service_name": service}
             params.update(
                 build_guardrail_params(
                     server=server,

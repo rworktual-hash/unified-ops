@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
-from app.policies.executor_actions import GPU_RESTART_SERVICES, is_gpu_host
+from app.policies.executor_actions import EXACT_RESTART_COMMANDS, recovery_unit
 
 if TYPE_CHECKING:
     from app.models.approval_request import ApprovalRequest
@@ -30,24 +30,45 @@ SAFE_COMMANDS: dict[str, dict[str, str]] = {
     },
 }
 
-GPU_FIX_COMMANDS: dict[str, dict[str, str]] = {
-    "systemctl_restart": {
+RESTART_SPECS: dict[str, dict[str, str]] = {
+    "docker": {
         "label": "Restart Docker",
-        "command": "sudo systemctl restart docker",
+        "command": EXACT_RESTART_COMMANDS["docker"],
         "impact": (
-            "GPU host only. Restarts the Docker service. Containers bounce. "
-            "Does not reboot the host, reset GPUs, change NVIDIA/CUDA, or write MariaDB .222."
+            "Restarts Docker on this host only. Containers bounce. "
+            "Does not reboot the host, reset GPUs, delete mail, restore backups, or write MariaDB .222."
+        ),
+    },
+    "postfix": {
+        "label": "Restart Postfix",
+        "command": EXACT_RESTART_COMMANDS["postfix"],
+        "impact": (
+            "Restarts postfix on this email host only. Mail may pause and retry. "
+            "Does not delete the queue, run postsuper, or send mail."
+        ),
+    },
+    "nginx": {
+        "label": "Restart nginx",
+        "command": EXACT_RESTART_COMMANDS["nginx"],
+        "impact": (
+            "Restarts nginx on this host only. Open HTTP connections drop briefly. "
+            "Does not edit nginx config or restart any other unit."
         ),
     },
 }
 
-COMMAND_SPECS = {**SAFE_COMMANDS, **GPU_FIX_COMMANDS}
+_DOWN_FLAG = {
+    "docker": "docker_active",
+    "postfix": "postfix_active",
+    "nginx": "nginx_active",
+}
 
 
-def _docker_down(extras: dict[str, Any] | None) -> bool:
-    if not extras:
+def _confirmed_down(extras: dict[str, Any] | None, flag: str) -> bool:
+    """True only when the collector stored an explicit False. Missing is not down."""
+    if not extras or flag not in extras:
         return False
-    return extras.get("docker_active") is False
+    return extras.get(flag) is False
 
 
 def pick_proposal(
@@ -59,8 +80,9 @@ def pick_proposal(
 ) -> tuple[str, dict[str, str]]:
     if (alert_type or "") == "collect_failed" or host_collect_error:
         return "ssh_verify", {}
-    if is_gpu_host(server) and getattr(server, "is_active", False) and _docker_down(extras):
-        return "systemctl_restart", {"service_name": "docker"}
+    unit = recovery_unit(server)
+    if unit and _confirmed_down(extras, _DOWN_FLAG[unit]):
+        return "systemctl_restart", {"service_name": unit}
     return "recollect_metrics", {}
 
 
@@ -78,14 +100,16 @@ def build_guardrail_params(
     diagnosis: str | None,
     extra_params: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    spec = COMMAND_SPECS[action_key]
-    command = spec["command"]
-    impact = spec["impact"]
     if action_key == "systemctl_restart":
-        service = (extra_params or {}).get("service_name") or "docker"
-        if service not in GPU_RESTART_SERVICES:
-            service = "docker"
-        command = f"sudo systemctl restart {service}"
+        service = (extra_params or {}).get("service_name", "").strip()
+        spec = RESTART_SPECS.get(service)
+        if spec is None:
+            raise ValueError(f"Service '{service}' is not an allowlisted recovery unit.")
+        command = spec["command"]
+        impact = spec["impact"]
+    else:
+        command = SAFE_COMMANDS[action_key]["command"]
+        impact = SAFE_COMMANDS[action_key]["impact"]
     parts: list[str] = []
     if alert_message and alert_message.strip():
         parts.append(alert_message.strip())
@@ -103,6 +127,7 @@ def build_guardrail_params(
     }
     if extra_params:
         params.update(extra_params)
+    params["proposed_command"] = command
     return params
 
 
@@ -163,10 +188,14 @@ def propose_after_investigation(
         .order_by(ApprovalRequest.created_at.desc())
         .first()
     )
-    spec = COMMAND_SPECS[action_key]
+    label = (
+        RESTART_SPECS[extra["service_name"]]["label"]
+        if action_key == "systemctl_restart"
+        else SAFE_COMMANDS[action_key]["label"]
+    )
     notes = (
         f"Alert: {params['alert_type']}. Reason: {params['alert_reason']}. "
-        f"Proposed: {spec['label']}. Command: {params['proposed_command']}."
+        f"Proposed: {label}. Command: {params['proposed_command']}."
     )[:2000]
     if existing:
         existing.alert_id = alert_id or existing.alert_id

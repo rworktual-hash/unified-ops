@@ -11,6 +11,7 @@ from app.agents.tools.readonly_gpu import (
     tool_check_host_snapshot,
     tool_check_readonly_extras,
 )
+from app.agents.tools.recovery_signals import tool_check_recovery_signals
 from app.models.server import Server
 from app.policies.guardrails import PHASE5_DEFAULT_RECOMMENDATION
 
@@ -34,6 +35,10 @@ def _node_run_tools(state: InvestigateState) -> dict[str, Any]:
     if server.server_type == "gpu":
         results["check_gpu"] = tool_check_gpu(server)
         results["check_readonly_extras"] = tool_check_readonly_extras(server)
+    else:
+        signals = tool_check_recovery_signals(server)
+        if signals:
+            results["check_recovery_signals"] = signals
     return {"tool_results": results}
 
 

@@ -1,11 +1,16 @@
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from app.policies.executor_actions import SAFE_ACTION_KEYS, is_action_allowed
 
 
-def _gpu(**kwargs):
-    data = {"server_type": "gpu", "is_active": True}
+def _host(**kwargs):
+    data = {
+        "server_type": "app",
+        "project": "other",
+        "is_active": True,
+        "ip_address": "10.180.0.10",
+        "server_name": "host",
+    }
     data.update(kwargs)
     return SimpleNamespace(**data)
 
@@ -16,55 +21,59 @@ def test_safe_actions_are_recollect_and_ssh_verify():
     assert is_action_allowed("ssh_verify") == (True, "ok")
 
 
-def test_unknown_action_rejected():
-    ok, reason = is_action_allowed("rm_rf")
-    assert ok is False
-    assert "not allowlisted" in reason
+def test_unknown_and_blocked_commands_rejected():
+    for key in ("rm_rf", "reboot", "postsuper", "restore", "sftp", "nvidia-smi -r", "kill"):
+        ok, reason = is_action_allowed(key, server=_host(server_type="gpu", project="ai"))
+        assert ok is False
+        assert "not allowlisted" in reason
 
 
-def test_restart_denied_without_gpu_host():
+def test_restart_denied_without_host():
     ok, reason = is_action_allowed("systemctl_restart", {"service_name": "docker"})
-    assert ok is False
-    assert "GPU" in reason
-
-
-def test_restart_denied_on_non_gpu():
-    ok, reason = is_action_allowed(
-        "systemctl_restart", {"service_name": "docker"}, server=_gpu(server_type="email")
-    )
-    assert ok is False
-    assert "GPU" in reason
-
-
-def test_restart_denied_when_gpu_inactive():
-    ok, reason = is_action_allowed(
-        "systemctl_restart", {"service_name": "docker"}, server=_gpu(is_active=False)
-    )
     assert ok is False
     assert "inactive" in reason
 
 
-def test_restart_docker_ok_on_active_gpu():
-    assert is_action_allowed(
-        "systemctl_restart", {"service_name": "docker"}, server=_gpu()
-    ) == (True, "ok")
-
-
-def test_restart_nginx_denied_even_on_gpu():
-    ok, reason = is_action_allowed(
-        "systemctl_restart", {"service_name": "nginx"}, server=_gpu()
-    )
-    assert ok is False
-    assert "docker" in reason
-
-
-def test_env_allowlist_cannot_add_sshd():
-    with patch(
-        "app.policies.executor_actions.allowlisted_restart_services",
-        return_value=frozenset({"sshd"}),
-    ):
-        ok, reason = is_action_allowed(
-            "systemctl_restart", {"service_name": "sshd"}, server=_gpu()
+def test_restart_docker_ok_on_gpu_voicemg_backupvault_sip_pbx():
+    hosts = [
+        _host(server_type="gpu", project="ai"),
+        _host(server_type="app", project="voicemg"),
+        _host(server_type="app", project="backupvault"),
+        _host(server_type="sip", project="infrastructure"),
+        _host(server_type="pbx", project="infrastructure"),
+    ]
+    for host in hosts:
+        assert is_action_allowed("systemctl_restart", {"service_name": "docker"}, server=host) == (
+            True,
+            "ok",
         )
+
+
+def test_postfix_only_on_email_and_nginx_only_on_nginx():
+    email = _host(server_type="app", project="email")
+    nginx = _host(server_type="nginx", project="infrastructure")
+    assert is_action_allowed("systemctl_restart", {"service_name": "postfix"}, server=email) == (True, "ok")
+    assert is_action_allowed("systemctl_restart", {"service_name": "nginx"}, server=nginx) == (True, "ok")
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "docker"}, server=email)
+    assert ok is False and "not allowlisted for this host" in reason
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "postfix"}, server=nginx)
+    assert ok is False and "not allowlisted for this host" in reason
+
+
+def test_wrong_unit_blocked_on_gpu():
+    gpu = _host(server_type="gpu", project="ai")
+    for service in ("nginx", "postfix", "sshd", "mysql", "mariadb", "postgresql", "voicemg"):
+        ok, reason = is_action_allowed("systemctl_restart", {"service_name": service}, server=gpu)
         assert ok is False
-        assert "sshd" in reason
+        assert service in reason
+
+
+def test_restart_denied_when_inactive_or_portal():
+    gpu = _host(server_type="gpu", project="ai", is_active=False)
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "docker"}, server=gpu)
+    assert ok is False and "inactive" in reason
+    portal = _host(server_type="gpu", project="ai", ip_address="10.180.1.222")
+    ok, reason = is_action_allowed("recollect_metrics", server=portal)
+    assert ok is False and ".222" in reason
+    ok, reason = is_action_allowed("systemctl_restart", {"service_name": "docker"}, server=portal)
+    assert ok is False and ".222" in reason
