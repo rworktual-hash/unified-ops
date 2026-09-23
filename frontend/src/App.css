@@ -1528,7 +1528,7 @@
 }
 
 .backupvault-stat-row {
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .backupvault-note {
@@ -1677,6 +1677,9 @@
 
 .stat-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1694,9 +1697,11 @@
 }
 
 .stat-value {
+  display: block;
   font-size: 1.65rem;
   font-weight: 600;
   letter-spacing: -0.03em;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2456,8 +2461,10 @@ button.linkish {
 }
 
 .bv-sub {
+  display: block;
   font-size: 0.75rem;
-  margin-top: 0.15rem;
+  line-height: 1.35;
+  margin-top: 0.4rem;
 }
 
 .bv-err-hint {
