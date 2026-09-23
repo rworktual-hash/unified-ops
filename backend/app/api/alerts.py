@@ -6,9 +6,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.alert import Alert
 from app.models.server import Server
-from app.schemas.alert import AlertRead, AlertReadWithServer, AlertSuggestionRead, LiveAlertsRead
+from app.schemas.alert import (
+    AlertInDepthRead,
+    AlertRead,
+    AlertReadWithServer,
+    AlertSuggestionRead,
+    LiveAlertsRead,
+    LiveSuggestionsRead,
+)
 from app.schemas.agent_action import InvestigationResponse
-from app.services.alert_suggestion import suggest_live_alert
+from app.services.alert_suggestion import enqueue_missing, in_depth_for_alert, ready_and_pending, suggest_live_alert
 from app.services.investigation import InvestigationNotAllowed, run_investigation
 from app.services.live_alerts import attach_inventory, fetch_ai_insights_alerts
 
@@ -76,6 +83,17 @@ def list_live_alerts(db: Session = Depends(get_db)) -> LiveAlertsRead:
     )
 
 
+@router.get("/live/suggestions", response_model=LiveSuggestionsRead)
+def list_live_suggestions(db: Session = Depends(get_db)) -> LiveSuggestionsRead:
+    payload = fetch_ai_insights_alerts()
+    if not payload.get("ok"):
+        return LiveSuggestionsRead(suggestions=[], pending_ids=[])
+    alerts = attach_inventory(payload.get("alerts") or [], _inventory_hosts(db))
+    enqueue_missing(alerts)
+    ready, pending = ready_and_pending(alerts)
+    return LiveSuggestionsRead(suggestions=ready, pending_ids=pending)
+
+
 def _matched_live_alert(db: Session, source_id: int) -> dict:
     payload = fetch_ai_insights_alerts()
     if not payload.get("ok"):
@@ -88,6 +106,12 @@ def _matched_live_alert(db: Session, source_id: int) -> dict:
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live alert not found")
     return alert
+
+
+@router.post("/live/{source_id}/in-depth", response_model=AlertInDepthRead)
+def live_alert_in_depth(source_id: int, db: Session = Depends(get_db)) -> AlertInDepthRead:
+    alert = _matched_live_alert(db, source_id)
+    return AlertInDepthRead(**in_depth_for_alert(db, alert))
 
 
 @router.post("/live/{source_id}/suggest", response_model=AlertSuggestionRead)

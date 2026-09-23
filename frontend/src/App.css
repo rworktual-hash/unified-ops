@@ -1974,6 +1974,20 @@ pre.diagnosis {
   font-size: 0.75rem;
 }
 
+.alert-depth {
+  margin-top: 0.35rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.alert-depth span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--muted);
+}
+
 .login-shell {
   min-height: 100vh;
   display: flex;

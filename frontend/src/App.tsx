@@ -19,8 +19,9 @@ import {
   listAgentActions,
   listAlerts,
   listLiveAlerts,
+  listLiveSuggestions,
+  fetchLiveAlertInDepth,
   listApprovals,
-  suggestLiveAlert,
   listServers,
   rejectApproval,
   resolveAlert,
@@ -103,9 +104,10 @@ function App() {
   const [showResolved, setShowResolved] = useState(false)
   const [agentActions, setAgentActions] = useState<AgentAction[]>([])
   const [investigatingId, setInvestigatingId] = useState<number | null>(null)
-  const [suggestingId, setSuggestingId] = useState<number | null>(null)
   const [suggestions, setSuggestions] = useState<Record<number, AlertSuggestion>>({})
-  const [suggestErrors, setSuggestErrors] = useState<Record<number, string>>({})
+  const [inDepth, setInDepth] = useState<Record<number, string>>({})
+  const [inDepthOpen, setInDepthOpen] = useState<Record<number, boolean>>({})
+  const [inDepthId, setInDepthId] = useState<number | null>(null)
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [showAllApprovals, setShowAllApprovals] = useState(false)
   const [collectingAll, setCollectingAll] = useState(false)
@@ -249,6 +251,33 @@ function App() {
   useLivePoll(pollAiExtras, loggedIn && (nav === 'servers' || nav === 'infrastructure'))
   useLivePoll(pollVoiceMgExtras, loggedIn && nav === 'servers')
   useLivePoll(pollLiveAlerts, loggedIn && nav === 'alerts')
+  const liveSuggestionKey = liveAlerts.map((alert) => alert.source_id).join(',')
+  useEffect(() => {
+    if (!loggedIn || nav !== 'alerts' || !liveSuggestionKey) return
+    let stop = false
+    let timer = 0
+    const tick = async () => {
+      try {
+        const res = await listLiveSuggestions()
+        if (stop) return
+        setSuggestions((prev) => {
+          const next = { ...prev }
+          for (const row of res.suggestions) next[row.source_id] = row
+          return next
+        })
+        if (res.pending_ids.length > 0) {
+          timer = window.setTimeout(() => void tick(), 3000)
+        }
+      } catch {
+        if (!stop) timer = window.setTimeout(() => void tick(), 8000)
+      }
+    }
+    void tick()
+    return () => {
+      stop = true
+      window.clearTimeout(timer)
+    }
+  }, [loggedIn, nav, liveSuggestionKey])
 
   const requestApproval = useCallback(
     async (
@@ -639,33 +668,34 @@ function App() {
                         <button
                           type="button"
                           className="btn ghost"
-                          disabled={suggestingId === a.source_id}
+                          disabled={inDepthId === a.source_id}
                           onClick={async () => {
-                            setSuggestingId(a.source_id)
-                            setSuggestErrors((prev) => {
-                              const next = { ...prev }
-                              delete next[a.source_id]
-                              return next
-                            })
+                            if (inDepthOpen[a.source_id]) {
+                              setInDepthOpen((prev) => ({ ...prev, [a.source_id]: false }))
+                              return
+                            }
+                            if (inDepth[a.source_id]) {
+                              setInDepthOpen((prev) => ({ ...prev, [a.source_id]: true }))
+                              return
+                            }
+                            setInDepthId(a.source_id)
+                            setError(null)
                             try {
-                              const suggestion = await suggestLiveAlert(a.source_id)
-                              setSuggestions((prev) => ({ ...prev, [a.source_id]: suggestion }))
+                              const row = await fetchLiveAlertInDepth(a.source_id)
+                              setInDepth((prev) => ({ ...prev, [a.source_id]: row.detail }))
+                              setInDepthOpen((prev) => ({ ...prev, [a.source_id]: true }))
                             } catch (err) {
-                              setSuggestErrors((prev) => ({
-                                ...prev,
-                                [a.source_id]:
-                                  err instanceof Error ? err.message : 'Suggestion failed',
-                              }))
+                              setError(err instanceof Error ? err.message : 'In-depth suggestion failed')
                             } finally {
-                              setSuggestingId(null)
+                              setInDepthId(null)
                             }
                           }}
                         >
-                          {suggestingId === a.source_id
-                            ? 'Suggesting…'
-                            : suggestions[a.source_id]
-                              ? 'Refresh suggestion'
-                              : 'Suggest'}
+                          {inDepthId === a.source_id
+                            ? 'Preparing…'
+                            : inDepthOpen[a.source_id]
+                              ? 'Hide in-depth'
+                              : 'In-depth suggestion'}
                         </button>
                         {!a.matched || !a.inventory_active ? (
                           <span className="muted">No agent</span>
@@ -730,10 +760,16 @@ function App() {
                               ? 'Estimate only. A restart still needs Approve and Confirm run.'
                               : 'The model was unavailable, so this is a short read of the alert. A restart still needs Approve and Confirm run.'}
                           </p>
+                          {inDepthOpen[a.source_id] && inDepth[a.source_id] ? (
+                            <div className="alert-depth">
+                              <span>In depth</span>
+                              {inDepth[a.source_id]}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : suggestErrors[a.source_id] ? (
-                        <p className="alert-suggest-note banner error">{suggestErrors[a.source_id]}</p>
-                      ) : null}
+                      ) : (
+                        <p className="muted alert-suggest-note">Preparing suggestion…</p>
+                      )}
                     </article>
                   ))}
                 </div>

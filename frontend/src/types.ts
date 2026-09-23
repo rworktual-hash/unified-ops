@@ -165,6 +165,12 @@ export type AlertSuggestion = {
   from_model: boolean
 }
 
+export type AlertInDepth = {
+  source_id: number
+  detail: string
+  from_model: boolean
+}
+
 export type LiveAlert = {
   source_id: number
   source: string

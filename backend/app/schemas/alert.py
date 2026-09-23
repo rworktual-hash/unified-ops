@@ -57,3 +57,14 @@ class AlertSuggestionRead(BaseModel):
     team: str
     time_estimate: str
     from_model: bool = False
+
+
+class LiveSuggestionsRead(BaseModel):
+    suggestions: list[AlertSuggestionRead]
+    pending_ids: list[int]
+
+
+class AlertInDepthRead(BaseModel):
+    source_id: int
+    detail: str
+    from_model: bool = False
