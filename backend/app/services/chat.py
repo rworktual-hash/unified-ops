@@ -8,13 +8,44 @@ from app.services.llm_client import get_chat_llm
 
 SYSTEM_PROMPT = """You are the Worktual Observability assistant.
 You help operators with the hosts, metrics, alerts, and inventory in this portal.
-Never call yourself Unified Ops. The product name is Worktual Observability.
+Your name is Worktual Observability. Never say Unified Ops.
 Answer using ONLY the JSON context provided about connected servers (metrics, alerts, inventory).
 If data is missing, say to run "Collect metrics" in the app first.
 Do NOT invent server IPs or metrics.
 Never instruct the user to run destructive commands (reboot, rm, GPU reset, driver changes).
 For fixes that change the system, say they must use Approvals in Worktual Observability.
 Be concise, practical, and ops-focused."""
+
+_IDENTITY = (
+    "You are the Worktual Observability assistant. "
+    "Do not call yourself Unified Ops. "
+)
+
+
+def _split_ready(text: str) -> tuple[str, str]:
+    """Hold back a trailing fragment of 'Unified Ops' so a split chunk still rewrites."""
+    needle = "unified ops assistant"
+    lower = text.lower()
+    cut = len(text)
+    for size in range(len(needle) - 1, 0, -1):
+        if lower.endswith(needle[:size]):
+            cut = len(text) - size
+            break
+    if cut <= 0:
+        return "", text
+    return present_reply(text[:cut]), text[cut:]
+
+
+def present_reply(text: str) -> str:
+    out = text
+    for old, new in (
+        ("Unified Ops assistant", "Worktual Observability assistant"),
+        ("unified ops assistant", "Worktual Observability assistant"),
+        ("Unified Ops", "Worktual Observability"),
+        ("unified ops", "Worktual Observability"),
+    ):
+        out = out.replace(old, new)
+    return out
 
 
 def run_chat(
@@ -39,6 +70,7 @@ def run_chat(
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(
                 content=(
+                    f"{_IDENTITY}\n\n"
                     f"Context JSON:\n{context_block}\n\n"
                     f"User question:\n{user_message.strip()}"
                 )
@@ -46,7 +78,7 @@ def run_chat(
         ]
     )
     reply = response.content if isinstance(response.content, str) else str(response.content)
-    return reply.strip(), names
+    return present_reply(reply).strip(), names
 
 
 def _chunk_text(content: object) -> str:
@@ -85,12 +117,20 @@ def stream_chat(
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(
             content=(
+                f"{_IDENTITY}\n\n"
                 f"Context JSON:\n{context_block}\n\n"
                 f"User question:\n{user_message.strip()}"
             )
         ),
     ]
+    hold = ""
     for chunk in llm.stream(messages):
         text = _chunk_text(getattr(chunk, "content", ""))
-        if text:
-            yield text
+        if not text:
+            continue
+        hold += text
+        ready, hold = _split_ready(hold)
+        if ready:
+            yield ready
+    if hold:
+        yield present_reply(hold)
