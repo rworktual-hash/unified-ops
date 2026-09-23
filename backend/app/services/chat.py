@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy.orm import Session
 
@@ -43,3 +45,50 @@ def run_chat(
     )
     reply = response.content if isinstance(response.content, str) else str(response.content)
     return reply.strip(), names
+
+
+def _chunk_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if text:
+                    parts.append(str(text))
+        return "".join(parts)
+    return ""
+
+
+def stream_chat(
+    db: Session,
+    *,
+    user_message: str,
+    server_id: int | None = None,
+) -> Iterator[str]:
+    server_ids = [server_id] if server_id is not None else None
+    context = build_ops_context(db, server_ids=server_ids)
+    if context["server_count"] == 0:
+        yield (
+            "No active connected servers in scope. Enable DR GPU hosts (148/149) or pick a valid server."
+        )
+        return
+
+    context_block = context_to_prompt_block(context)
+    llm = get_chat_llm()
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(
+            content=(
+                f"Context JSON:\n{context_block}\n\n"
+                f"User question:\n{user_message.strip()}"
+            )
+        ),
+    ]
+    for chunk in llm.stream(messages):
+        text = _chunk_text(getattr(chunk, "content", ""))
+        if text:
+            yield text

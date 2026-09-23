@@ -582,6 +582,42 @@ export async function fetchServerMetricsHistory(
   return res.json()
 }
 
+export async function streamChatMessage(
+  message: string,
+  serverId: number | null,
+  onChunk: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await apiFetch('/chat/stream', {
+    method: 'POST',
+    body: JSON.stringify({ message, server_id: serverId }),
+    signal,
+  })
+  if (!res.ok || !res.body) {
+    const detail = await res.text()
+    throw new Error(detail || 'Chat request failed')
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let pending = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    pending += decoder.decode(value, { stream: true })
+    const parts = pending.split('\n')
+    pending = parts.pop() ?? ''
+    for (const line of parts) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const raw = trimmed.slice(5).trim()
+      if (!raw) continue
+      const data = JSON.parse(raw) as { t?: string; error?: string }
+      if (data.error) throw new Error(data.error)
+      if (data.t) onChunk(data.t)
+    }
+  }
+}
+
 export async function sendChatMessage(
   message: string,
   serverId: number | null,

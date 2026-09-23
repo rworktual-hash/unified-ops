@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { sendChatMessage } from '../api'
+import { streamChatMessage } from '../api'
 import type { Server } from '../types'
 import { ChatMessageBody } from './ChatMessageBody'
 
@@ -45,13 +45,71 @@ export function ChatPanel({ activeServers }: Props) {
     const sid = serverId === 'all' ? null : Number(serverId)
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 130_000)
+    const received = { text: '' }
+    const shown = { text: '' }
+    let timer = 0
+
+    setMessages((prev) => [...prev, { role: 'assistant', text: '' }])
+
+    const paint = (value: string) => {
+      setMessages((prev) => {
+        const next = [...prev]
+        const last = next.length - 1
+        if (next[last]?.role === 'assistant') {
+          next[last] = { role: 'assistant', text: value }
+        }
+        return next
+      })
+    }
 
     try {
-      const res = await sendChatMessage(text, sid, controller.signal)
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', text: res.reply },
-      ])
+      let settled = false
+      let failed: Error | null = null
+      const incoming = streamChatMessage(
+        text,
+        sid,
+        (chunk) => {
+          received.text += chunk
+        },
+        controller.signal,
+      ).then(
+        () => {
+          settled = true
+        },
+        (err: unknown) => {
+          settled = true
+          failed = err instanceof Error ? err : new Error('Chat failed')
+        },
+      )
+
+      await new Promise<void>((resolve) => {
+        const step = () => {
+          const target = received.text
+          const current = shown.text
+          if (current.length < target.length) {
+            const rest = target.slice(current.length)
+            let end = 0
+            while (end < rest.length && /\s/.test(rest[end])) end += 1
+            const word = rest.slice(end).search(/\s/)
+            end += word === -1 ? rest.length - end : word
+            if (end < 1) end = 1
+            shown.text = current + rest.slice(0, end)
+            paint(shown.text)
+            timer = window.setTimeout(step, 28)
+            return
+          }
+          if (settled) {
+            resolve()
+            return
+          }
+          timer = window.setTimeout(step, 40)
+        }
+        void incoming.then(() => {
+          settled = true
+        })
+        step()
+      })
+      if (failed) throw failed
     } catch (err) {
       const msg =
         err instanceof Error
@@ -60,10 +118,13 @@ export function ChatPanel({ activeServers }: Props) {
             : err.message
           : 'Chat failed'
       setChatError(msg)
-      setInput(text)
-      setMessages((prev) => prev.slice(0, -1))
+      if (!shown.text) {
+        setInput(text)
+        setMessages((prev) => prev.slice(0, -2))
+      }
     } finally {
       window.clearTimeout(timeout)
+      window.clearTimeout(timer)
       setSending(false)
       inputRef.current?.focus()
     }
@@ -121,21 +182,23 @@ export function ChatPanel({ activeServers }: Props) {
         {messages.map((m, i) => (
           <div key={i} className={`chat-bubble ${m.role}`}>
             {m.role === 'assistant' ? (
-              <ChatMessageBody text={m.text} />
+              m.text === '' && sending && i === messages.length - 1 ? (
+                <span className="chat-dots" aria-hidden>
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              ) : (
+                <>
+                  <ChatMessageBody text={m.text} />
+                  {sending && i === messages.length - 1 ? <span className="chat-caret" aria-hidden /> : null}
+                </>
+              )
             ) : (
               <p className="chat-user-text">{m.text}</p>
             )}
           </div>
         ))}
-        {sending && (
-          <div className="chat-bubble assistant chat-pending" aria-label="Waiting for answer">
-            <span className="chat-dots" aria-hidden>
-              <span />
-              <span />
-              <span />
-            </span>
-          </div>
-        )}
         <div ref={bottomRef} />
       </div>
 

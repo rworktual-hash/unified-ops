@@ -1300,6 +1300,27 @@
   animation-delay: 0.15s;
 }
 
+.chat-caret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  background: currentColor;
+  vertical-align: text-bottom;
+  animation: chat-caret 1s steps(1) infinite;
+}
+
+@keyframes chat-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .chat-dots span:nth-child(3) {
   animation-delay: 0.3s;
 }
