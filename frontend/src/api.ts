@@ -69,6 +69,15 @@ export async function fetchMe(): Promise<AppUser> {
   return res.json()
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const res = await apiFetch('/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  })
+  if (res.status === 401) throw new Error('Current password is incorrect')
+  if (!res.ok) throw new Error('Could not update password')
+}
+
 export async function listUsers(): Promise<AppUser[]> {
   const res = await apiFetch('/users')
   if (!res.ok) throw new Error('Failed to load users')

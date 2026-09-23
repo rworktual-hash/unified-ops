@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.app_user import AppUser
-from app.schemas.auth import LoginRequest, TokenResponse, UserPublic
-from app.services.app_auth import authenticate_user, create_access_token
+from app.schemas.auth import LoginRequest, PasswordChange, TokenResponse, UserPublic
+from app.services.app_auth import authenticate_user, create_access_token, hash_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,4 +26,21 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
     row = db.query(AppUser).filter(AppUser.id == user.id).first()
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return UserPublic.model_validate(row)
+
+
+@router.post("/password", response_model=UserPublic)
+def change_password(
+    payload: PasswordChange,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserPublic:
+    if not user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password change is unavailable")
+    row = authenticate_user(db, user.email, payload.current_password)
+    if row is None or row.id != user.id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+    row.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(row)
     return UserPublic.model_validate(row)

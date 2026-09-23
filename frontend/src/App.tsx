@@ -41,7 +41,7 @@ import type { DomainId } from './serverDomains'
 import { ApprovalDecisionCard } from './components/ApprovalDecisionCard'
 import { ApprovalRequestButtons } from './components/ApprovalRequestButtons'
 import { BrandLockup } from './components/BrandLockup'
-import { AgentLogList } from './components/AgentLogList'
+import { AccountMenu } from './components/AccountMenu'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { LegacyMetricsSection } from './components/LegacyMetricsSection'
@@ -79,7 +79,6 @@ type NavId =
 function App() {
   const [session, setSession] = useState<AppUser | null | 'pending'>('pending')
   const [nav, setNav] = useState<NavId>('servers')
-  const [apiStatus, setApiStatus] = useState<'loading' | 'ok' | 'error'>('loading')
   const [servers, setServers] = useState<Server[]>([])
   const [error, setError] = useState<string | null>(null)
   const [testingId, setTestingId] = useState<number | null>(null)
@@ -128,9 +127,7 @@ function App() {
     setError(null)
     try {
       await fetchHealth()
-      setApiStatus('ok')
     } catch (err) {
-      setApiStatus('error')
       setError(err instanceof Error ? err.message : 'Cannot reach API. Start the backend on port 8000.')
       return
     }
@@ -292,9 +289,6 @@ function App() {
     { id: 'alerts', label: 'Alerts' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'activity', label: 'Agent log' },
-    ...(session && session !== 'pending' && session.role === 'admin'
-      ? [{ id: 'users' as const, label: 'Users' }]
-      : []),
   ]
 
   if (session === 'pending') {
@@ -317,14 +311,12 @@ function App() {
     )
   }
 
-  const pageTitle = navItems.find((item) => item.id === nav)?.label ?? 'Dashboard'
-  const initials = session.email.slice(0, 2).toUpperCase()
+  const pageTitle = nav === 'users' ? 'Users' : (navItems.find((item) => item.id === nav)?.label ?? 'Servers')
 
   return (
     <div className="app-shell app-shell--fixed">
       <aside className="sidebar">
         <BrandLockup />
-        <p className="nav-kicker">Modules</p>
         <nav className="nav">
           {navItems.map((item) => (
             <button
@@ -337,25 +329,6 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-foot">
-          <p className="sidebar-meta">
-            <span className={`api-dot ${apiStatus === 'ok' ? 'ok' : 'err'}`} />
-            {apiStatus === 'ok' ? 'API connected' : apiStatus === 'loading' ? 'API…' : 'API offline'}
-            <span className="sidebar-meta-sub">
-              {activeServers.length} servers
-            </span>
-          </p>
-          <button
-            type="button"
-            className="nav-item sidebar-signout"
-            onClick={() => {
-              clearStoredToken()
-              setSession(null)
-            }}
-          >
-            Logout
-          </button>
-        </div>
       </aside>
 
       <main className="main">
@@ -363,9 +336,20 @@ function App() {
           <div className="topbar-title">
             <h1>{pageTitle}</h1>
           </div>
-          <div className="topbar-user" title={session.email}>
-            <span>{initials}</span>
-          </div>
+          <AccountMenu
+            user={session}
+            onLogout={() => {
+              clearStoredToken()
+              setSession(null)
+            }}
+            onOpenUsers={
+              session.role === 'admin'
+                ? () => {
+                    setNav('users')
+                  }
+                : undefined
+            }
+          />
         </header>
         <div className="main-body">
         {error && <p className="banner error">{error}</p>}
