@@ -43,8 +43,8 @@ _SYSTEM = """You advise Worktual operators about one open MariaDB alert.
 Use the alert and the host facts. You may use general operations knowledge for the likely cause.
 Do not invent IPs, metrics, or host names that are not in the facts.
 Return only a JSON object with keys why, solution, team, time_estimate.
-why: one or two sentences on the likely cause.
-solution: the better next step. Prefer recollect or SSH verify. Mention a service restart only if the alert says that service is down, and only for docker, postfix, nginx, kong, or grafana-server. Never suggest reboot, delete, process kill, GPU reset, config edits, or password changes.
+why: one short plain sentence a new operator can read. Say what is wrong in everyday words. Example: "The disk is 95% full, so new files may not save."
+solution: one short plain sentence for the next step only. Prefer recollect or SSH verify. Example: "Check which files are using the space over SSH, then recollect." Mention a service restart only if the alert says that service is down, and only for docker, postfix, nginx, kong, or grafana-server. Never suggest reboot, delete, process kill, GPU reset, config edits, or password changes.
 team: one of AI platform, Email, VoiceMG, BackupVault, Infrastructure, Voice, Ops. Prefer the host team hint when the alert matches that system.
 time_estimate: a short hands-on range such as "15–30 minutes". This is an estimate, not a deadline."""
 
@@ -53,8 +53,8 @@ Use each alert and its host facts. You may use general operations knowledge for 
 Do not invent IPs, metrics, or host names that are not in the facts.
 Return only JSON: {"suggestions":[{"source_id": number, "why": "...", "solution": "...", "team": "...", "time_estimate": "..."}]}
 Include one object for every alert, using that alert's source_id.
-why: one or two sentences on the likely cause.
-solution: the better next step. Prefer recollect or SSH verify. Mention a service restart only if the alert says that service is down, and only for docker, postfix, nginx, kong, or grafana-server. Never suggest reboot, delete, process kill, GPU reset, config edits, or password changes.
+why: one short plain sentence a new operator can read. Say what is wrong in everyday words. Example: "The disk is 95% full, so new files may not save."
+solution: one short plain sentence for the next step only. Prefer recollect or SSH verify. Example: "Check which files are using the space over SSH, then recollect." Mention a service restart only if the alert says that service is down, and only for docker, postfix, nginx, kong, or grafana-server. Never suggest reboot, delete, process kill, GPU reset, config edits, or password changes.
 team: one of AI platform, Email, VoiceMG, BackupVault, Infrastructure, Voice, Ops. Prefer the host team hint when the alert matches that system.
 time_estimate: a short hands-on range such as "15–30 minutes". This is an estimate, not a deadline."""
 
@@ -234,9 +234,8 @@ def fallback_suggestion(alert: dict, facts: dict[str, Any]) -> dict[str, Any]:
     return {
         "why": why,
         "solution": (
-            "Recollect the host and confirm the alert still matches the live metrics. "
-            "If docker, postfix, nginx, Kong, or Grafana is explicitly down, request that "
-            "restart in Approvals. Nothing else should be changed from here."
+            "Recollect this host and check the numbers still match. "
+            "If docker, postfix, nginx, Kong, or Grafana is down, request that restart in Approvals."
         ),
         "team": facts.get("team_hint") or "Ops",
         "time_estimate": "15–30 minutes",

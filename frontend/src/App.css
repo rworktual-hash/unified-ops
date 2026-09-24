@@ -2177,16 +2177,25 @@ pre.diagnosis {
   border-top: 1px solid var(--border);
 }
 
-.alert-suggest p:not(.alert-suggest-note) {
-  display: grid;
-  grid-template-columns: 3.2rem minmax(0, 1fr);
-  gap: 0.65rem;
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.4;
+.alert-suggest-block span {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.alert-suggest p span {
+.alert-suggest-block p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.alert-suggest-meta {
+  margin: 0.1rem 0 0;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 

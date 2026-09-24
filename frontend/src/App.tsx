@@ -771,20 +771,17 @@ function App() {
                       </div>
                       {suggestions[a.source_id] ? (
                         <div className="alert-suggest">
-                          <p>
-                            <span>Why</span>
-                            {suggestions[a.source_id].why}
-                          </p>
-                          <p>
-                            <span>Fix</span>
-                            {suggestions[a.source_id].solution}
-                          </p>
-                          <p>
-                            <span>Team</span>
+                          <div className="alert-suggest-block">
+                            <span>What happened</span>
+                            <p>{suggestions[a.source_id].why}</p>
+                          </div>
+                          <div className="alert-suggest-block">
+                            <span>What to do</span>
+                            <p>{suggestions[a.source_id].solution}</p>
+                          </div>
+                          <p className="alert-suggest-meta">
                             {suggestions[a.source_id].team}
-                          </p>
-                          <p>
-                            <span>Time</span>
+                            {' · '}
                             {suggestions[a.source_id].time_estimate}
                           </p>
                           <p className="muted alert-suggest-note">
