@@ -33,7 +33,7 @@ import {
 } from './api'
 import { clearStoredToken } from './authStorage'
 import { formatWhen } from './formatWhen'
-import { AlertAgentNote } from './components/AlertAgentNote'
+import { AlertAgentNote, AlertNotify } from './components/AlertAgentNote'
 import { AiInsightsGroups } from './components/AiInsightsGroups'
 import { useLivePoll } from './useLivePoll'
 import { BackupVaultPanel } from './components/BackupVaultPanel'
@@ -696,7 +696,12 @@ function App() {
                           {a.message}
                         </p>
                       </div>
-                      <time className="alert-when">{formatWhen(a.last_seen_at || a.first_seen_at)}</time>
+                      <div className="alert-corner">
+                        <time className="alert-when">{formatWhen(a.last_seen_at || a.first_seen_at)}</time>
+                        {suggestions[a.source_id] ? (
+                          <AlertNotify alert={a} suggestion={suggestions[a.source_id]} />
+                        ) : null}
+                      </div>
                       <div className="alert-actions">
                         <button
                           type="button"
@@ -772,7 +777,7 @@ function App() {
                       </div>
                       {suggestions[a.source_id] ? (
                         <div className="alert-suggest">
-                          <AlertAgentNote alert={a} suggestion={suggestions[a.source_id]} />
+                          <AlertAgentNote suggestion={suggestions[a.source_id]} />
                           {inDepthOpen[a.source_id] && inDepth[a.source_id] ? (
                             <div className="alert-depth">
                               <span>In depth</span>

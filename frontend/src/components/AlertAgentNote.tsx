@@ -78,7 +78,7 @@ function OutlookMark() {
   )
 }
 
-export function AlertAgentNote({ alert, suggestion }: Props) {
+export function AlertNotify({ alert, suggestion }: Props) {
   const [synced, setSynced] = useState<Channel[]>(() => readSynced()[String(alert.source_id)] ?? [])
 
   function notify(channel: Channel) {
@@ -90,34 +90,37 @@ export function AlertAgentNote({ alert, suggestion }: Props) {
   }
 
   return (
+    <div className="alert-notify">
+      <span className="alert-notify-label">Notify team</span>
+      <button
+        type="button"
+        className={`alert-notify-btn${synced.includes('gmail') ? ' synced' : ''}`}
+        aria-label={`Notify ${suggestion.team} in Gmail`}
+        title={synced.includes('gmail') ? 'Opened in Gmail' : 'Open in Gmail'}
+        onClick={() => notify('gmail')}
+      >
+        <GmailMark />
+      </button>
+      <button
+        type="button"
+        className={`alert-notify-btn${synced.includes('outlook') ? ' synced' : ''}`}
+        aria-label={`Notify ${suggestion.team} in Outlook`}
+        title={synced.includes('outlook') ? 'Opened in Outlook' : 'Open in Outlook'}
+        onClick={() => notify('outlook')}
+      >
+        <OutlookMark />
+      </button>
+    </div>
+  )
+}
+
+export function AlertAgentNote({ suggestion }: { suggestion: AlertSuggestion }) {
+  return (
     <div className="alert-agent">
-      <div className="alert-agent-head">
-        <div className="alert-agent-who">
-          <span className="alert-agent-mark">A</span>
-          <span>Agent</span>
-        </div>
-        <div className="alert-notify">
-          <span className="alert-notify-label">Notify team</span>
-          <button
-            type="button"
-            className={`alert-notify-btn${synced.includes('gmail') ? ' synced' : ''}`}
-            aria-label={`Notify ${suggestion.team} in Gmail`}
-            title={synced.includes('gmail') ? 'Opened in Gmail' : 'Open in Gmail'}
-            onClick={() => notify('gmail')}
-          >
-            <GmailMark />
-          </button>
-          <button
-            type="button"
-            className={`alert-notify-btn${synced.includes('outlook') ? ' synced' : ''}`}
-            aria-label={`Notify ${suggestion.team} in Outlook`}
-            title={synced.includes('outlook') ? 'Opened in Outlook' : 'Open in Outlook'}
-            onClick={() => notify('outlook')}
-          >
-            <OutlookMark />
-          </button>
-        </div>
-      </div>
+      <p className="alert-agent-live">
+        <span className="live-dot" aria-hidden />
+        Agent
+      </p>
       <div className="alert-agent-rows">
         <p>
           <span>Reason</span>
