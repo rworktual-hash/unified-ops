@@ -10,6 +10,10 @@
   overflow: hidden;
 }
 
+.app-shell--fixed .sidebar-slot {
+  height: 100%;
+}
+
 .app-shell--fixed .sidebar {
   height: 100%;
   overflow-y: auto;
@@ -25,15 +29,69 @@
   overscroll-behavior: contain;
 }
 
-.sidebar {
+.sidebar-slot {
+  position: relative;
   width: 248px;
   flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.sidebar-slot--collapsed {
+  width: 76px;
+}
+
+.sidebar {
+  width: 100%;
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
   padding: 1.15rem 0.85rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: 1.45rem;
+  right: -13px;
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #e4e4e7;
+  border-radius: 50%;
+  background: #fff;
+  color: #18181b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+}
+
+.sidebar-slot--collapsed .nav-label,
+.sidebar-slot--collapsed .brand-sub {
+  display: none;
+}
+
+.sidebar-slot--collapsed .brand-lockup {
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar-slot--collapsed .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+  border-radius: 10px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  display: block;
+  border-radius: 8px;
 }
 
 .brand-lockup {
@@ -2506,6 +2564,20 @@ button.linkish {
 @media (max-width: 900px) {
   .app-shell {
     flex-direction: column;
+  }
+
+  .sidebar-slot,
+  .sidebar-slot--collapsed {
+    width: 100%;
+  }
+
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .sidebar-slot--collapsed .nav-label,
+  .sidebar-slot--collapsed .brand-sub {
+    display: inline;
   }
 
   .sidebar {
