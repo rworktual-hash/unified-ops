@@ -2171,31 +2171,97 @@ pre.diagnosis {
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.15rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid var(--border);
+  gap: 0.45rem;
+  margin-top: 0.2rem;
 }
 
-.alert-suggest-block span {
-  display: block;
-  margin-bottom: 0.15rem;
-  font-size: 0.68rem;
+.alert-agent {
+  padding: 0.7rem 0.85rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.alert-agent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.alert-agent-who {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+}
+
+.alert-agent-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.alert-notify {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.alert-notify-label {
+  margin-right: 0.15rem;
   color: var(--muted);
-}
-
-.alert-suggest-block p {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.45;
-}
-
-.alert-suggest-meta {
-  margin: 0.1rem 0 0;
   font-size: 0.75rem;
+}
+
+.alert-notify-btn {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.alert-notify-btn.synced {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px #dcfce7;
+}
+
+.alert-notify-btn.synced::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  background: #16a34a;
+}
+
+.alert-agent-rows p {
+  display: grid;
+  grid-template-columns: 7.4rem minmax(0, 1fr);
+  gap: 0.65rem;
+  margin: 0.18rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.alert-agent-rows span {
   color: var(--muted);
 }
 

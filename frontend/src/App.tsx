@@ -33,6 +33,7 @@ import {
 } from './api'
 import { clearStoredToken } from './authStorage'
 import { formatWhen } from './formatWhen'
+import { AlertAgentNote } from './components/AlertAgentNote'
 import { AiInsightsGroups } from './components/AiInsightsGroups'
 import { useLivePoll } from './useLivePoll'
 import { BackupVaultPanel } from './components/BackupVaultPanel'
@@ -771,24 +772,7 @@ function App() {
                       </div>
                       {suggestions[a.source_id] ? (
                         <div className="alert-suggest">
-                          <div className="alert-suggest-block">
-                            <span>What happened</span>
-                            <p>{suggestions[a.source_id].why}</p>
-                          </div>
-                          <div className="alert-suggest-block">
-                            <span>What to do</span>
-                            <p>{suggestions[a.source_id].solution}</p>
-                          </div>
-                          <p className="alert-suggest-meta">
-                            {suggestions[a.source_id].team}
-                            {' · '}
-                            {suggestions[a.source_id].time_estimate}
-                          </p>
-                          <p className="muted alert-suggest-note">
-                            {suggestions[a.source_id].from_model
-                              ? 'Estimate only. A restart still needs Approve and Confirm run.'
-                              : 'The model was unavailable, so this is a short read of the alert. A restart still needs Approve and Confirm run.'}
-                          </p>
+                          <AlertAgentNote alert={a} suggestion={suggestions[a.source_id]} />
                           {inDepthOpen[a.source_id] && inDepth[a.source_id] ? (
                             <div className="alert-depth">
                               <span>In depth</span>
