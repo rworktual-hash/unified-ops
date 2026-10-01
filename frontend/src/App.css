@@ -3683,58 +3683,50 @@ button.ai-legend-btn:hover,
   margin-bottom: 0.7rem;
 }
 
-.llm-trace {
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
-
-.llm-steps {
+.llm-flow {
   list-style: none;
-  margin: 0;
+  margin: 0.85rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.75rem;
 }
 
-.llm-step {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.55rem;
-  align-items: baseline;
-  text-align: left;
+.llm-flow .llm-flow {
+  margin: 0.85rem 0 0.15rem;
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--border);
+}
+
+.llm-flow-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
   background: var(--bg);
-  padding: 0.55rem 0.75rem;
-  cursor: pointer;
-  color: inherit;
 }
 
-.llm-step--open {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.llm-step--error {
+.llm-flow-item--error > .llm-flow-card {
   border-left: 3px solid var(--danger);
 }
 
-.llm-step-body {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  background: var(--bg);
-  min-width: 0;
+.llm-flow-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
-@media (max-width: 800px) {
-  .llm-trace {
-    grid-template-columns: 1fr;
-  }
+.llm-tokens {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--text);
 }
 
 .llm-run-head {

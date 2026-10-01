@@ -36,54 +36,83 @@ function dayEnd(day: string): string {
   return `${day}T23:59:59+05:30`
 }
 
-function stepDepth(run: LlmObsRun, runs: LlmObsRun[]): number {
-  let depth = 0
-  let parent = run.parent_id
-  const seen = new Set<string>()
-  while (parent) {
-    if (seen.has(parent)) break
-    seen.add(parent)
-    depth += 1
-    const next = runs.find((item) => item.external_id === parent)
-    parent = next?.parent_id ?? null
-  }
-  return depth
+type FlowItem = { run: LlmObsRun; n: number; children: FlowItem[] }
+
+function byStarted(a: LlmObsRun, b: LlmObsRun): number {
+  const left = a.started_at ? Date.parse(a.started_at) : 0
+  const right = b.started_at ? Date.parse(b.started_at) : 0
+  if (left !== right) return left - right
+  return a.id - b.id
 }
 
-function StepBody({ run }: { run: LlmObsRun }) {
+function buildFlow(runs: LlmObsRun[]): FlowItem[] {
+  const ordered = [...runs].sort(byStarted)
+  const ids = new Set(ordered.map((run) => run.external_id))
+  const byParent = new Map<string | null, LlmObsRun[]>()
+  for (const run of ordered) {
+    const parent = run.parent_id && ids.has(run.parent_id) ? run.parent_id : null
+    const group = byParent.get(parent) ?? []
+    group.push(run)
+    byParent.set(parent, group)
+  }
+  const walk = (parent: string | null, counter: { n: number }): FlowItem[] =>
+    (byParent.get(parent) ?? []).map((run) => {
+      const n = counter.n
+      counter.n += 1
+      return { run, n, children: walk(run.external_id, counter) }
+    })
+  return walk(null, { n: 1 })
+}
+
+function tokenLine(run: LlmObsRun): string | null {
+  if (run.input_tokens == null && run.output_tokens == null && run.total_tokens == null) return null
+  const parts: string[] = []
+  if (run.input_tokens != null) parts.push(`${run.input_tokens} input tokens`)
+  if (run.output_tokens != null) parts.push(`${run.output_tokens} output tokens`)
+  if (run.total_tokens != null) parts.push(`${run.total_tokens} total`)
+  return parts.join(' · ')
+}
+
+function FlowBlock({ label, text }: { label: string; text: string }) {
   return (
-    <div className="llm-step-body">
-      <header className="llm-run-head">
-        <span className={`llm-type llm-type--${run.type}`}>{run.type}</span>
-        <strong>{run.name}</strong>
-        {run.model ? <span className="muted">{run.model}</span> : null}
-        <span className={run.status === 'error' ? 'llm-status llm-status--error' : 'llm-status'}>{run.status}</span>
-        {run.latency_ms != null ? <span className="muted">{run.latency_ms} ms</span> : null}
-        {run.total_tokens != null ? <span className="muted">{run.total_tokens} tokens</span> : null}
-      </header>
-      {run.error ? <p className="llm-error">{run.error}</p> : null}
-      {run.system_prompt ? (
-        <label className="llm-block">
-          System prompt
-          <pre>{run.system_prompt}</pre>
-        </label>
-      ) : null}
-      {run.input ? (
-        <label className="llm-block">
-          Input
-          <pre>{run.input}</pre>
-        </label>
-      ) : null}
-      {run.output ? (
-        <label className="llm-block">
-          Output
-          <pre>{run.output}</pre>
-        </label>
-      ) : null}
-      {!run.error && !run.system_prompt && !run.input && !run.output ? (
-        <p className="muted">This step has no prompt or output.</p>
-      ) : null}
-    </div>
+    <label className="llm-block">
+      {label}
+      <pre>{text}</pre>
+    </label>
+  )
+}
+
+function FlowCard({ item }: { item: FlowItem }) {
+  const { run, children } = item
+  const nested = children.length > 0
+  const tokens = tokenLine(run)
+  const inputLabel = run.type === 'tool' ? 'Tool input' : run.type === 'llm' ? 'Prompt' : 'Request'
+  const outputLabel = nested ? 'Final response' : run.type === 'tool' ? 'Tool output' : 'Response'
+  return (
+    <li className={`llm-flow-item${run.status === 'error' ? ' llm-flow-item--error' : ''}`}>
+      <article className="llm-flow-card">
+        <header className="llm-run-head">
+          <span className="llm-flow-num">{item.n}</span>
+          <span className="llm-type">{run.type}</span>
+          <strong>{run.name}</strong>
+          {run.model ? <span className="muted">{run.model}</span> : null}
+          <span className={run.status === 'error' ? 'llm-status llm-status--error' : 'llm-status'}>{run.status}</span>
+          {run.latency_ms != null ? <span className="muted">{run.latency_ms} ms</span> : null}
+        </header>
+        {tokens ? <p className="llm-tokens">{tokens}</p> : null}
+        {run.system_prompt ? <FlowBlock label="System prompt" text={run.system_prompt} /> : null}
+        {run.input ? <FlowBlock label={inputLabel} text={run.input} /> : null}
+        {nested ? (
+          <ol className="llm-flow">
+            {children.map((child) => (
+              <FlowCard key={child.run.id} item={child} />
+            ))}
+          </ol>
+        ) : null}
+        {run.error ? <p className="llm-error">{run.error}</p> : null}
+        {run.output ? <FlowBlock label={outputLabel} text={run.output} /> : null}
+      </article>
+    </li>
   )
 }
 
@@ -101,7 +130,6 @@ export function LlmObsPanel() {
   const [summary, setSummary] = useState<LlmObsSummary>(EMPTY_SUMMARY)
   const [traces, setTraces] = useState<LlmObsTrace[]>([])
   const [detail, setDetail] = useState<LlmObsTraceDetail | null>(null)
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -145,16 +173,14 @@ export function LlmObsPanel() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load API keys'))
   }, [selectedProject])
 
-  const selectedRun = detail?.runs.find((run) => run.id === selectedRunId) ?? null
   const ingestUrl = `${window.location.origin}/api/llm-obs/ingest`
+  const flow = detail ? buildFlow(detail.runs) : []
 
   function openTrace(traceId: number) {
     setError(null)
     void fetchLlmObsTrace(traceId)
       .then((next) => {
-        const failed = next.runs.find((run) => run.status === 'error')
         setDetail(next)
-        setSelectedRunId(failed?.id ?? next.runs[0]?.id ?? null)
         setView('trace')
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load trace'))
@@ -303,7 +329,6 @@ export function LlmObsPanel() {
                 onClick={() => {
                   setView('traces')
                   setDetail(null)
-                  setSelectedRunId(null)
                 }}
               >
                 Back to traces
@@ -311,32 +336,16 @@ export function LlmObsPanel() {
               <h2>{detail.name}</h2>
               <p className="muted-block">
                 {detail.project} · {formatWhen(detail.started_at)}
+                {detail.latency_ms != null ? ` · ${detail.latency_ms} ms` : ''}
                 {detail.error ? ` · ${detail.error}` : ''}
               </p>
             </div>
           </div>
-          <div className="llm-trace">
-            <ol className="llm-steps">
-              {detail.runs.map((run) => (
-                <li key={run.id}>
-                  <button
-                    type="button"
-                    className={`llm-step${run.id === selectedRunId ? ' llm-step--open' : ''}${run.status === 'error' ? ' llm-step--error' : ''}`}
-                    style={{ paddingLeft: `${0.75 + stepDepth(run, detail.runs) * 0.9}rem` }}
-                    onClick={() => setSelectedRunId(run.id)}
-                  >
-                    <span className="llm-type">{run.type}</span>
-                    <strong>{run.name}</strong>
-                    <span className={run.status === 'error' ? 'llm-status llm-status--error' : 'llm-status'}>
-                      {run.status}
-                    </span>
-                    {run.latency_ms != null ? <span className="muted">{run.latency_ms} ms</span> : null}
-                  </button>
-                </li>
-              ))}
-            </ol>
-            {selectedRun ? <StepBody run={selectedRun} /> : <p className="muted">Select a step.</p>}
-          </div>
+          <ol className="llm-flow">
+            {flow.map((item) => (
+              <FlowCard key={item.run.id} item={item} />
+            ))}
+          </ol>
         </section>
       ) : null}
 
