@@ -60,6 +60,53 @@ def _wants_mail(message: str) -> bool:
     )
 
 
+def _asks_mail_volume(message: str) -> bool:
+    text = message.lower()
+    if not any(word in text for word in ("mail", "email", "campaign")):
+        return False
+    return any(
+        word in text for word in ("how many", "sent", "count", "volume", "bulk", "today", "total")
+    )
+
+
+def _num(value: object) -> str:
+    if value is None:
+        return "0"
+    return str(value)
+
+
+def mail_volume_answer(context: dict) -> str:
+    """Same sent/bounce numbers as the Email page. The model must not invent a refusal."""
+    campaign = context.get("email_campaign") or {}
+    parts: list[str] = []
+    if campaign.get("ok"):
+        hours = campaign.get("period_hours") or 24
+        parts.append(
+            f"Campaign bulk mail, last {hours} hours: "
+            f"{_num(campaign.get('sent'))} sent, "
+            f"{_num(campaign.get('delivered'))} delivered, "
+            f"{_num(campaign.get('bounce'))} bounced, "
+            f"{_num(campaign.get('deferred'))} deferred, "
+            f"{_num(campaign.get('campaign_queued'))} still in the campaign queue."
+        )
+    else:
+        reason = campaign.get("reason") or "the campaign log is not connected"
+        parts.append(f"Campaign bulk mail is unavailable: {reason}.")
+
+    rows: list[str] = []
+    for server in context.get("connected_servers") or []:
+        today = server.get("latest_email_today")
+        if not today:
+            continue
+        rows.append(
+            f"{server.get('name')}: {_num(today.get('delivered'))} delivered, "
+            f"{_num(today.get('received'))} received, {_num(today.get('bounced'))} bounced today"
+        )
+    if rows:
+        parts.append("Email gateways today: " + "; ".join(rows) + ".")
+    return " ".join(parts)
+
+
 def run_chat(
     db: Session,
     *,
@@ -77,6 +124,8 @@ def run_chat(
         )
 
     names = [s["name"] for s in context["connected_servers"]]
+    if _asks_mail_volume(user_message):
+        return mail_volume_answer(context), names
     context_block = context_to_prompt_block(context)
     llm = get_chat_llm()
     response = llm.invoke(
@@ -125,6 +174,10 @@ def stream_chat(
         yield (
             "No active connected servers in scope. Enable DR GPU hosts (148/149) or pick a valid server."
         )
+        return
+
+    if _asks_mail_volume(user_message):
+        yield mail_volume_answer(context)
         return
 
     context_block = context_to_prompt_block(context)
