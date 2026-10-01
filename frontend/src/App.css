@@ -3686,17 +3686,28 @@ button.ai-legend-btn:hover,
 
 .llm-flow {
   list-style: none;
-  margin: 0.85rem 0 0;
-  padding: 0;
+  margin: 1rem 0 0;
+  padding: 0 0 0 0.15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
 }
 
-.llm-flow .llm-flow {
-  margin: 0.85rem 0 0.15rem;
-  padding-left: 0.85rem;
-  border-left: 2px solid var(--border);
+.llm-flow-item {
+  display: grid;
+  grid-template-columns: 1.7rem 1fr;
+  column-gap: 0.85rem;
+  position: relative;
+  padding-bottom: 0.85rem;
+}
+
+.llm-flow-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 0.78rem;
+  top: 1.55rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
 }
 
 .llm-flow-card {
@@ -3707,20 +3718,23 @@ button.ai-legend-btn:hover,
 }
 
 .llm-flow-item--error > .llm-flow-card {
-  border-left: 3px solid var(--danger);
+  border-color: var(--danger);
 }
 
 .llm-flow-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.4rem;
-  height: 1.4rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin-top: 0.85rem;
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
+  position: relative;
+  z-index: 1;
 }
 
 .llm-tokens {

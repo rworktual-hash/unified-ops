@@ -37,7 +37,18 @@ function dayEnd(day: string): string {
   return `${day}T23:59:59+05:30`
 }
 
-type FlowItem = { run: LlmObsRun; n: number; children: FlowItem[] }
+type TimelineStep = {
+  key: string
+  n: number
+  typeLabel: string
+  title: string
+  model: string | null
+  status: string | null
+  latency: number | null
+  tokens: string | null
+  blocks: { label: string; text: string }[]
+  error: string | null
+}
 
 function byStarted(a: LlmObsRun, b: LlmObsRun): number {
   const left = a.started_at ? Date.parse(a.started_at) : 0
@@ -46,37 +57,107 @@ function byStarted(a: LlmObsRun, b: LlmObsRun): number {
   return a.id - b.id
 }
 
-function buildFlow(runs: LlmObsRun[]): FlowItem[] {
-  const ordered = [...runs].sort(byStarted)
-  const ids = new Set(ordered.map((run) => run.external_id))
-  const byParent = new Map<string | null, LlmObsRun[]>()
-  for (const run of ordered) {
-    const parent = run.parent_id && ids.has(run.parent_id) ? run.parent_id : null
-    const group = byParent.get(parent) ?? []
-    group.push(run)
-    byParent.set(parent, group)
-  }
-  const walk = (parent: string | null, counter: { n: number }): FlowItem[] =>
-    (byParent.get(parent) ?? []).map((run) => {
-      const n = counter.n
-      counter.n += 1
-      return { run, n, children: walk(run.external_id, counter) }
-    })
-  return walk(null, { n: 1 })
-}
-
 function formatCost(value: number): string {
   const text = value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
   return `$${text || '0'}`
 }
 
 function tokenLine(run: LlmObsRun): string | null {
+  const input = run.input_tokens ?? 0
+  const output = run.output_tokens ?? 0
+  const total = run.total_tokens ?? 0
+  if (input === 0 && output === 0 && total === 0 && run.total_cost == null) return null
   const parts: string[] = []
-  if (run.input_tokens != null) parts.push(`${run.input_tokens} input tokens`)
-  if (run.output_tokens != null) parts.push(`${run.output_tokens} output tokens`)
-  if (run.total_tokens != null) parts.push(`${run.total_tokens} total`)
+  if (input) parts.push(`${input} input tokens`)
+  if (output) parts.push(`${output} output tokens`)
+  if (total) parts.push(`${total} total`)
   if (run.total_cost != null) parts.push(formatCost(run.total_cost))
   return parts.length ? parts.join(' · ') : null
+}
+
+function userText(run: LlmObsRun): string | null {
+  if (!run.input) return null
+  if (run.type !== 'llm') return run.input
+  try {
+    const parsed = JSON.parse(run.input) as unknown
+    const messages = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object' && Array.isArray((parsed as { messages?: unknown }).messages)
+        ? (parsed as { messages: unknown[] }).messages
+        : null
+    if (!messages) return run.input
+    const lines = messages.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as { role?: string; content?: unknown }
+      if (row.role === 'system' || typeof row.content !== 'string' || !row.content.trim()) return []
+      return [row.content]
+    })
+    return lines.length ? lines.join('\n\n') : run.input
+  } catch {
+    return run.input
+  }
+}
+
+function buildTimeline(runs: LlmObsRun[]): TimelineStep[] {
+  const ordered = [...runs].sort(byStarted)
+  const ids = new Set(ordered.map((run) => run.external_id))
+  const childrenOf = new Map<string, LlmObsRun[]>()
+  const roots: LlmObsRun[] = []
+  for (const run of ordered) {
+    if (run.parent_id && ids.has(run.parent_id)) {
+      const group = childrenOf.get(run.parent_id) ?? []
+      group.push(run)
+      childrenOf.set(run.parent_id, group)
+    } else {
+      roots.push(run)
+    }
+  }
+  const steps: TimelineStep[] = []
+  const counter = { n: 1 }
+  const add = (step: Omit<TimelineStep, 'n'>) => {
+    steps.push({ ...step, n: counter.n })
+    counter.n += 1
+  }
+  const visit = (run: LlmObsRun) => {
+    const children = childrenOf.get(run.external_id) ?? []
+    const blocks: { label: string; text: string }[] = []
+    if (run.type === 'llm' && run.system_prompt) blocks.push({ label: 'System prompt', text: run.system_prompt })
+    const input = userText(run)
+    if (input) {
+      const label = run.type === 'tool' ? 'Tool input' : run.type === 'llm' ? 'User' : 'Request'
+      blocks.push({ label, text: input })
+    }
+    if (!children.length && run.output) {
+      blocks.push({ label: run.type === 'tool' ? 'Tool output' : 'Response', text: run.output })
+    }
+    add({
+      key: `run-${run.id}`,
+      typeLabel: run.type,
+      title: run.name,
+      model: run.model,
+      status: children.length ? null : run.status,
+      latency: children.length ? null : run.latency_ms,
+      tokens: tokenLine(run),
+      blocks,
+      error: children.length ? null : run.error,
+    })
+    for (const child of children) visit(child)
+    if (children.length && run.output) {
+      add({
+        key: `result-${run.id}`,
+        typeLabel: 'result',
+        title: 'Result',
+        model: null,
+        status: run.status,
+        latency: null,
+        tokens: null,
+        blocks: [{ label: 'Final response', text: run.output }],
+        error: null,
+      })
+    }
+  }
+  for (const root of roots) visit(root)
+  return steps
 }
 
 function FlowBlock({ label, text }: { label: string; text: string }) {
@@ -88,35 +169,26 @@ function FlowBlock({ label, text }: { label: string; text: string }) {
   )
 }
 
-function FlowCard({ item }: { item: FlowItem }) {
-  const { run, children } = item
-  const nested = children.length > 0
-  const tokens = tokenLine(run)
-  const inputLabel = run.type === 'tool' ? 'Tool input' : run.type === 'llm' ? 'Prompt' : 'Request'
-  const outputLabel = nested ? 'Final response' : run.type === 'tool' ? 'Tool output' : 'Response'
+function TimelineRow({ step }: { step: TimelineStep }) {
+  const failed = step.status === 'error' || Boolean(step.error)
   return (
-    <li className={`llm-flow-item${run.status === 'error' ? ' llm-flow-item--error' : ''}`}>
+    <li className={`llm-flow-item${failed ? ' llm-flow-item--error' : ''}`}>
+      <span className="llm-flow-num">{step.n}</span>
       <article className="llm-flow-card">
         <header className="llm-run-head">
-          <span className="llm-flow-num">{item.n}</span>
-          <span className="llm-type">{run.type}</span>
-          <strong>{run.name}</strong>
-          {run.model ? <span className="muted">{run.model}</span> : null}
-          <span className={run.status === 'error' ? 'llm-status llm-status--error' : 'llm-status'}>{run.status}</span>
-          {run.latency_ms != null ? <span className="muted">{run.latency_ms} ms</span> : null}
+          <span className="llm-type">{step.typeLabel}</span>
+          <strong>{step.title}</strong>
+          {step.model ? <span className="muted">{step.model}</span> : null}
+          {step.status ? (
+            <span className={step.status === 'error' ? 'llm-status llm-status--error' : 'llm-status'}>{step.status}</span>
+          ) : null}
+          {step.latency != null ? <span className="muted">{step.latency} ms</span> : null}
         </header>
-        {tokens ? <p className="llm-tokens">{tokens}</p> : null}
-        {run.system_prompt ? <FlowBlock label="System prompt" text={run.system_prompt} /> : null}
-        {run.input ? <FlowBlock label={inputLabel} text={run.input} /> : null}
-        {nested ? (
-          <ol className="llm-flow">
-            {children.map((child) => (
-              <FlowCard key={child.run.id} item={child} />
-            ))}
-          </ol>
-        ) : null}
-        {run.error ? <p className="llm-error">{run.error}</p> : null}
-        {run.output ? <FlowBlock label={outputLabel} text={run.output} /> : null}
+        {step.tokens ? <p className="llm-tokens">{step.tokens}</p> : null}
+        {step.blocks.map((block) => (
+          <FlowBlock key={block.label} label={block.label} text={block.text} />
+        ))}
+        {step.error ? <p className="llm-error">{step.error}</p> : null}
       </article>
     </li>
   )
@@ -180,7 +252,7 @@ export function LlmObsPanel() {
   }, [selectedProject])
 
   const ingestUrl = `${window.location.origin}/api/llm-obs/ingest`
-  const flow = detail ? buildFlow(detail.runs) : []
+  const flow = detail ? buildTimeline(detail.runs) : []
 
   function openTrace(traceId: number | string) {
     setError(null)
@@ -356,8 +428,8 @@ export function LlmObsPanel() {
             </div>
           </div>
           <ol className="llm-flow">
-            {flow.map((item) => (
-              <FlowCard key={item.run.id} item={item} />
+            {flow.map((step) => (
+              <TimelineRow key={step.key} step={step} />
             ))}
           </ol>
         </section>
