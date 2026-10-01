@@ -1,0 +1,61 @@
+"""Sample CRM chat trace used to prove agent, model, tool, and failure capture."""
+
+DEMO_TRACE = {
+    "trace": {
+        "id": "demo-crm-turn-1",
+        "name": "CRM chat — find contact and open ticket",
+    },
+    "runs": [
+        {
+            "id": "agent-1",
+            "type": "agent",
+            "name": "crm-support-agent",
+            "input": "Find Acme and open a ticket about billing",
+            "output": "Could not open the ticket.",
+            "status": "error",
+            "error": "create_ticket failed: CRM API timeout",
+            "started_at": "2026-10-01T05:00:00+00:00",
+            "finished_at": "2026-10-01T05:00:02+00:00",
+        },
+        {
+            "id": "llm-1",
+            "parent_id": "agent-1",
+            "type": "llm",
+            "name": "plan",
+            "model": "worktual-gemma",
+            "system_prompt": "You are the CRM assistant. Use tools. Never invent contact ids.",
+            "input": [
+                {"role": "system", "content": "You are the CRM assistant. Use tools. Never invent contact ids."},
+                {"role": "user", "content": "Find Acme and open a ticket about billing"},
+            ],
+            "output": "I will look up the contact, then create a ticket.",
+            "status": "success",
+            "input_tokens": 40,
+            "output_tokens": 18,
+            "started_at": "2026-10-01T05:00:00.100000+00:00",
+            "finished_at": "2026-10-01T05:00:00.800000+00:00",
+        },
+        {
+            "id": "tool-ok",
+            "parent_id": "agent-1",
+            "type": "tool",
+            "name": "lookup_contact",
+            "input": {"name": "Acme"},
+            "output": {"id": "c-19", "name": "Acme"},
+            "status": "success",
+            "started_at": "2026-10-01T05:00:00.900000+00:00",
+            "finished_at": "2026-10-01T05:00:01.100000+00:00",
+        },
+        {
+            "id": "tool-fail",
+            "parent_id": "agent-1",
+            "type": "tool",
+            "name": "create_ticket",
+            "input": {"contact_id": "c-19", "subject": "billing", "api_key": "should-not-store"},
+            "status": "error",
+            "error": "CRM API timeout after 30s",
+            "started_at": "2026-10-01T05:00:01.200000+00:00",
+            "finished_at": "2026-10-01T05:00:01.900000+00:00",
+        },
+    ],
+}

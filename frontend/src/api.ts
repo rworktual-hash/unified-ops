@@ -1573,6 +1573,158 @@ export function matchVoiceMgExtra(
   return extras.find((row) => row.hostname.toLowerCase() === needle)
 }
 
+export type LlmObsProject = {
+  id: number
+  name: string
+  display_name: string
+  created_at: string
+}
+
+export type LlmObsApiKey = {
+  id: number
+  project_id: number
+  name: string
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+  revoked: boolean
+}
+
+export type LlmObsApiKeyCreated = LlmObsApiKey & { api_key: string }
+
+export type LlmObsSummary = {
+  total: number
+  success: number
+  error: number
+  avg_latency_ms: number | null
+  total_tokens: number
+  models: string[]
+}
+
+export type LlmObsTrace = {
+  id: number
+  project_id: number
+  project: string
+  name: string
+  status: string
+  error: string | null
+  started_at: string
+  finished_at: string | null
+  latency_ms: number | null
+  agents: string[]
+  tools: string[]
+  failed_tools: string[]
+  models: string[]
+  total_tokens: number
+  run_count: number
+}
+
+export type LlmObsRun = {
+  id: number
+  external_id: string
+  parent_id: string | null
+  type: string
+  name: string
+  model: string | null
+  system_prompt: string | null
+  input: string | null
+  output: string | null
+  status: string
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
+  latency_ms: number | null
+  input_tokens: number | null
+  output_tokens: number | null
+  total_tokens: number | null
+}
+
+export type LlmObsTraceDetail = LlmObsTrace & { runs: LlmObsRun[] }
+
+export type LlmObsFilters = {
+  projectId?: number
+  model?: string
+  status?: string
+  from?: string
+  to?: string
+}
+
+function llmObsQuery(filters: LlmObsFilters): string {
+  const params = new URLSearchParams()
+  if (filters.projectId != null) params.set('project_id', String(filters.projectId))
+  if (filters.model) params.set('model', filters.model)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.from) params.set('from', filters.from)
+  if (filters.to) params.set('to', filters.to)
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
+async function llmObsError(res: Response, fallback: string): Promise<never> {
+  const text = await res.text()
+  try {
+    const body = JSON.parse(text) as { detail?: unknown }
+    if (typeof body.detail === 'string') throw new Error(body.detail)
+  } catch (err) {
+    if (err instanceof SyntaxError) throw new Error(fallback)
+    throw err
+  }
+  throw new Error(fallback)
+}
+
+export async function listLlmObsProjects(): Promise<LlmObsProject[]> {
+  const res = await apiFetch('/llm-obs/projects')
+  if (!res.ok) return llmObsError(res, 'Failed to load projects')
+  return res.json()
+}
+
+export async function createLlmObsProject(name: string, displayName?: string): Promise<LlmObsProject> {
+  const res = await apiFetch('/llm-obs/projects', {
+    method: 'POST',
+    body: JSON.stringify({ name, display_name: displayName || name }),
+  })
+  if (!res.ok) return llmObsError(res, 'Failed to create project')
+  return res.json()
+}
+
+export async function listLlmObsKeys(projectId: number): Promise<LlmObsApiKey[]> {
+  const res = await apiFetch(`/llm-obs/projects/${projectId}/keys`)
+  if (!res.ok) return llmObsError(res, 'Failed to load API keys')
+  return res.json()
+}
+
+export async function createLlmObsKey(projectId: number, name: string): Promise<LlmObsApiKeyCreated> {
+  const res = await apiFetch(`/llm-obs/projects/${projectId}/keys`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) return llmObsError(res, 'Failed to create API key')
+  return res.json()
+}
+
+export async function revokeLlmObsKey(projectId: number, keyId: number): Promise<void> {
+  const res = await apiFetch(`/llm-obs/projects/${projectId}/keys/${keyId}/revoke`, { method: 'POST' })
+  if (!res.ok) return llmObsError(res, 'Failed to revoke API key')
+}
+
+export async function fetchLlmObsSummary(filters: LlmObsFilters): Promise<LlmObsSummary> {
+  const res = await apiFetch(`/llm-obs/summary${llmObsQuery(filters)}`)
+  if (!res.ok) return llmObsError(res, 'Failed to load summary')
+  return res.json()
+}
+
+export async function listLlmObsTraces(filters: LlmObsFilters): Promise<LlmObsTrace[]> {
+  const res = await apiFetch(`/llm-obs/traces${llmObsQuery(filters)}`)
+  if (!res.ok) return llmObsError(res, 'Failed to load traces')
+  return res.json()
+}
+
+export async function fetchLlmObsTrace(traceId: number): Promise<LlmObsTraceDetail> {
+  const res = await apiFetch(`/llm-obs/traces/${traceId}`)
+  if (!res.ok) return llmObsError(res, 'Failed to load trace')
+  return res.json()
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })

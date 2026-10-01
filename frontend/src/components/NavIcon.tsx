@@ -70,6 +70,13 @@ export function NavIcon({ id }: Props) {
           <path d="M5 16.2 3.6 20V7.6A3.6 3.6 0 0 1 7.2 4h9.6A3.6 3.6 0 0 1 20.4 7.6v5.2A3.6 3.6 0 0 1 16.8 16.4H8z" />
         </svg>
       )
+    case 'llmobs':
+      return (
+        <svg {...common}>
+          <path d="M4 19V5M4 19h16" />
+          <path d="M8 15v-4M12 15V7M16 15v-6" />
+        </svg>
+      )
     case 'alerts':
       return (
         <svg {...common}>

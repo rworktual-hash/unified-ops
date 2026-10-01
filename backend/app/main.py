@@ -14,6 +14,8 @@ from app.api.email import router as email_router
 from app.api.fleet import router as fleet_router
 from app.api.infrastructure import router as infrastructure_router
 from app.api.legacy_metrics import router as legacy_metrics_router
+from app.api.llm_obs import dashboard_router as llm_obs_dashboard_router
+from app.api.llm_obs import ingest_router as llm_obs_ingest_router
 from app.api.servers import router as servers_router
 from app.api.voicemg import router as voicemg_router
 from app.api.users import router as users_router
@@ -45,6 +47,7 @@ from app.models import infrastructure_ssh_snapshot as _infrastructure_ssh_snapsh
 from app.models import legacy_metric_point as _legacy_metric_point_model  # noqa: F401
 from app.models import legacy_sync_state as _legacy_sync_state_model  # noqa: F401
 from app.models import voicemg_ssh_snapshot as _voicemg_ssh_snapshot_model  # noqa: F401
+from app.models import llm_obs as _llm_obs_model  # noqa: F401
 from app.services.app_auth import ensure_bootstrap_admin
 
 
@@ -93,6 +96,8 @@ api.include_router(infrastructure_router, dependencies=_protected)
 api.include_router(voicemg_router, dependencies=_protected)
 api.include_router(fleet_router, dependencies=_protected)
 api.include_router(legacy_metrics_router, dependencies=_protected)
+api.include_router(llm_obs_dashboard_router, dependencies=_protected)
+api.include_router(llm_obs_ingest_router)
 
 
 @api.get("/health")

@@ -52,6 +52,7 @@ import { AgentLogList } from './components/AgentLogList'
 import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { VoiceMgPanel } from './components/VoiceMgPanel'
+import { LlmObsPanel } from './components/LlmObsPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type {
   AgentAction,
@@ -87,6 +88,7 @@ type NavId =
   | 'email'
   | 'voicemg'
   | 'chat'
+  | 'llmobs'
   | 'alerts'
   | 'approvals'
   | 'activity'
@@ -347,6 +349,7 @@ function App() {
     ...(emailServers.length > 0 ? [{ id: 'email' as const, label: 'Email' }] : []),
     ...(voiceMgServers.length > 0 ? [{ id: 'voicemg' as const, label: 'VoiceMG' }] : []),
     { id: 'chat', label: 'Chat' },
+    { id: 'llmobs', label: 'LLM Observability' },
     { id: 'alerts', label: 'Alerts' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'activity', label: 'Agent log' },
@@ -648,6 +651,8 @@ function App() {
           </div>
         )}
 
+        {nav === 'llmobs' && <LlmObsPanel />}
+
         {nav === 'alerts' && !alertsLoaded && (
           <p className="muted">Loading alerts…</p>
         )}
@@ -940,7 +945,8 @@ function App() {
           </>
         )}
 
-        {nav !== 'chat' &&
+        {          nav !== 'chat' &&
+          nav !== 'llmobs' &&
           nav !== 'users' &&
           nav !== 'approvals' &&
           nav !== 'infrastructure' &&
