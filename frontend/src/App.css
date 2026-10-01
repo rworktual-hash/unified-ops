@@ -3679,17 +3679,62 @@ button.ai-legend-btn:hover,
   cursor: pointer;
 }
 
-.llm-run {
-  border: 1px solid var(--border);
-  border-left-width: 3px;
-  border-radius: 10px;
-  padding: 0.75rem 0.85rem;
-  margin-top: 0.65rem;
-  background: var(--bg);
+.llm-obs .panel-head .btn.ghost {
+  margin-bottom: 0.7rem;
 }
 
-.llm-run--error {
-  border-left-color: var(--danger);
+.llm-trace {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.llm-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.llm-step {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  align-items: baseline;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+.llm-step--open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.llm-step--error {
+  border-left: 3px solid var(--danger);
+}
+
+.llm-step-body {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: var(--bg);
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .llm-trace {
+    grid-template-columns: 1fr;
+  }
 }
 
 .llm-run-head {
