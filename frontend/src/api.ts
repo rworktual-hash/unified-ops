@@ -587,10 +587,11 @@ export async function streamChatMessage(
   serverId: number | null,
   onChunk: (text: string) => void,
   signal?: AbortSignal,
+  history: { role: 'user' | 'assistant'; text: string }[] = [],
 ): Promise<void> {
   const res = await apiFetch('/chat/stream', {
     method: 'POST',
-    body: JSON.stringify({ message, server_id: serverId }),
+    body: JSON.stringify({ message, server_id: serverId, history }),
     signal,
   })
   if (!res.ok || !res.body) {

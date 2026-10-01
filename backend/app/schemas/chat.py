@@ -1,9 +1,15 @@
 from pydantic import BaseModel, Field
 
 
+class ChatTurn(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    text: str = Field(..., max_length=800)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     server_id: int | None = None
+    history: list[ChatTurn] = Field(default_factory=list, max_length=8)
 
 
 class ChatResponse(BaseModel):

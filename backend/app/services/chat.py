@@ -13,6 +13,7 @@ Answer using ONLY the JSON context provided about connected servers (metrics, al
 Host email stats are in latest_email_today: that gateway's postfix counts for today (received, delivered, bounced).
 Campaign bulk mail is in email_campaign for period_hours: sent, delivered, bounce, deferred, campaign_queued.
 Quote those numbers when the user asks how many mails were sent. Do not say you have no mail counts when those fields are present.
+Earlier turns are included on a follow-up. "What are those 9" means the sent count from the previous answer. Explain that number from the context. Do not say you do not know which number they mean when the earlier reply states it.
 If email_campaign.ok is false, say the campaign log is unavailable and still answer from latest_email_today when it is present.
 If other data is missing, say to run "Collect metrics" in the app first.
 Do NOT invent server IPs or metrics.
@@ -82,12 +83,12 @@ def mail_volume_answer(context: dict) -> str:
     if campaign.get("ok"):
         hours = campaign.get("period_hours") or 24
         parts.append(
-            f"Campaign bulk mail, last {hours} hours: "
-            f"{_num(campaign.get('sent'))} sent, "
-            f"{_num(campaign.get('delivered'))} delivered, "
-            f"{_num(campaign.get('bounce'))} bounced, "
-            f"{_num(campaign.get('deferred'))} deferred, "
-            f"{_num(campaign.get('campaign_queued'))} still in the campaign queue."
+            f"In the last {hours} hours the campaign log shows "
+            f"{_num(campaign.get('sent'))} messages marked sent and "
+            f"{_num(campaign.get('delivered'))} marked delivered. "
+            f"Bounce {_num(campaign.get('bounce'))}, deferred {_num(campaign.get('deferred'))}. "
+            f"The campaign queue still has {_num(campaign.get('campaign_queued'))} messages waiting. "
+            "That queue is not the sent count."
         )
     else:
         reason = campaign.get("reason") or "the campaign log is not connected"
@@ -107,15 +108,37 @@ def mail_volume_answer(context: dict) -> str:
     return " ".join(parts)
 
 
+def _history_block(history: list[dict] | None) -> str:
+    lines: list[str] = []
+    for turn in (history or [])[-8:]:
+        role = "User" if turn.get("role") == "user" else "Assistant"
+        text = str(turn.get("text") or "").strip()[:800]
+        if text:
+            lines.append(f"{role}: {text}")
+    return "\n".join(lines)
+
+
+def _prompt(context_block: str, user_message: str, history: list[dict] | None) -> str:
+    earlier = _history_block(history)
+    parts = [_IDENTITY, "", f"Context JSON:\n{context_block}", ""]
+    if earlier:
+        parts.append(f"Earlier in this chat:\n{earlier}\n")
+    parts.append(f"User question:\n{user_message.strip()}")
+    return "\n".join(parts)
+
+
 def run_chat(
     db: Session,
     *,
     user_message: str,
     server_id: int | None = None,
+    history: list[dict] | None = None,
 ) -> tuple[str, list[str]]:
     server_ids = [server_id] if server_id is not None else None
     context = build_ops_context(
-        db, server_ids=server_ids, include_campaign=_wants_mail(user_message)
+        db,
+        server_ids=server_ids,
+        include_campaign=_wants_mail(user_message) or _wants_mail(_history_block(history)),
     )
     if context["server_count"] == 0:
         return (
@@ -131,13 +154,7 @@ def run_chat(
     response = llm.invoke(
         [
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(
-                content=(
-                    f"{_IDENTITY}\n\n"
-                    f"Context JSON:\n{context_block}\n\n"
-                    f"User question:\n{user_message.strip()}"
-                )
-            ),
+            HumanMessage(content=_prompt(context_block, user_message, history)),
         ]
     )
     reply = response.content if isinstance(response.content, str) else str(response.content)
@@ -165,10 +182,13 @@ def stream_chat(
     *,
     user_message: str,
     server_id: int | None = None,
+    history: list[dict] | None = None,
 ) -> Iterator[str]:
     server_ids = [server_id] if server_id is not None else None
     context = build_ops_context(
-        db, server_ids=server_ids, include_campaign=_wants_mail(user_message)
+        db,
+        server_ids=server_ids,
+        include_campaign=_wants_mail(user_message) or _wants_mail(_history_block(history)),
     )
     if context["server_count"] == 0:
         yield (
@@ -184,13 +204,7 @@ def stream_chat(
     llm = get_chat_llm()
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(
-            content=(
-                f"{_IDENTITY}\n\n"
-                f"Context JSON:\n{context_block}\n\n"
-                f"User question:\n{user_message.strip()}"
-            )
-        ),
+        HumanMessage(content=_prompt(context_block, user_message, history)),
     ]
     hold = ""
     for chunk in llm.stream(messages):

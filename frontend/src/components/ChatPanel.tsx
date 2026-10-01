@@ -102,6 +102,10 @@ export function ChatPanel({ activeServers }: Props) {
     setSending(true)
 
     const sid = serverId === 'all' ? null : Number(serverId)
+    const history = messages
+      .filter((message) => message.text.trim())
+      .slice(-8)
+      .map((message) => ({ role: message.role, text: message.text.slice(0, 800) }))
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 130_000)
     const received = { text: '' }
@@ -131,6 +135,7 @@ export function ChatPanel({ activeServers }: Props) {
           received.text += chunk
         },
         controller.signal,
+        history,
       ).then(
         () => {
           settled = true
@@ -186,7 +191,7 @@ export function ChatPanel({ activeServers }: Props) {
       window.clearTimeout(timer)
       setSending(false)
     }
-  }, [input, sending, serverId])
+  }, [input, sending, serverId, messages])
 
   useEffect(() => {
     if (!sending) inputRef.current?.focus()

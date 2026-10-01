@@ -18,7 +18,12 @@ def _sse(payload: dict) -> str:
 @router.post("", response_model=ChatResponse)
 def chat(payload: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
     try:
-        reply, names = run_chat(db, user_message=payload.message, server_id=payload.server_id)
+        reply, names = run_chat(
+            db,
+            user_message=payload.message,
+            server_id=payload.server_id,
+            history=[turn.model_dump() for turn in payload.history],
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -31,7 +36,12 @@ def chat(payload: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
 def chat_stream(payload: ChatRequest, db: Session = Depends(get_db)) -> StreamingResponse:
     def generate():
         try:
-            for piece in stream_chat(db, user_message=payload.message, server_id=payload.server_id):
+            for piece in stream_chat(
+                db,
+                user_message=payload.message,
+                server_id=payload.server_id,
+                history=[turn.model_dump() for turn in payload.history],
+            ):
                 yield _sse({"t": piece})
             yield _sse({"done": True})
         except Exception as exc:
