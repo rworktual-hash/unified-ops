@@ -17,6 +17,8 @@ import {
 } from '../api'
 import { formatWhen } from '../formatWhen'
 
+const LANGFUSE_URL = 'https://langfuse.worktual.tech'
+
 const EMPTY_SUMMARY: LlmObsSummary = {
   total: 0,
   success: 0,
@@ -26,7 +28,7 @@ const EMPTY_SUMMARY: LlmObsSummary = {
   models: [],
 }
 
-type View = 'traces' | 'trace' | 'projects'
+type View = 'traces' | 'trace' | 'projects' | 'langfuse'
 
 function dayStart(day: string): string {
   return `${day}T00:00:00+05:30`
@@ -204,6 +206,13 @@ export function LlmObsPanel() {
           >
             Projects
           </button>
+          <button
+            type="button"
+            className={`domain-tab${view === 'langfuse' ? ' active' : ''}`}
+            onClick={() => setView('langfuse')}
+          >
+            Langfuse
+          </button>
         </div>
       ) : null}
       {error ? <p className="banner error">{error}</p> : null}
@@ -346,6 +355,32 @@ export function LlmObsPanel() {
               <FlowCard key={item.run.id} item={item} />
             ))}
           </ol>
+        </section>
+      ) : null}
+
+      {view === 'langfuse' ? (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Langfuse</h2>
+              <p className="muted-block">
+                Self-hosted Langfuse OSS stores traces for CRM, CCaaS, and Ticketing. The Langfuse
+                name and logo stay in that app. Traces and Projects on this page are the existing
+                Worktual demo and stay until Langfuse is confirmed.
+              </p>
+            </div>
+            <a className="btn primary" href={LANGFUSE_URL} target="_blank" rel="noreferrer">
+              Open Langfuse
+            </a>
+          </div>
+          <label className="llm-block">
+            Env for each app
+            <pre>{`LANGFUSE_PUBLIC_KEY=pk-lf-...\nLANGFUSE_SECRET_KEY=sk-lf-...\nLANGFUSE_BASE_URL=${LANGFUSE_URL}`}</pre>
+          </label>
+          <p className="muted">
+            Create a project in Langfuse and copy its keys. Then run{' '}
+            <code>scripts/send_langfuse_crm_demo.py</code> with those variables set.
+          </p>
         </section>
       ) : null}
 

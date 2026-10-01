@@ -33,3 +33,30 @@ server {
         proxy_read_timeout 130s;
     }
 }
+
+# Langfuse OSS. Separate from the FastAPI app. Requires the Compose stack on 127.0.0.1:3000.
+# STAR.worktual.tech covers this name. Do not proxy this through the Unified Ops API.
+
+server {
+    listen 80;
+    server_name langfuse.worktual.tech;
+    return 301 https://langfuse.worktual.tech$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name langfuse.worktual.tech;
+
+    ssl_certificate     /etc/ssl/worktual.tech/STAR.worktual.tech.fullchain.pem;
+    ssl_certificate_key /etc/ssl/worktual.tech/STAR.worktual.tech_key.txt;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 130s;
+    }
+}
