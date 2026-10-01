@@ -9,8 +9,12 @@ from app.services.llm_client import get_chat_llm
 SYSTEM_PROMPT = """You are the Worktual Observability assistant.
 You help operators with the hosts, metrics, alerts, and inventory in this portal.
 Your name is Worktual Observability. Never say Unified Ops.
-Answer using ONLY the JSON context provided about connected servers (metrics, alerts, inventory).
-If data is missing, say to run "Collect metrics" in the app first.
+Answer using ONLY the JSON context provided about connected servers (metrics, alerts, inventory, email).
+Host email stats are in latest_email_today: that gateway's postfix counts for today (received, delivered, bounced).
+Campaign bulk mail is in email_campaign for period_hours: sent, delivered, bounce, deferred, campaign_queued.
+Quote those numbers when the user asks how many mails were sent. Do not say you have no mail counts when those fields are present.
+If email_campaign.ok is false, say the campaign log is unavailable and still answer from latest_email_today when it is present.
+If other data is missing, say to run "Collect metrics" in the app first.
 Do NOT invent server IPs or metrics.
 Never instruct the user to run destructive commands (reboot, rm, GPU reset, driver changes).
 For fixes that change the system, say they must use Approvals in Worktual Observability.
@@ -48,6 +52,14 @@ def present_reply(text: str) -> str:
     return out
 
 
+def _wants_mail(message: str) -> bool:
+    text = message.lower()
+    return any(
+        word in text
+        for word in ("mail", "email", "campaign", "postfix", "bounce", "sent", "deliver", "queue")
+    )
+
+
 def run_chat(
     db: Session,
     *,
@@ -55,7 +67,9 @@ def run_chat(
     server_id: int | None = None,
 ) -> tuple[str, list[str]]:
     server_ids = [server_id] if server_id is not None else None
-    context = build_ops_context(db, server_ids=server_ids)
+    context = build_ops_context(
+        db, server_ids=server_ids, include_campaign=_wants_mail(user_message)
+    )
     if context["server_count"] == 0:
         return (
             "No active connected servers in scope. Enable DR GPU hosts (148/149) or pick a valid server.",
@@ -104,7 +118,9 @@ def stream_chat(
     server_id: int | None = None,
 ) -> Iterator[str]:
     server_ids = [server_id] if server_id is not None else None
-    context = build_ops_context(db, server_ids=server_ids)
+    context = build_ops_context(
+        db, server_ids=server_ids, include_campaign=_wants_mail(user_message)
+    )
     if context["server_count"] == 0:
         yield (
             "No active connected servers in scope. Enable DR GPU hosts (148/149) or pick a valid server."

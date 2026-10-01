@@ -4,12 +4,18 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.alert import Alert
+from app.models.email_ssh_snapshot import EmailSshSnapshot
 from app.models.gpu_metric import GpuMetric
 from app.models.server import Server
 from app.models.server_metric import ServerMetric
 
 
-def build_ops_context(db: Session, *, server_ids: list[int] | None = None) -> dict[str, Any]:
+def build_ops_context(
+    db: Session,
+    *,
+    server_ids: list[int] | None = None,
+    include_campaign: bool = False,
+) -> dict[str, Any]:
     q = db.query(Server).filter(Server.is_active.is_(True))
     if server_ids:
         q = q.filter(Server.id.in_(server_ids))
@@ -37,8 +43,7 @@ def build_ops_context(db: Session, *, server_ids: list[int] | None = None) -> di
             .limit(10)
             .all()
         )
-        fleet.append(
-            {
+        entry: dict[str, Any] = {
                 "id": s.id,
                 "name": s.server_name,
                 "ip": s.ip_address,
@@ -73,10 +78,74 @@ def build_ops_context(db: Session, *, server_ids: list[int] | None = None) -> di
                     }
                     for a in open_alerts
                 ],
-            }
-        )
+        }
+        if (s.project or "").lower() == "email":
+            email_today = _latest_email_today(db, s.id)
+            if email_today is not None:
+                entry["latest_email_today"] = email_today
+        fleet.append(entry)
 
-    return {"connected_servers": fleet, "server_count": len(fleet)}
+    context: dict[str, Any] = {"connected_servers": fleet, "server_count": len(fleet)}
+    if include_campaign:
+        context["email_campaign"] = _email_campaign_summary()
+    return context
+
+
+def _latest_email_today(db: Session, server_id: int) -> dict[str, Any] | None:
+    row = (
+        db.query(EmailSshSnapshot)
+        .filter(EmailSshSnapshot.server_id == server_id)
+        .order_by(EmailSshSnapshot.collected_at.desc())
+        .first()
+    )
+    if row is None:
+        return None
+    if (
+        row.mail_received is None
+        and row.mail_delivered is None
+        and row.queue_messages is None
+    ):
+        return None
+    return {
+        "collected_at": row.collected_at.isoformat() if row.collected_at else None,
+        "period": "today",
+        "received": row.mail_received,
+        "delivered": row.mail_delivered,
+        "bounced": row.mail_bounced,
+        "rejected": row.mail_rejected,
+        "deferred": row.mail_deferred,
+        "queue_messages": row.queue_messages,
+        "queue_deferred": row.queue_deferred,
+        "postfix_active": row.postfix_active,
+    }
+
+
+def _email_campaign_summary() -> dict[str, Any]:
+    """Campaign bulk-mail totals only. No addresses, subjects, or log lines."""
+    try:
+        from app.services.email_portal import fetch_email_extras
+
+        raw = fetch_email_extras(24)
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc)[:200], "period_hours": 24}
+    totals = raw.get("totals") or {}
+    queue = raw.get("queue") or {}
+    return {
+        "ok": bool(raw.get("ok")),
+        "reason": raw.get("reason"),
+        "period_hours": raw.get("period_hours") or 24,
+        "sent": totals.get("sent"),
+        "delivered": totals.get("delivered"),
+        "bounce": totals.get("bounce"),
+        "deferred": totals.get("deferred"),
+        "inbound": totals.get("inbound"),
+        "outbound": totals.get("outbound"),
+        "failed": totals.get("failed"),
+        "log_total": totals.get("log_total"),
+        "campaign_queued": totals.get("campaign_queued"),
+        "queue_count": queue.get("queue_count"),
+        "queue_deferred": queue.get("deferred_count"),
+    }
 
 
 def context_to_prompt_block(context: dict[str, Any]) -> str:

@@ -185,9 +185,12 @@ export function ChatPanel({ activeServers }: Props) {
       window.clearTimeout(timeout)
       window.clearTimeout(timer)
       setSending(false)
-      inputRef.current?.focus()
     }
   }, [input, sending, serverId])
+
+  useEffect(() => {
+    if (!sending) inputRef.current?.focus()
+  }, [sending])
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -294,7 +297,6 @@ export function ChatPanel({ activeServers }: Props) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          disabled={sending}
         />
         <button
           type="button"
