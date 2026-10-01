@@ -21,6 +21,7 @@ const SUGGESTIONS = [
 ]
 
 const CHAT_STORE = 'worktual_observability_chats'
+const ACTIVE_CHAT = 'worktual_observability_chat_active'
 
 type ChatThread = {
   id: string
@@ -44,16 +45,60 @@ function loadThreads(): ChatThread[] {
   }
 }
 
+function restoreChat(): { id: string; messages: ChatMessage[] } {
+  const threads = loadThreads()
+  let savedId: string | null = null
+  try {
+    savedId = localStorage.getItem(ACTIVE_CHAT)
+  } catch {
+    savedId = null
+  }
+  const thread = threads.find((item) => item.id === savedId) ?? threads[0]
+  if (!thread) return { id: newThreadId(), messages: [] }
+  return { id: thread.id, messages: thread.messages }
+}
+
 export function ChatPanel({ activeServers }: Props) {
+  const restored = useRef(restoreChat())
   const [threads, setThreads] = useState<ChatThread[]>(() => loadThreads())
-  const [activeId, setActiveId] = useState(newThreadId)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [activeId, setActiveId] = useState(() => restored.current.id)
+  const [messages, setMessages] = useState<ChatMessage[]>(() => restored.current.messages)
   const [input, setInput] = useState('')
   const [serverId, setServerId] = useState<string>('all')
   const [sending, setSending] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const messagesRef = useRef(messages)
+  const activeIdRef = useRef(activeId)
+  messagesRef.current = messages
+  activeIdRef.current = activeId
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_CHAT, activeId)
+    } catch {
+      /* ignore quota */
+    }
+  }, [activeId])
+
+  useEffect(() => {
+    return () => {
+      const saved = messagesRef.current.filter((message) => message.text.trim())
+      if (saved.length === 0) return
+      const title = (saved.find((message) => message.role === 'user')?.text || 'New chat').slice(0, 48)
+      const next = [
+        { id: activeIdRef.current, title, messages: saved, updatedAt: Date.now() },
+        ...loadThreads().filter((thread) => thread.id !== activeIdRef.current),
+      ].slice(0, 40)
+      try {
+        localStorage.setItem(CHAT_STORE, JSON.stringify(next))
+        localStorage.setItem(ACTIVE_CHAT, activeIdRef.current)
+      } catch {
+        /* ignore quota */
+      }
+    }
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
