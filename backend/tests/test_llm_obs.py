@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 import pytest
 from fastapi import FastAPI
@@ -182,3 +183,173 @@ def test_http_ingest_uses_api_key_not_user_login(client, session):
     )
     assert in_range.status_code == 200
     assert len(in_range.json()) == 1
+
+
+def test_worktual_ingest_reads_the_crm_flow_back_from_langfuse(client, session, monkeypatch):
+    """Send the CRM demo through the Worktual endpoint and read the same flow from Langfuse."""
+    import base64
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from app.config import settings
+    from app.models.llm_obs import LlmObsTrace
+
+    observations: list[dict] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def _send(self, code: int, payload: dict) -> None:
+            raw = json.dumps(payload).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def _authorized(self) -> bool:
+            expected = "Basic " + base64.b64encode(b"pk-lf-test:sk-lf-test").decode()
+            return self.headers.get("Authorization") == expected
+
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if not self._authorized():
+                self._send(401, {"message": "unauthorized"})
+                return
+            if not self.path.startswith("/api/public/otel/v1/traces"):
+                self._send(404, {})
+                return
+            if self.headers.get("x-langfuse-ingestion-version") != "4":
+                self._send(400, {"message": "missing ingestion version"})
+                return
+            observations.extend(_observations_from_otel(body))
+            self._send(200, {})
+
+        def do_GET(self) -> None:  # noqa: N802
+            if not self._authorized():
+                self._send(401, {"message": "unauthorized"})
+                return
+            if not self.path.split("?", 1)[0] == "/api/public/v2/observations":
+                self._send(404, {})
+                return
+            self._send(200, {"data": observations, "meta": {"cursor": None}})
+
+        def log_message(self, _format: str, *_args) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    monkeypatch.setattr(settings, "langfuse_host", f"http://127.0.0.1:{port}")
+    monkeypatch.setattr(settings, "langfuse_public_key", "pk-lf-test")
+    monkeypatch.setattr(settings, "langfuse_secret_key", "sk-lf-test")
+    try:
+        created = client.post("/api/llm-obs/projects", json={"name": "crm", "display_name": "CRM"})
+        assert created.status_code == 201, created.text
+        project_id = created.json()["id"]
+        key = client.post(f"/api/llm-obs/projects/{project_id}/keys", json={"name": "crm"})
+        assert key.status_code == 201, key.text
+        raw = key.json()["api_key"]
+
+        accepted = client.post("/api/llm-obs/ingest", json=DEMO_TRACE, headers={"X-Api-Key": raw})
+        assert accepted.status_code == 201, accepted.text
+        assert session.query(LlmObsTrace).count() == 1
+
+        listed = client.get("/api/llm-obs/traces", params={"project_id": project_id})
+        assert listed.status_code == 200, listed.text
+        rows = listed.json()
+        assert len(rows) == 1
+        assert rows[0]["id"] == "demo-crm-turn-1"
+        assert rows[0]["session_id"] == "crm-billing-1"
+        assert rows[0]["agents"] == ["crm-support-agent"]
+        assert rows[0]["failed_tools"] == ["create_ticket"]
+        assert "pk-lf" not in listed.text
+        assert "sk-lf" not in listed.text
+
+        detail = client.get("/api/llm-obs/traces/demo-crm-turn-1")
+        assert detail.status_code == 200, detail.text
+        payload = detail.json()
+        assert "pk-lf" not in detail.text
+        assert "sk-lf" not in detail.text
+        assert [run["type"] for run in payload["runs"]] == ["agent", "llm", "tool", "tool"]
+        assert [run["name"] for run in payload["runs"]] == [
+            "crm-support-agent",
+            "plan",
+            "lookup_contact",
+            "create_ticket",
+        ]
+        assert [run["parent_id"] for run in payload["runs"]] == [None, "agent-1", "agent-1", "agent-1"]
+        plan = payload["runs"][1]
+        assert plan["model"] == "worktual-gemma"
+        assert "CRM assistant" in plan["system_prompt"]
+        assert plan["input_tokens"] == 40
+        assert plan["output_tokens"] == 18
+        assert plan["total_tokens"] == 58
+        assert plan["total_cost"] == 0.0025
+        assert payload["runs"][2]["status"] == "success"
+        assert payload["runs"][3]["status"] == "error"
+        assert payload["runs"][3]["error"] == "CRM API timeout after 30s"
+        assert "should-not-store" not in (payload["runs"][3]["input"] or "")
+        assert "[redacted]" in (payload["runs"][3]["input"] or "")
+        assert payload["session_id"] == "crm-billing-1"
+        assert payload["latency_ms"] == 2000
+
+        summary = client.get("/api/llm-obs/summary", params={"project_id": project_id})
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["total"] == 1
+        assert summary.json()["error"] == 1
+        assert summary.json()["total_tokens"] == 58
+        assert summary.json()["total_cost"] == 0.0025
+        assert "worktual-gemma" in summary.json()["models"]
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+
+def _observations_from_otel(body: dict) -> list[dict]:
+    found: list[dict] = []
+    for resource in body.get("resourceSpans", []):
+        for scope in resource.get("scopeSpans", []):
+            for span in scope.get("spans", []):
+                attrs = {}
+                for item in span.get("attributes", []):
+                    value = item.get("value", {})
+                    attrs[item["key"]] = value.get("stringValue", value.get("intValue"))
+                meta = {}
+                for key, value in attrs.items():
+                    if key.startswith("langfuse.observation.metadata."):
+                        meta[key.removeprefix("langfuse.observation.metadata.")] = value
+                    elif key.startswith("langfuse.trace.metadata."):
+                        meta[key.removeprefix("langfuse.trace.metadata.")] = value
+                usage = {}
+                raw_usage = attrs.get("langfuse.observation.usage_details")
+                if isinstance(raw_usage, str) and raw_usage:
+                    usage = json.loads(raw_usage)
+                kind = str(attrs.get("langfuse.observation.type") or "span").upper()
+                started = datetime.fromtimestamp(int(span["startTimeUnixNano"]) / 1_000_000_000, timezone.utc)
+                finished = datetime.fromtimestamp(int(span["endTimeUnixNano"]) / 1_000_000_000, timezone.utc)
+                row = {
+                    "id": span["spanId"],
+                    "traceId": span["traceId"],
+                    "startTime": started.isoformat(),
+                    "endTime": finished.isoformat(),
+                    "type": kind,
+                    "name": span["name"],
+                    "level": attrs.get("langfuse.observation.level") or "DEFAULT",
+                    "statusMessage": attrs.get("langfuse.observation.status_message"),
+                    "environment": attrs.get("langfuse.environment"),
+                    "sessionId": attrs.get("langfuse.session.id"),
+                    "traceName": attrs.get("langfuse.trace.name"),
+                    "input": attrs.get("langfuse.observation.input"),
+                    "output": attrs.get("langfuse.observation.output"),
+                    "model": attrs.get("langfuse.observation.model.name"),
+                    "metadata": meta,
+                    "usageDetails": usage,
+                    "inputUsage": usage.get("input"),
+                    "outputUsage": usage.get("output"),
+                    "totalUsage": usage.get("total"),
+                }
+                if kind == "GENERATION" and usage:
+                    row["totalCost"] = 0.0025
+                found.append(row)
+    return found

@@ -1598,11 +1598,12 @@ export type LlmObsSummary = {
   error: number
   avg_latency_ms: number | null
   total_tokens: number
+  total_cost?: number | null
   models: string[]
 }
 
 export type LlmObsTrace = {
-  id: number
+  id: number | string
   project_id: number
   project: string
   name: string
@@ -1617,6 +1618,8 @@ export type LlmObsTrace = {
   models: string[]
   total_tokens: number
   run_count: number
+  session_id?: string | null
+  total_cost?: number | null
 }
 
 export type LlmObsRun = {
@@ -1637,6 +1640,7 @@ export type LlmObsRun = {
   input_tokens: number | null
   output_tokens: number | null
   total_tokens: number | null
+  total_cost?: number | null
 }
 
 export type LlmObsTraceDetail = LlmObsTrace & { runs: LlmObsRun[] }
@@ -1719,8 +1723,8 @@ export async function listLlmObsTraces(filters: LlmObsFilters): Promise<LlmObsTr
   return res.json()
 }
 
-export async function fetchLlmObsTrace(traceId: number): Promise<LlmObsTraceDetail> {
-  const res = await apiFetch(`/llm-obs/traces/${traceId}`)
+export async function fetchLlmObsTrace(traceId: number | string): Promise<LlmObsTraceDetail> {
+  const res = await apiFetch(`/llm-obs/traces/${encodeURIComponent(String(traceId))}`)
   if (!res.ok) return llmObsError(res, 'Failed to load trace')
   return res.json()
 }

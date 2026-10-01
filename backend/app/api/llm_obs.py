@@ -22,6 +22,7 @@ from app.schemas.llm_obs import (
 from app.services.llm_obs import (
     LlmObsConflict,
     LlmObsRejected,
+    LlmObsUpstream,
     create_api_key,
     create_project,
     get_owned_project,
@@ -167,7 +168,7 @@ def traces(
 
 @dashboard_router.get("/traces/{trace_id}", response_model=TraceDetail)
 def trace_detail(
-    trace_id: int,
+    trace_id: str,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TraceDetail:
@@ -208,3 +209,5 @@ def ingest_trace(
             status_code=status.HTTP_409_CONFLICT,
             detail="Trace id already exists for this project",
         ) from None
+    except LlmObsUpstream as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.message) from exc

@@ -17,18 +17,17 @@ import {
 } from '../api'
 import { formatWhen } from '../formatWhen'
 
-const LANGFUSE_URL = 'https://langfuse.worktual.tech'
-
 const EMPTY_SUMMARY: LlmObsSummary = {
   total: 0,
   success: 0,
   error: 0,
   avg_latency_ms: null,
   total_tokens: 0,
+  total_cost: null,
   models: [],
 }
 
-type View = 'traces' | 'trace' | 'projects' | 'langfuse'
+type View = 'traces' | 'trace' | 'projects'
 
 function dayStart(day: string): string {
   return `${day}T00:00:00+05:30`
@@ -66,13 +65,18 @@ function buildFlow(runs: LlmObsRun[]): FlowItem[] {
   return walk(null, { n: 1 })
 }
 
+function formatCost(value: number): string {
+  const text = value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
+  return `$${text || '0'}`
+}
+
 function tokenLine(run: LlmObsRun): string | null {
-  if (run.input_tokens == null && run.output_tokens == null && run.total_tokens == null) return null
   const parts: string[] = []
   if (run.input_tokens != null) parts.push(`${run.input_tokens} input tokens`)
   if (run.output_tokens != null) parts.push(`${run.output_tokens} output tokens`)
   if (run.total_tokens != null) parts.push(`${run.total_tokens} total`)
-  return parts.join(' · ')
+  if (run.total_cost != null) parts.push(formatCost(run.total_cost))
+  return parts.length ? parts.join(' · ') : null
 }
 
 function FlowBlock({ label, text }: { label: string; text: string }) {
@@ -178,7 +182,7 @@ export function LlmObsPanel() {
   const ingestUrl = `${window.location.origin}/api/llm-obs/ingest`
   const flow = detail ? buildFlow(detail.runs) : []
 
-  function openTrace(traceId: number) {
+  function openTrace(traceId: number | string) {
     setError(null)
     void fetchLlmObsTrace(traceId)
       .then((next) => {
@@ -205,13 +209,6 @@ export function LlmObsPanel() {
             onClick={() => setView('projects')}
           >
             Projects
-          </button>
-          <button
-            type="button"
-            className={`domain-tab${view === 'langfuse' ? ' active' : ''}`}
-            onClick={() => setView('langfuse')}
-          >
-            Langfuse
           </button>
         </div>
       ) : null}
@@ -283,6 +280,10 @@ export function LlmObsPanel() {
               <span>Tokens</span>
               <strong>{summary.total_tokens}</strong>
             </div>
+            <div className="host-kpi">
+              <span>Cost</span>
+              <strong>{summary.total_cost != null ? formatCost(summary.total_cost) : '—'}</strong>
+            </div>
           </div>
           {traces.length === 0 ? (
             <p className="muted">No traces for this filter. Open Projects to create a key, then send a chat turn.</p>
@@ -300,6 +301,7 @@ export function LlmObsPanel() {
                     <th>Status</th>
                     <th>Latency</th>
                     <th>Tokens</th>
+                    <th>Session</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -319,6 +321,7 @@ export function LlmObsPanel() {
                       </td>
                       <td>{trace.latency_ms != null ? `${trace.latency_ms} ms` : '—'}</td>
                       <td>{trace.total_tokens}</td>
+                      <td>{trace.session_id || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -345,7 +348,9 @@ export function LlmObsPanel() {
               <h2>{detail.name}</h2>
               <p className="muted-block">
                 {detail.project} · {formatWhen(detail.started_at)}
+                {detail.session_id ? ` · session ${detail.session_id}` : ''}
                 {detail.latency_ms != null ? ` · ${detail.latency_ms} ms` : ''}
+                {detail.total_cost != null ? ` · ${formatCost(detail.total_cost)}` : ''}
                 {detail.error ? ` · ${detail.error}` : ''}
               </p>
             </div>
@@ -358,38 +363,15 @@ export function LlmObsPanel() {
         </section>
       ) : null}
 
-      {view === 'langfuse' ? (
-        <section className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Langfuse</h2>
-              <p className="muted-block">
-                Self-hosted Langfuse OSS stores traces for CRM, CCaaS, and Ticketing. The Langfuse
-                name and logo stay in that app. Traces and Projects on this page are the existing
-                Worktual demo and stay until Langfuse is confirmed.
-              </p>
-            </div>
-            <a className="btn primary" href={LANGFUSE_URL} target="_blank" rel="noreferrer">
-              Open Langfuse
-            </a>
-          </div>
-          <label className="llm-block">
-            Env for each app
-            <pre>{`LANGFUSE_PUBLIC_KEY=pk-lf-...\nLANGFUSE_SECRET_KEY=sk-lf-...\nLANGFUSE_BASE_URL=${LANGFUSE_URL}`}</pre>
-          </label>
-          <p className="muted">
-            Create a project in Langfuse and copy its keys. Then run{' '}
-            <code>scripts/send_langfuse_crm_demo.py</code> with those variables set.
-          </p>
-        </section>
-      ) : null}
-
       {view === 'projects' ? (
         <section className="panel">
           <div className="panel-head">
             <div>
               <h2>Projects</h2>
-              <p className="muted-block">One project per app, such as crm, ccaas, or ticketing.</p>
+              <p className="muted-block">
+                One project per app, such as crm, ccaas, or ticketing. The app sends traces to the
+                Worktual endpoint with its Worktual key.
+              </p>
             </div>
           </div>
           <form
@@ -521,12 +503,12 @@ export function LlmObsPanel() {
                 </ul>
               )}
               <label className="llm-block">
-                Ingest URL
+                Worktual endpoint
                 <pre>{ingestUrl}</pre>
               </label>
               <label className="llm-block">
                 Env for the app
-                <pre>{`LLM_OBS_ENDPOINT=${window.location.origin}\nLLM_OBS_API_KEY=`}</pre>
+                <pre>{`WORKTUAL_LLM_OBS_ENDPOINT=${ingestUrl}\nWORKTUAL_LLM_OBS_KEY=${freshKey ?? ''}`}</pre>
               </label>
             </div>
           ) : (

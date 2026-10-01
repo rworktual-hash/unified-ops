@@ -2,7 +2,7 @@
 """Send one CRM-style chat trace to LLM Observability.
 
 Usage:
-  LLM_OBS_API_KEY=wllm_... LLM_OBS_ENDPOINT=http://127.0.0.1:8000 python scripts/send_llm_obs_demo.py
+  WORKTUAL_LLM_OBS_KEY=wllm_... WORKTUAL_LLM_OBS_ENDPOINT=https://observability.worktual.tech python scripts/send_llm_obs_demo.py
 """
 
 from __future__ import annotations
@@ -19,10 +19,14 @@ from app.services.llm_obs_demo import DEMO_TRACE  # noqa: E402
 
 
 def main() -> int:
-    key = os.environ.get("LLM_OBS_API_KEY", "").strip()
-    endpoint = os.environ.get("LLM_OBS_ENDPOINT", "http://127.0.0.1:8000").rstrip("/")
+    key = os.environ.get("WORKTUAL_LLM_OBS_KEY", os.environ.get("LLM_OBS_API_KEY", "")).strip()
+    endpoint = os.environ.get(
+        "WORKTUAL_LLM_OBS_ENDPOINT",
+        os.environ.get("LLM_OBS_ENDPOINT", "http://127.0.0.1:8000"),
+    ).rstrip("/")
+    endpoint = endpoint.removesuffix("/api/llm-obs/ingest")
     if not key:
-        print("Set LLM_OBS_API_KEY to a project key from LLM Observability.", file=sys.stderr)
+        print("Set WORKTUAL_LLM_OBS_KEY to a project key from LLM Observability.", file=sys.stderr)
         return 1
     url = f"{endpoint}/api/llm-obs/ingest"
     request = urllib.request.Request(

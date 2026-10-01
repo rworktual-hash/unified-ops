@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     llm_api_key: str = "dummy"
     llm_timeout_seconds: float = 120.0
 
+    # Langfuse OSS on this host. Server-only. Never returned to customer apps.
+    langfuse_host: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+
     auth_enabled: bool = True
     jwt_secret: str = "change-me-in-production"
     jwt_expire_minutes: int = 60 * 24 * 7

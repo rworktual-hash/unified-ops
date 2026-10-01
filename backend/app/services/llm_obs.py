@@ -22,6 +22,9 @@ from app.schemas.llm_obs import (
     TraceListItem,
 )
 from app.services.app_auth import hash_password, verify_password
+from app.services.langfuse_gateway import LangfuseError, _TYPE_FROM_LANGFUSE, enabled as langfuse_enabled
+from app.services.langfuse_gateway import export_trace as langfuse_export
+from app.services.langfuse_gateway import fetch_observations as langfuse_fetch
 
 _NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 _SECRET_LINE = re.compile(
@@ -40,6 +43,12 @@ class LlmObsRejected(Exception):
 
 class LlmObsConflict(Exception):
     pass
+
+
+class LlmObsUpstream(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
 
 
 def _now() -> datetime:
@@ -236,6 +245,18 @@ def ingest(db: Session, key: LlmObsApiKey, body: IngestBody) -> IngestResult:
         error = redact_text(run_errors[0].error or f"{run_errors[0].name} failed")
 
     external_id = (body.trace.id or uuid.uuid4().hex)[:64]
+    if langfuse_enabled():
+        try:
+            langfuse_export(
+                project_name=key.project.name,
+                project_id=key.project_id,
+                external_id=external_id,
+                trace_name=body.trace.name.strip()[:160],
+                session_id=(body.trace.session_id or "").strip() or None,
+                runs=body.runs,
+            )
+        except LangfuseError as exc:
+            raise LlmObsUpstream(exc.message) from exc
     trace = LlmObsTrace(
         project_id=key.project_id,
         external_id=external_id,
@@ -383,6 +404,215 @@ def _trace_items(db: Session, traces: list[LlmObsTrace]) -> list[TraceListItem]:
     return items
 
 
+def _parse_stamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def _object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _usage_count(usage: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        number = _number(usage.get(key))
+        if number is not None:
+            return int(number)
+    return None
+
+
+def _observation_runs(rows: list[dict[str, Any]]) -> list[RunPublic]:
+    prepared: list[tuple[datetime, RunPublic]] = []
+    for index, row in enumerate(rows, start=1):
+        meta = _object(row.get("metadata"))
+        usage = _object(row.get("usageDetails"))
+        started = _parse_stamp(row.get("startTime"))
+        finished = _parse_stamp(row.get("endTime"))
+        latency = _latency(started, finished, None)
+        if latency is None:
+            seconds = _number(row.get("latency"))
+            latency = int(seconds * 1000) if seconds is not None else None
+        level = str(row.get("level") or "").upper()
+        message = row.get("statusMessage")
+        error = message.strip() if isinstance(message, str) and message.strip() else None
+        kind = _TYPE_FROM_LANGFUSE.get(str(row.get("type") or "").upper(), "chain")
+        input_tokens = _usage_count(usage, "input", "input_tokens")
+        if input_tokens is None:
+            counted = _number(row.get("inputUsage"))
+            input_tokens = int(counted) if counted is not None else None
+        output_tokens = _usage_count(usage, "output", "output_tokens")
+        if output_tokens is None:
+            counted = _number(row.get("outputUsage"))
+            output_tokens = int(counted) if counted is not None else None
+        total_tokens = _usage_count(usage, "total", "total_tokens")
+        if total_tokens is None:
+            counted = _number(row.get("totalUsage"))
+            total_tokens = int(counted) if counted is not None else _tokens(input_tokens, output_tokens, None)
+        prompt = meta.get("system_prompt")
+        system_prompt = prompt.strip() if isinstance(prompt, str) and prompt.strip() else None
+        run_id = meta.get("worktual_run_id")
+        parent = meta.get("worktual_parent_id")
+        model = row.get("model")
+        prepared.append(
+            (
+                started or datetime.min.replace(tzinfo=timezone.utc),
+                RunPublic(
+                    id=index,
+                    external_id=str(run_id or row.get("id") or index),
+                    parent_id=str(parent) if parent else None,
+                    type=kind,
+                    name=str(row.get("name") or "step")[:128],
+                    model=str(model).strip() if isinstance(model, str) and model.strip() else None,
+                    system_prompt=system_prompt,
+                    input=row.get("input") if isinstance(row.get("input"), str) else _as_text(row.get("input")),
+                    output=row.get("output") if isinstance(row.get("output"), str) else _as_text(row.get("output")),
+                    status="error" if level == "ERROR" or error else "success",
+                    error=error,
+                    started_at=started,
+                    finished_at=finished,
+                    latency_ms=latency,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    total_cost=_number(row.get("totalCost")),
+                ),
+            )
+        )
+    prepared.sort(key=lambda item: (item[0], item[1].id))
+    return [run for _stamp, run in prepared]
+
+
+def _langfuse_details(
+    db: Session,
+    user: CurrentUser,
+    *,
+    project_id: int | None,
+    model: str | None,
+    status: str | None,
+    started_from: datetime | None,
+    started_to: datetime | None,
+    trace_key: str | None = None,
+) -> list[TraceDetail]:
+    owned = list_projects(db, user)
+    if project_id is not None:
+        owned = [project for project in owned if project.id == project_id]
+    by_name = {project.name: project for project in owned}
+    if not by_name:
+        return []
+    environment = owned[0].name if project_id is not None and len(owned) == 1 else None
+    rows = langfuse_fetch(
+        started_from=_aware(started_from),
+        started_to=_aware(started_to),
+        environment=environment,
+        worktual_trace_id=trace_key,
+    )
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        meta = _object(row.get("metadata"))
+        external = meta.get("worktual_trace_id")
+        project_name = row.get("environment") or meta.get("worktual_project")
+        if not isinstance(external, str) or not external or not isinstance(project_name, str):
+            continue
+        if project_name not in by_name:
+            continue
+        if trace_key is not None and external != trace_key:
+            continue
+        grouped.setdefault((project_name, external), []).append(row)
+
+    details: list[TraceDetail] = []
+    for (project_name, external), group in grouped.items():
+        project = by_name[project_name]
+        runs = _observation_runs(group)
+        if model and model not in {run.model for run in runs if run.model}:
+            continue
+        failed = [run for run in runs if run.status == "error"]
+        trace_status = "error" if failed else "success"
+        if status in {"success", "error"} and trace_status != status:
+            continue
+        starts = [run.started_at for run in runs if run.started_at]
+        ends = [run.finished_at for run in runs if run.finished_at]
+        started = min(starts) if starts else _now()
+        finished = max(ends) if ends else None
+        names = []
+        tokens = 0
+        costs: list[float] = []
+        for run in runs:
+            if run.model and run.model not in names:
+                names.append(run.model)
+            if run.type == "llm" and run.total_tokens:
+                tokens += run.total_tokens
+            if run.total_cost is not None:
+                costs.append(run.total_cost)
+        session = next((str(row.get("sessionId")) for row in group if row.get("sessionId")), None)
+        trace_name = next((str(row.get("traceName")) for row in group if row.get("traceName")), external)
+        details.append(
+            TraceDetail(
+                id=external,
+                project_id=project.id,
+                project=project.display_name,
+                name=trace_name,
+                status=trace_status,
+                error=failed[0].error if failed else None,
+                started_at=started,
+                finished_at=finished,
+                latency_ms=_latency(started, finished, None),
+                agents=[run.name for run in runs if run.type == "agent"],
+                tools=[run.name for run in runs if run.type == "tool"],
+                failed_tools=[run.name for run in runs if run.type == "tool" and run.status == "error"],
+                models=names,
+                total_tokens=tokens,
+                run_count=len(runs),
+                session_id=session,
+                total_cost=sum(costs) if costs else None,
+                runs=runs,
+            )
+        )
+    details.sort(key=lambda item: item.started_at, reverse=True)
+    return details[:200]
+
+
+def _summary_from_details(details: list[TraceDetail], models: list[str]) -> SummaryPublic:
+    success = sum(1 for item in details if item.status == "success")
+    latencies = [item.latency_ms for item in details if item.latency_ms is not None]
+    costs = [item.total_cost for item in details if item.total_cost is not None]
+    return SummaryPublic(
+        total=len(details),
+        success=success,
+        error=len(details) - success,
+        avg_latency_ms=int(sum(latencies) / len(latencies)) if latencies else None,
+        total_tokens=sum(item.total_tokens for item in details),
+        total_cost=sum(costs) if costs else None,
+        models=models,
+    )
+
+
 def list_traces(
     db: Session,
     user: CurrentUser,
@@ -393,6 +623,21 @@ def list_traces(
     started_from: datetime | None,
     started_to: datetime | None,
 ) -> list[TraceListItem]:
+    if langfuse_enabled():
+        try:
+            details = _langfuse_details(
+                db,
+                user,
+                project_id=project_id,
+                model=model,
+                status=status,
+                started_from=started_from,
+                started_to=started_to,
+            )
+        except LangfuseError:
+            details = []
+        else:
+            return [TraceListItem(**detail.model_dump(exclude={"runs"})) for detail in details]
     traces = (
         _filtered_traces(
             db,
@@ -420,6 +665,27 @@ def summarize(
     started_from: datetime | None,
     started_to: datetime | None,
 ) -> SummaryPublic:
+    if langfuse_enabled():
+        try:
+            scoped = _langfuse_details(
+                db,
+                user,
+                project_id=project_id,
+                model=None,
+                status=None,
+                started_from=started_from,
+                started_to=started_to,
+            )
+        except LangfuseError:
+            scoped = None
+        if scoped is not None:
+            models = sorted({name for item in scoped for name in item.models})
+            details = scoped
+            if model:
+                details = [item for item in details if model in item.models]
+            if status in {"success", "error"}:
+                details = [item for item in details if item.status == status]
+            return _summary_from_details(details, models)
     filtered = _filtered_traces(
         db,
         user,
@@ -450,11 +716,32 @@ def summarize(
     )
 
 
-def get_trace(db: Session, user: CurrentUser, trace_id: int) -> TraceDetail | None:
+def get_trace(db: Session, user: CurrentUser, trace_id: int | str) -> TraceDetail | None:
+    if langfuse_enabled():
+        try:
+            found = _langfuse_details(
+                db,
+                user,
+                project_id=None,
+                model=None,
+                status=None,
+                started_from=None,
+                started_to=None,
+                trace_key=str(trace_id),
+            )
+        except LangfuseError:
+            found = []
+        else:
+            if found:
+                return found[0]
+            if not str(trace_id).isdigit():
+                return None
+    if not str(trace_id).isdigit():
+        return None
     trace = (
         db.query(LlmObsTrace)
         .filter(
-            LlmObsTrace.id == trace_id,
+            LlmObsTrace.id == int(trace_id),
             LlmObsTrace.project_id.in_(_owned_trace_ids(db, user)),
         )
         .first()

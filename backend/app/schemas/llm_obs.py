@@ -62,6 +62,7 @@ class IngestRun(BaseModel):
 class IngestTrace(BaseModel):
     id: str | None = Field(default=None, max_length=64)
     name: str = Field(min_length=1, max_length=160)
+    session_id: str | None = Field(default=None, max_length=200)
     status: RunStatus | None = None
     error: str | None = None
     started_at: datetime | None = None
@@ -99,10 +100,11 @@ class RunPublic(BaseModel):
     input_tokens: int | None
     output_tokens: int | None
     total_tokens: int | None
+    total_cost: float | None = None
 
 
 class TraceListItem(BaseModel):
-    id: int
+    id: int | str
     project_id: int
     project: str
     name: str
@@ -117,6 +119,8 @@ class TraceListItem(BaseModel):
     models: list[str]
     total_tokens: int
     run_count: int
+    session_id: str | None = None
+    total_cost: float | None = None
 
 
 class TraceDetail(TraceListItem):
@@ -129,4 +133,5 @@ class SummaryPublic(BaseModel):
     error: int
     avg_latency_ms: int | None
     total_tokens: int
+    total_cost: float | None = None
     models: list[str]

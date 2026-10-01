@@ -1,9 +1,10 @@
 """Sample CRM chat trace used to prove agent, model, tool, and failure capture."""
 
 DEMO_TRACE = {
-    "trace": {
+        "trace": {
         "id": "demo-crm-turn-1",
         "name": "CRM chat — find contact and open ticket",
+        "session_id": "crm-billing-1",
     },
     "runs": [
         {
