@@ -13,4 +13,5 @@ def get_chat_llm() -> ChatOpenAI:
         api_key=settings.llm_api_key,
         timeout=settings.llm_timeout_seconds,
         max_retries=1,
+        max_tokens=700,
     )

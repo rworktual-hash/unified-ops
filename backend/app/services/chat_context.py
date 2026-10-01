@@ -54,44 +54,32 @@ def build_ops_context(
             .all()
         )
         entry: dict[str, Any] = {
-                "id": s.id,
-                "name": s.server_name,
-                "ip": s.ip_address,
-                "ssh_port": s.ssh_port,
-                "username": s.ssh_username,
-                "type": s.server_type,
-                "project": s.project,
-                "latest_host_metrics": {
-                    "collected_at": host.collected_at.isoformat() if host else None,
-                    "mem_used_pct": host.mem_used_pct if host else None,
-                    "disk_root_pct": host.disk_root_pct if host else None,
-                    "load_1m": host.load_1m if host else None,
-                    "collect_error": host.collect_error if host else None,
-                },
-                "latest_gpu_metrics": [
-                    {
-                        "gpu_index": g.gpu_index,
-                        "utilization_pct": g.utilization_pct,
-                        "temperature_c": g.temperature_c,
-                        "status": g.status,
-                        "mem_used_mb": g.mem_used_mb,
-                        "mem_total_mb": g.mem_total_mb,
-                    }
-                    for g in gpus[:4]
-                ],
-                "open_alerts": [
-                    {
-                        "type": a.alert_type,
-                        "severity": a.severity,
-                        "title": a.title,
-                        "message": a.message,
-                    }
-                    for a in open_alerts
-                ],
+            "name": s.server_name,
+            "ip": s.ip_address,
+            "type": s.server_type,
+            "project": s.project,
+            "mem": _round(host.mem_used_pct if host else None),
+            "disk": _round(host.disk_root_pct if host else None),
+            "load": _round(host.load_1m if host else None),
         }
+        if host and host.collect_error:
+            entry["collect_error"] = _clip(host.collect_error, 80)
+        gpu_bits = [
+            f"{g.gpu_index}:{_round(g.utilization_pct)}%/{_round(g.temperature_c)}C"
+            for g in gpus[:2]
+            if g.utilization_pct is not None or g.temperature_c is not None
+        ]
+        if gpu_bits:
+            entry["gpu"] = gpu_bits
+        alert_bits = [
+            f"{a.severity}: {_clip(a.title, 48)}"
+            for a in open_alerts[:2]
+        ]
+        if alert_bits:
+            entry["alerts"] = alert_bits
         email_today = _email_today(email_snaps.get(s.id))
         if email_today is not None:
-            entry["latest_email_today"] = email_today
+            entry["email_today"] = email_today
         module = _module_metrics(
             s,
             email_snaps.get(s.id),
@@ -100,7 +88,7 @@ def build_ops_context(
             infra_snaps.get(s.id),
         )
         if module is not None:
-            entry["module_metrics"] = module
+            entry["module"] = module
         fleet.append(entry)
 
     context: dict[str, Any] = {"connected_servers": fleet, "server_count": len(fleet)}
@@ -122,6 +110,18 @@ def _latest_rows(db: Session, model: type, server_ids: list[int]) -> dict[int, A
     return {row.server_id: row for row in rows}
 
 
+def _round(value: Any) -> float | int | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number >= 10:
+        return int(round(number))
+    return round(number, 1)
+
+
 def _clip(value: Any, limit: int = 180) -> str | None:
     if value is None:
         return None
@@ -137,16 +137,9 @@ def _email_today(row: EmailSshSnapshot | None) -> dict[str, Any] | None:
     if row.mail_received is None and row.mail_delivered is None and row.queue_messages is None:
         return None
     return {
-        "collected_at": row.collected_at.isoformat() if row.collected_at else None,
-        "period": "today",
-        "received": row.mail_received,
         "delivered": row.mail_delivered,
+        "received": row.mail_received,
         "bounced": row.mail_bounced,
-        "rejected": row.mail_rejected,
-        "deferred": row.mail_deferred,
-        "queue_messages": row.queue_messages,
-        "queue_deferred": row.queue_deferred,
-        "postfix_active": row.postfix_active,
     }
 
 
@@ -156,57 +149,27 @@ def _module_metrics(
     voice: VoiceMgSshSnapshot | None,
     backup: BackupVaultSshSnapshot | None,
     infra: InfrastructureSshSnapshot | None,
-) -> dict[str, Any] | None:
+) -> str | None:
     project = (server.project or "").lower()
-    if project == "email" and email is not None:
-        return {
-            "module": "email",
-            "collected_at": email.collected_at.isoformat() if email.collected_at else None,
-            "postfix_active": email.postfix_active,
-            "dovecot_active": email.dovecot_active,
-            "queue_messages": email.queue_messages,
-            "received_today": email.mail_received,
-            "delivered_today": email.mail_delivered,
-            "bounced_today": email.mail_bounced,
-        }
     if project == "voicemg" and voice is not None:
-        return {
-            "module": "voicemg",
-            "collected_at": voice.collected_at.isoformat() if voice.collected_at else None,
-            "role": voice.role,
-            "service_active": voice.service_active,
-            "containers_running": voice.containers_running,
-            "app_process_count": voice.app_process_count,
-            "disk_used_pct": voice.data_disk_used_pct,
-            "services": _clip(voice.extra_service_status),
-            "health": _clip(voice.healthcheck_status),
-        }
+        return (
+            f"voicemg {voice.role} service={voice.service_active} "
+            f"procs={voice.app_process_count} disk={_round(voice.data_disk_used_pct)}"
+        )
     if project == "backupvault" and backup is not None:
-        return {
-            "module": "backupvault",
-            "collected_at": backup.collected_at.isoformat() if backup.collected_at else None,
-            "role": backup.role,
-            "service_active": backup.service_active,
-            "latest_backup_at": backup.latest_backup_at.isoformat() if backup.latest_backup_at else None,
-            "latest_backup_path": _clip(backup.latest_backup_path, 120),
-            "backup_file_count": backup.backup_file_count,
-            "disk_used_pct": backup.data_disk_used_pct,
-            "replication_lag_seconds": backup.replication_lag_seconds,
-        }
+        when = backup.latest_backup_at.isoformat() if backup.latest_backup_at else "none"
+        return (
+            f"backupvault {backup.role} service={backup.service_active} "
+            f"files={backup.backup_file_count} latest={when} disk={_round(backup.data_disk_used_pct)}"
+        )
+    if project == "email" and email is not None:
+        return f"email postfix={email.postfix_active} queue={email.queue_messages}"
     if infra is not None:
-        return {
-            "module": "infrastructure",
-            "collected_at": infra.collected_at.isoformat() if infra.collected_at else None,
-            "role": infra.role,
-            "service_active": infra.service_active,
-            "nginx_active": infra.nginx_active,
-            "kong_active": infra.kong_active,
-            "redis_role": infra.redis_role,
-            "db_connections": infra.db_connections,
-            "replication_lag_seconds": infra.replication_lag_seconds,
-            "disk_used_pct": infra.data_disk_used_pct,
-            "services": _clip(infra.extra_service_status),
-        }
+        return (
+            f"infra {infra.role} service={infra.service_active} nginx={infra.nginx_active} "
+            f"kong={infra.kong_active} redis={infra.redis_role} db_conn={infra.db_connections} "
+            f"lag_s={infra.replication_lag_seconds}"
+        )
     return None
 
 
@@ -223,7 +186,7 @@ def _email_campaign_summary() -> dict[str, Any]:
     recent: list[dict[str, Any]] = []
     events = list(raw.get("events") or [])
     events.sort(key=lambda row: 0 if str(row.get("status") or "").lower() in {"sent", "delivered"} else 1)
-    for event in events[:25]:
+    for event in events[:12]:
         recent.append(
             {
                 "time": event.get("occurred_at"),
@@ -254,4 +217,4 @@ def _email_campaign_summary() -> dict[str, Any]:
 
 
 def context_to_prompt_block(context: dict[str, Any]) -> str:
-    return json.dumps(context, indent=2, default=str)
+    return json.dumps(context, separators=(",", ":"), default=str)

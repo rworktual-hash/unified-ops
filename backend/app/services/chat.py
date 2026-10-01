@@ -9,11 +9,11 @@ from app.services.llm_client import get_chat_llm
 SYSTEM_PROMPT = """You are the Worktual Observability assistant.
 You help operators with the hosts, metrics, alerts, and inventory in this portal.
 Your name is Worktual Observability. Never say Unified Ops.
-Answer using ONLY the JSON context. It includes host metrics, GPU metrics, alerts, and module collects: module_metrics on each host (email, VoiceMG, BackupVault, infrastructure), plus email_campaign.
+Answer using ONLY the JSON context. Each host has mem, disk, load, and when present gpu, alerts, module, and email_today. email_campaign is included for mail questions.
 email_campaign.recent_messages is the campaign log (time, from, to, subject, status). When the user asks to list the mails, list those rows. Do not say you lack the list when recent_messages is present.
 Quote sent, delivered, bounce, and queue numbers from email_campaign. The queue count is mail still waiting, not mail already sent.
 Earlier turns are included on a follow-up. "What are those 9" and "list the 9 mails" refer to the sent count and recent_messages from the previous answer. Do not say you do not know which number they mean when the earlier reply states it.
-If email_campaign.ok is false, say the campaign log is unavailable and still answer from latest_email_today when it is present.
+If email_campaign.ok is false, say the campaign log is unavailable and still answer from email_today when it is present.
 If other data is missing, say to run "Collect metrics" in the app first.
 Do NOT invent server IPs or metrics.
 Never instruct the user to run destructive commands (reboot, rm, GPU reset, driver changes).
@@ -95,7 +95,7 @@ def mail_volume_answer(context: dict) -> str:
 
     rows: list[str] = []
     for server in context.get("connected_servers") or []:
-        today = server.get("latest_email_today")
+        today = server.get("email_today")
         if not today:
             continue
         rows.append(
@@ -137,7 +137,7 @@ def run_chat(
     context = build_ops_context(
         db,
         server_ids=server_ids,
-        include_campaign=True,
+        include_campaign=_wants_mail(user_message) or _wants_mail(_history_block(history)),
     )
     if context["server_count"] == 0:
         return (
@@ -187,7 +187,7 @@ def stream_chat(
     context = build_ops_context(
         db,
         server_ids=server_ids,
-        include_campaign=True,
+        include_campaign=_wants_mail(user_message) or _wants_mail(_history_block(history)),
     )
     if context["server_count"] == 0:
         yield (
