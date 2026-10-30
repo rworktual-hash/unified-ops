@@ -3782,6 +3782,12 @@ button.ai-legend-btn:hover,
   margin-bottom: 0;
 }
 
+.process-countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--text);
+}
+
 .process-create .field-label select {
   font: inherit;
   border: 1px solid var(--border);

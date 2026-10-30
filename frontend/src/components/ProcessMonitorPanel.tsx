@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   checkProcessWatch,
   createProcessWatch,
@@ -6,7 +6,7 @@ import {
   listProcessWatches,
   type ProcessWatch,
 } from '../api'
-import { formatWhen } from '../formatWhen'
+import { formatWhen, parseWhen } from '../formatWhen'
 
 type Props = {
   isAdmin: boolean
@@ -25,6 +25,24 @@ function watchTitle(row: ProcessWatch): string {
 function everyLabel(amount: number, unit: 'seconds' | 'minutes' | string): string {
   const name = unit === 'minutes' ? 'min' : 'sec'
   return `${amount} ${name}`
+}
+
+function intervalMs(row: ProcessWatch): number {
+  return row.check_interval_unit === 'minutes' ? row.check_interval * 60_000 : row.check_interval * 1000
+}
+
+function remainingMs(row: ProcessWatch, now: number): number {
+  const checked = parseWhen(row.last_checked_at)
+  if (checked == null) return 0
+  return Math.max(0, checked + intervalMs(row) - now)
+}
+
+function countdownText(ms: number): string {
+  const total = Math.ceil(ms / 1000)
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  if (minutes > 0) return `${minutes}:${String(seconds).padStart(2, '0')}`
+  return `${seconds}s`
 }
 
 export function ProcessAlertSection({
@@ -89,6 +107,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [checkEvery, setCheckEvery] = useState('60')
   const [checkUnit, setCheckUnit] = useState<'seconds' | 'minutes'>('seconds')
   const [mailEvery, setMailEvery] = useState('5')
+  const [now, setNow] = useState(() => Date.now())
+  const inFlight = useRef<Set<number>>(new Set())
+  const retryAt = useRef<Record<number, number>>({})
 
   const load = useCallback(async () => {
     setRows(await listProcessWatches())
@@ -100,6 +121,43 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     })
   }, [load])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void listProcessWatches()
+        .then(setRows)
+        .catch(() => undefined)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    for (const row of rows) {
+      if (inFlight.current.has(row.id)) continue
+      if ((retryAt.current[row.id] ?? 0) > now) continue
+      if (remainingMs(row, now) > 0) continue
+      inFlight.current.add(row.id)
+      setCheckingId(row.id)
+      void checkProcessWatch(row.id)
+        .then((updated) => {
+          setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+        })
+        .catch((err: unknown) => {
+          retryAt.current[row.id] = Date.now() + 5000
+          setError(err instanceof Error ? err.message : 'Process check failed')
+        })
+        .finally(() => {
+          inFlight.current.delete(row.id)
+          setCheckingId((current) => (current === row.id ? null : current))
+        })
+    }
+  }, [isAdmin, now, rows])
+
   return (
     <>
       <section className="panel">
@@ -107,8 +165,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           <div>
             <h2>Watches</h2>
             <p className="muted-block">
-              Each watch is checked on its own interval. Mail repeats on the mail interval while the
-              process stays down.
+              Each watch checks itself when its timer reaches zero. The timer counts down on the card.
+              Mail repeats on the mail interval while the process stays down.
             </p>
           </div>
         </div>
@@ -252,6 +310,11 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       {row.process_name} · {row.ssh_username}@{row.ip_address}:{row.ssh_port}
                     </span>
                   </div>
+                  <p className="alert-message process-countdown">
+                    {checkingId === row.id
+                      ? 'Checking…'
+                      : `Next check in ${countdownText(remainingMs(row, now))}`}
+                  </p>
                   <p className="alert-message">
                     {row.recipients.join(', ')} · check every {everyLabel(row.check_interval, row.check_interval_unit)} ·
                     mail every {row.mail_interval_minutes} min · {mailLine(row)}

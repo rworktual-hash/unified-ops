@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -52,6 +54,26 @@ from app.models import voicemg_ssh_snapshot as _voicemg_ssh_snapshot_model  # no
 from app.models import llm_obs as _llm_obs_model  # noqa: F401
 from app.models import process_watch as _process_watch_model  # noqa: F401
 from app.services.app_auth import ensure_bootstrap_admin
+from app.services.process_watch import check_enabled_watches
+
+logger = logging.getLogger(__name__)
+
+
+def _check_due_process_watches() -> None:
+    db = SessionLocal()
+    try:
+        check_enabled_watches(db)
+    finally:
+        db.close()
+
+
+async def _process_watch_loop() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(_check_due_process_watches)
+        except Exception:
+            logger.exception("Process watch check failed")
+        await asyncio.sleep(5)
 
 
 @asynccontextmanager
@@ -70,7 +92,16 @@ async def lifespan(_app: FastAPI):
         ensure_bootstrap_admin(db)
     finally:
         db.close()
-    yield
+    watcher = asyncio.create_task(_process_watch_loop()) if settings.process_watch_check_enabled else None
+    try:
+        yield
+    finally:
+        if watcher is not None:
+            watcher.cancel()
+            try:
+                await watcher
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(title="Unified Ops API", lifespan=lifespan)
