@@ -12,6 +12,7 @@ from app.api.process_watches import router
 from app.db.session import Base, get_db
 from app.models.process_watch import ProcessWatch
 from app.monitoring.process_check import ProcessCheckError, process_in_listing
+from app.services.process_mail import process_down_body
 from app.schemas.process_watch import ProcessWatchCreate
 from app.services.process_watch import check_enabled_watches, check_watch, create_process_watch
 
@@ -67,6 +68,20 @@ def _payload(**overrides):
     }
     body.update(overrides)
     return body
+
+
+def test_down_mail_uses_the_team_notice_in_ist():
+    body = process_down_body(
+        ip_address="10.180.1.244",
+        process_name="stt_tts_mg",
+        down_since="2026-10-30T14:05:30+00:00",
+    )
+    assert "Hello Team," in body
+    assert "Service: stt_tts_mg" in body
+    assert "Server IP: 10.180.1.244" in body
+    assert "Status: DOWN" in body
+    assert "Detected At: 30-Oct-2026 19:35:30 IST" in body
+    assert "This is an automated notification. Please do not reply." in body
 
 
 def test_process_listing_matches_the_name_and_ignores_the_ps_command():

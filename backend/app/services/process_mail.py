@@ -1,7 +1,12 @@
+from datetime import datetime, timezone
 from email.message import EmailMessage
 import smtplib
+from zoneinfo import ZoneInfo
 
 from app.config import settings
+
+IST = ZoneInfo("Asia/Kolkata")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
 class MailNotConfigured(Exception):
@@ -10,6 +15,43 @@ class MailNotConfigured(Exception):
 
 class MailSendError(Exception):
     pass
+
+
+def format_detected_at(down_since: str) -> str:
+    text = down_since.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    local = parsed.astimezone(IST)
+    month = _MONTHS[local.month - 1]
+    return f"{local.day:02d}-{month}-{local.year} {local:%H:%M:%S} IST"
+
+
+def process_down_body(*, ip_address: str, process_name: str, down_since: str) -> str:
+    detected = format_detected_at(down_since)
+    return "\n".join(
+        [
+            "Hello Team,",
+            "",
+            "The following service is currently not running.",
+            "",
+            f"Service: {process_name}",
+            f"Server IP: {ip_address}",
+            "Status: DOWN",
+            f"Detected At: {detected}",
+            "",
+            "The monitoring system will continue sending alerts until the service is restored.",
+            "",
+            "Please check and take the necessary action.",
+            "",
+            "Regards,",
+            "Worktual Monitoring System",
+            "",
+            "This is an automated notification. Please do not reply.",
+        ]
+    )
 
 
 def send_process_down_mail(*, ip_address: str, process_name: str, recipients: list[str], down_since: str) -> None:
@@ -22,15 +64,7 @@ def send_process_down_mail(*, ip_address: str, process_name: str, recipients: li
     message["Subject"] = f"Process down: {process_name} on {ip_address}"
     message["From"] = settings.smtp_from.strip()
     message["To"] = ", ".join(recipients)
-    message.set_content(
-        "\n".join(
-            [
-                f"Process {process_name} is not running on {ip_address}.",
-                f"Down since {down_since}.",
-                "This mail repeats until the process is running again.",
-            ]
-        )
-    )
+    message.set_content(process_down_body(ip_address=ip_address, process_name=process_name, down_since=down_since))
     try:
         with smtplib.SMTP(settings.smtp_host.strip(), settings.smtp_port, timeout=20) as smtp:
             if settings.smtp_tls:
