@@ -173,6 +173,10 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     row.check_interval_unit = payload.check_interval_unit
     row.mail_interval_minutes = payload.mail_interval_minutes
     row.enabled = payload.enabled
+    if not payload.enabled:
+        row.status = "unknown"
+        row.pid = ""
+        row.last_error = None
     password = payload.ssh_password.strip()
     if password:
         row.ssh_password = password

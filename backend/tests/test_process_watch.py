@@ -262,12 +262,22 @@ def test_inactive_watch_is_not_monitored(client, session, monkeypatch):
     assert body["enabled"] is True
     watch_id = body["id"]
 
+    def running(**_kwargs):
+        return "  101 nginx: master process nginx\n"
+
+    monkeypatch.setattr("app.services.process_watch.fetch_process_listing", running)
+    checked_up = client.post(f"/api/process-watches/{watch_id}/check")
+    assert checked_up.json()["status"] == "up"
+    assert checked_up.json()["pid"] == "101"
+
     updated = client.patch(
         f"/api/process-watches/{watch_id}",
         json=_payload(description="Speech service on the edge", enabled=False, ssh_password=""),
     )
     assert updated.status_code == 200
     assert updated.json()["enabled"] is False
+    assert updated.json()["status"] == "unknown"
+    assert updated.json()["pid"] == ""
     assert updated.json()["description"] == "Speech service on the edge"
 
     def fail(**_kwargs):

@@ -428,14 +428,20 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       <strong>{watchTitle(row)}</strong>
                     </td>
                     <td>{row.process_name}</td>
-                    <td className="process-pid">{row.status === 'up' && row.pid ? row.pid : '—'}</td>
+                    <td className="process-pid">{row.enabled && row.status === 'up' && row.pid ? row.pid : '—'}</td>
                     <td>
                       <span
                         className={`badge ${
-                          row.status === 'down' ? 'critical' : row.status === 'up' ? 'ok' : 'pending'
+                          !row.enabled || row.status === 'unknown'
+                            ? 'pending'
+                            : row.status === 'down'
+                              ? 'critical'
+                              : row.status === 'up'
+                                ? 'ok'
+                                : 'pending'
                         }`}
                       >
-                        {row.status === 'unknown' ? 'not checked' : row.status}
+                        {!row.enabled || row.status === 'unknown' ? 'not checked' : row.status}
                       </span>
                     </td>
                     <td className="process-countdown">
