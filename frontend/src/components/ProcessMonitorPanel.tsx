@@ -40,8 +40,6 @@ function remainingMs(row: ProcessWatch, clientNow: number, clockOffset: number):
 
 function rowDetail(row: ProcessWatch): string {
   return [
-    `${row.ssh_username}@${row.ip_address}:${row.ssh_port}`,
-    row.description,
     row.recipients.join(', '),
     `check every ${everyLabel(row.check_interval, row.check_interval_unit)}`,
     `mail every ${row.mail_interval_minutes} min`,
@@ -446,14 +444,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   <tr key={row.id} title={rowDetail(row)}>
                     <td>
                       <strong>{watchTitle(row)}</strong>
-                      {row.description ? <div className="muted">{row.description}</div> : null}
                     </td>
-                    <td>
-                      {row.process_name}
-                      <div className="muted">
-                        {row.ssh_username}@{row.ip_address}:{row.ssh_port}
-                      </div>
-                    </td>
+                    <td>{row.process_name}</td>
                     <td className="process-pid">{row.status === 'up' && row.pid ? row.pid : '—'}</td>
                     <td>
                       <span
