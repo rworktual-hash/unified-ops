@@ -8,7 +8,13 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.models.process_watch import ProcessWatch
-from app.monitoring.process_check import fetch_process_listing, format_pids, matching_pids, valid_process_name
+from app.monitoring.process_check import (
+    fetch_exact_pid,
+    fetch_process_listing,
+    format_pids,
+    matching_pids,
+    valid_process_name,
+)
 from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
 from app.services.process_mail import MailNotConfigured, send_process_down_mail
 
@@ -247,11 +253,10 @@ def check_watch(
         db.refresh(row)
         if not row.enabled or not check_is_due(row, now):
             return row
-    fetch_fn = fetch or _fetch_listing
     send_fn = send or send_process_down_mail
     row.last_checked_at = now
     try:
-        listing = fetch_fn(row)
+        pids = _resolve_pids(row, fetch)
     except Exception as exc:
         row.last_error = (str(exc) or "SSH failed")[:2000]
         db.commit()
@@ -259,7 +264,6 @@ def check_watch(
         return row
 
     row.last_error = None
-    pids = matching_pids(listing, row.process_name)
     if pids:
         if row.status == "down":
             row.resolved_at = now
@@ -280,6 +284,27 @@ def check_watch(
     db.commit()
     db.refresh(row)
     return row
+
+
+def _exact_pid(row: ProcessWatch) -> tuple[str, str]:
+    return fetch_exact_pid(
+        host=row.ip_address,
+        port=row.ssh_port,
+        username=row.ssh_username,
+        ssh_password=row.ssh_password,
+        process_name=row.process_name,
+    )
+
+
+def _resolve_pids(row: ProcessWatch, fetch: Callable[..., str] | None) -> list[str]:
+    if fetch is not None:
+        return matching_pids(fetch(row), row.process_name)
+    kind, pid = _exact_pid(row)
+    if kind == "pid":
+        return [pid]
+    if kind == "down":
+        return []
+    return matching_pids(_fetch_listing(row), row.process_name)
 
 
 def _fetch_listing(row: ProcessWatch) -> str:

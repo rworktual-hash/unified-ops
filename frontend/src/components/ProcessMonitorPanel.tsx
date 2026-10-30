@@ -414,6 +414,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 <tr>
                   <th>Label</th>
                   <th>Process name</th>
+                  <th>Server</th>
                   <th>PID</th>
                   <th>Status</th>
                   <th>Next check</th>
@@ -428,6 +429,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       <strong>{watchTitle(row)}</strong>
                     </td>
                     <td>{row.process_name}</td>
+                    <td className="process-server">
+                      {row.ssh_username}@{row.ip_address}:{row.ssh_port}
+                    </td>
                     <td className="process-pid">{row.enabled && row.status === 'up' && row.pid ? row.pid : '—'}</td>
                     <td>
                       <span

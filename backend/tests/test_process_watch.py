@@ -11,7 +11,13 @@ from app.api.deps import CurrentUser, get_current_user
 from app.api.process_watches import router
 from app.db.session import Base, get_db
 from app.models.process_watch import ProcessWatch
-from app.monitoring.process_check import ProcessCheckError, matching_pids, process_in_listing
+from app.monitoring.process_check import (
+    ProcessCheckError,
+    interpret_pgrep,
+    matching_pids,
+    pgrep_command,
+    process_in_listing,
+)
 from app.services.process_mail import process_down_body
 from app.schemas.process_watch import ProcessWatchCreate
 from app.services.process_watch import check_enabled_watches, check_watch, create_process_watch
@@ -82,6 +88,46 @@ def test_down_mail_uses_the_team_notice_in_ist():
     assert "Status: DOWN" in body
     assert "Detected At: 30-Oct-2026 19:35:30 IST" in body
     assert "This is an automated notification. Please do not reply." in body
+
+
+def test_pgrep_uses_the_process_name_and_empty_output_means_down():
+    command = pgrep_command("srs")
+    assert 'pgrep -x "srs"' in command
+    assert "awk 'NR==1 {print $1}'" in command
+    assert "__PGREP_UNAVAILABLE__" in command
+    assert interpret_pgrep("44021\n") == ("pid", "44021")
+    assert interpret_pgrep("") == ("down", "")
+    assert interpret_pgrep("__PGREP_UNAVAILABLE__\n") == ("unavailable", "")
+
+    with pytest.raises(ProcessCheckError):
+        pgrep_command("nginx;rm")
+
+
+def test_pgrep_pid_wins_and_a_miss_does_not_fall_back_to_ps(session, monkeypatch):
+    row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()))
+
+    def ps_must_not_run(_row):
+        raise AssertionError("ps fallback")
+
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("pid", "55"))
+    monkeypatch.setattr("app.services.process_watch._fetch_listing", ps_must_not_run)
+    check_watch(session, row, now=T0, force=True)
+    assert row.status == "up"
+    assert row.pid == "55"
+
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("down", ""))
+    check_watch(session, row, now=T0 + timedelta(seconds=60), force=True)
+    assert row.status == "down"
+    assert row.pid == ""
+
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("unavailable", ""))
+    monkeypatch.setattr(
+        "app.services.process_watch._fetch_listing",
+        lambda _row: "  77 nginx: master process nginx\n",
+    )
+    check_watch(session, row, now=T0 + timedelta(seconds=120), force=True)
+    assert row.status == "up"
+    assert row.pid == "77"
 
 
 def test_process_listing_matches_the_name_and_ignores_the_ps_command():
@@ -241,6 +287,7 @@ def test_api_check_reports_ssh_failure_without_marking_down(client, monkeypatch)
     def fail(**_kwargs):
         raise ProcessCheckError("SSH failed")
 
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("unavailable", ""))
     monkeypatch.setattr("app.services.process_watch.fetch_process_listing", fail)
     checked = client.post(f"/api/process-watches/{watch_id}/check")
     assert checked.status_code == 200
@@ -265,6 +312,7 @@ def test_inactive_watch_is_not_monitored(client, session, monkeypatch):
     def running(**_kwargs):
         return "  101 nginx: master process nginx\n"
 
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("unavailable", ""))
     monkeypatch.setattr("app.services.process_watch.fetch_process_listing", running)
     checked_up = client.post(f"/api/process-watches/{watch_id}/check")
     assert checked_up.json()["status"] == "up"
@@ -334,6 +382,7 @@ def test_scheduled_check_waits_for_the_watch_interval(session, monkeypatch):
     check_watch(session, row, now=T0, fetch=listing, send=lambda **_kwargs: None)
     assert calls["n"] == 1
 
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("unavailable", ""))
     monkeypatch.setattr("app.services.process_watch._fetch_listing", listing)
     early = check_enabled_watches(session, now=T0 + timedelta(seconds=10))
     assert early["checked"] == 0

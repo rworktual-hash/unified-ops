@@ -3875,6 +3875,7 @@ button.ai-legend-btn:hover,
   margin-top: 0.15rem;
 }
 
+.process-server,
 .process-pid {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

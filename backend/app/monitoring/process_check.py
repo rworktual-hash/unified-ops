@@ -1,4 +1,4 @@
-"""Read-only process listing. The remote command is fixed; the name is matched in Python."""
+"""Read-only process lookup. pgrep is tried first; ps is the fallback."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from app.monitoring.ssh_client import ssh_session
 
 # Fixed command. Process names are never interpolated into the shell.
 CMD_PS_ARGS = "ps -eo pid=,args="
+_PGREP_UNAVAILABLE = "__PGREP_UNAVAILABLE__"
 
 PROCESS_NAME_RE = re.compile(r"^[A-Za-z0-9._/: -]{1,128}$")
 _PID_LINE = re.compile(r"^(\d+)\s+(.*)$")
@@ -66,6 +67,59 @@ def format_pids(pids: list[str]) -> str:
 
 def process_in_listing(listing: str, process_name: str) -> bool:
     return bool(matching_pids(listing, process_name))
+
+
+def pgrep_command(process_name: str) -> str:
+    """Exact-name lookup. The name is quoted only after it passes validation."""
+    if not valid_process_name(process_name):
+        raise ProcessCheckError("Process name is invalid")
+    quoted = '"' + process_name + '"'
+    return (
+        "if ! command -v pgrep >/dev/null 2>&1; then "
+        f"printf '%s\\n' {_PGREP_UNAVAILABLE}; "
+        "else "
+        f"pgrep -x {quoted} 2>/dev/null | awk 'NR==1 {{print $1}}'; "
+        "fi"
+    )
+
+
+def interpret_pgrep(output: str) -> tuple[str, str]:
+    """Return (pid|down|unavailable, pid). Empty pgrep output means the process is down."""
+    text = output.strip()
+    if _PGREP_UNAVAILABLE in text:
+        return ("unavailable", "")
+    if not text:
+        return ("down", "")
+    first = text.splitlines()[0].strip()
+    if first.isdigit():
+        return ("pid", first)
+    return ("unavailable", "")
+
+
+def fetch_exact_pid(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    ssh_password: str,
+    process_name: str,
+) -> tuple[str, str]:
+    command = pgrep_command(process_name)
+    try:
+        with ssh_session(
+            host=host,
+            port=port,
+            username=username,
+            credential_ref=None,
+            ssh_password=ssh_password,
+            ssh_auth_mode="password",
+        ) as client:
+            _stdin, stdout, _stderr = client.exec_command(command, timeout=settings.ssh_command_timeout)
+            out = stdout.read().decode("utf-8", errors="replace")
+            stdout.channel.recv_exit_status()
+    except Exception as exc:
+        raise ProcessCheckError(str(exc) or "SSH failed") from exc
+    return interpret_pgrep(out)
 
 
 def fetch_process_listing(
