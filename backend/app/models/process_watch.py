@@ -17,6 +17,7 @@ class ProcessWatch(Base):
     label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
     process_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    pid: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     recipients: Mapped[str] = mapped_column(Text, nullable=False)
     check_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     check_interval_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="seconds")

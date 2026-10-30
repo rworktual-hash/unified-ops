@@ -42,6 +42,7 @@ class ProcessWatchRead(BaseModel):
     label: str
     description: str
     process_name: str
+    pid: str
     recipients: list[str]
     check_interval: int
     check_interval_unit: str
@@ -56,5 +57,6 @@ class ProcessWatchRead(BaseModel):
     mail_error: str | None
     last_error: str | None
     created_at: datetime
+    server_now: datetime
 
     model_config = {"from_attributes": True}

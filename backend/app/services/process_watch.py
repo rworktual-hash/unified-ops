@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.models.process_watch import ProcessWatch
-from app.monitoring.process_check import fetch_process_listing, process_in_listing, valid_process_name
+from app.monitoring.process_check import fetch_process_listing, format_pids, matching_pids, valid_process_name
 from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
 from app.services.process_mail import MailNotConfigured, send_process_down_mail
 
@@ -95,7 +95,7 @@ def check_is_due(row: ProcessWatch, now: datetime) -> bool:
     return now - last >= _check_delta(row)
 
 
-def to_read(row: ProcessWatch) -> ProcessWatchRead:
+def to_read(row: ProcessWatch, *, server_now: datetime | None = None) -> ProcessWatchRead:
     return ProcessWatchRead(
         id=row.id,
         ip_address=row.ip_address,
@@ -104,6 +104,7 @@ def to_read(row: ProcessWatch) -> ProcessWatchRead:
         label=row.label or "",
         description=row.description or "",
         process_name=row.process_name,
+        pid=row.pid or "",
         recipients=recipient_list(row.recipients),
         check_interval=row.check_interval,
         check_interval_unit=row.check_interval_unit,
@@ -118,6 +119,7 @@ def to_read(row: ProcessWatch) -> ProcessWatchRead:
         mail_error=row.mail_error,
         last_error=row.last_error,
         created_at=row.created_at,
+        server_now=server_now or datetime.now(timezone.utc),
     )
 
 
@@ -232,10 +234,15 @@ def check_watch(
     now: datetime | None = None,
     fetch: Callable[..., str] | None = None,
     send: Callable[..., None] | None = None,
+    force: bool = False,
 ) -> ProcessWatch:
     now = now or datetime.now(timezone.utc)
     if not row.enabled:
         return row
+    if not force:
+        db.refresh(row)
+        if not row.enabled or not check_is_due(row, now):
+            return row
     fetch_fn = fetch or _fetch_listing
     send_fn = send or send_process_down_mail
     row.last_checked_at = now
@@ -248,14 +255,17 @@ def check_watch(
         return row
 
     row.last_error = None
-    if process_in_listing(listing, row.process_name):
+    pids = matching_pids(listing, row.process_name)
+    if pids:
         if row.status == "down":
             row.resolved_at = now
         row.status = "up"
+        row.pid = format_pids(pids)
         db.commit()
         db.refresh(row)
         return row
 
+    row.pid = ""
     newly_down = row.status != "down"
     if newly_down:
         row.down_since = now

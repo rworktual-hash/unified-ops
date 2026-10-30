@@ -8,9 +8,10 @@ from app.config import settings
 from app.monitoring.ssh_client import ssh_session
 
 # Fixed command. Process names are never interpolated into the shell.
-CMD_PS_ARGS = "ps -eo args="
+CMD_PS_ARGS = "ps -eo pid=,args="
 
 PROCESS_NAME_RE = re.compile(r"^[A-Za-z0-9._/: -]{1,128}$")
+_PID_LINE = re.compile(r"^(\d+)\s+(.*)$")
 
 
 class ProcessCheckError(Exception):
@@ -26,16 +27,45 @@ def valid_process_name(name: str) -> bool:
     return any(not ch.isspace() for ch in stripped)
 
 
-def process_in_listing(listing: str, process_name: str) -> bool:
+def _is_ps_command(text: str) -> bool:
+    stripped = text.strip()
+    return stripped == CMD_PS_ARGS or stripped.startswith("ps -eo ")
+
+
+def matching_pids(listing: str, process_name: str) -> list[str]:
+    """PIDs whose command line contains the name. An empty string means a match without a PID."""
+    found: list[str] = []
     for line in listing.splitlines():
         stripped = line.strip()
-        if not stripped:
+        if not stripped or _is_ps_command(stripped):
             continue
-        if stripped == CMD_PS_ARGS or stripped.startswith("ps -eo args"):
+        match = _PID_LINE.match(stripped)
+        if match:
+            pid, args = match.group(1), match.group(2).strip()
+            if _is_ps_command(args):
+                continue
+            if process_name in args:
+                found.append(pid)
             continue
         if process_name in stripped:
-            return True
-    return False
+            found.append("")
+    return found
+
+
+def format_pids(pids: list[str]) -> str:
+    real = [pid for pid in pids if pid]
+    if not real:
+        return ""
+    shown = real[:12]
+    text = ", ".join(shown)
+    extra = len(real) - len(shown)
+    if extra:
+        text = f"{text} +{extra}"
+    return text[:255]
+
+
+def process_in_listing(listing: str, process_name: str) -> bool:
+    return bool(matching_pids(listing, process_name))
 
 
 def fetch_process_listing(

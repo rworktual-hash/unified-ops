@@ -11,7 +11,7 @@ from app.api.deps import CurrentUser, get_current_user
 from app.api.process_watches import router
 from app.db.session import Base, get_db
 from app.models.process_watch import ProcessWatch
-from app.monitoring.process_check import ProcessCheckError, process_in_listing
+from app.monitoring.process_check import ProcessCheckError, matching_pids, process_in_listing
 from app.services.process_mail import process_down_body
 from app.schemas.process_watch import ProcessWatchCreate
 from app.services.process_watch import check_enabled_watches, check_watch, create_process_watch
@@ -85,11 +85,30 @@ def test_down_mail_uses_the_team_notice_in_ist():
 
 
 def test_process_listing_matches_the_name_and_ignores_the_ps_command():
-    listing = "ps -eo args=\nnginx: master process nginx\npostgres: writer\n"
+    listing = "  42 ps -eo pid=,args=\n  101 nginx: master process nginx\n  202 postgres: writer\n"
     assert process_in_listing(listing, "nginx") is True
     assert process_in_listing(listing, "postgres") is True
     assert process_in_listing(listing, "redis") is False
-    assert process_in_listing("ps -eo args=\n", "args") is False
+    assert process_in_listing("ps -eo pid=,args=\n", "args") is False
+    assert matching_pids(listing, "nginx") == ["101"]
+
+
+def test_a_running_process_stores_its_pid(session):
+    row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()))
+
+    def listing(_row):
+        return "  42 ps -eo pid=,args=\n  101 nginx: master process nginx\n  303 nginx: worker process\n"
+
+    check_watch(session, row, now=T0, fetch=listing, send=lambda **_kwargs: None)
+    assert row.status == "up"
+    assert row.pid == "101, 303"
+
+    def gone(_row):
+        return "  202 postgres: writer\n"
+
+    check_watch(session, row, now=T0 + timedelta(seconds=60), fetch=gone, send=lambda **_kwargs: None, force=True)
+    assert row.status == "down"
+    assert row.pid == ""
 
 
 def test_down_mail_repeats_on_the_interval_then_stops_when_the_process_returns(session):
@@ -140,7 +159,7 @@ def test_ssh_failure_does_not_mark_the_process_down_or_send_mail(session):
     def absent(_row):
         return ""
 
-    check_watch(session, row, now=T0, fetch=absent, send=lambda **kwargs: sent.append(kwargs))
+    check_watch(session, row, now=T0, fetch=absent, send=lambda **kwargs: sent.append(kwargs), force=True)
     assert row.status == "down"
     assert len(sent) == 1
 
@@ -265,6 +284,30 @@ def test_inactive_watch_is_not_monitored(client, session, monkeypatch):
     result = check_enabled_watches(session, now=T0)
     assert result["checked"] == 0
     assert row.status == "unknown"
+
+
+def test_automatic_check_waits_until_the_interval_and_manual_check_does_not(session):
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(_payload(check_interval=30, check_interval_unit="seconds")),
+    )
+    calls = {"n": 0}
+
+    def listing(_row):
+        calls["n"] += 1
+        return "nginx: master process nginx\n"
+
+    check_watch(session, row, now=T0, fetch=listing, force=True)
+    checked_at = row.last_checked_at
+    assert calls["n"] == 1
+
+    check_watch(session, row, now=T0 + timedelta(seconds=5), fetch=listing)
+    assert calls["n"] == 1
+    assert row.last_checked_at == checked_at
+
+    check_watch(session, row, now=T0 + timedelta(seconds=5), fetch=listing, force=True)
+    assert calls["n"] == 2
+    assert row.last_checked_at != checked_at
 
 
 def test_scheduled_check_waits_for_the_watch_interval(session, monkeypatch):

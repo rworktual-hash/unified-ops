@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -27,7 +29,8 @@ def _watch_or_404(db: Session, watch_id: int):
 
 @router.get("", response_model=list[ProcessWatchRead])
 def list_watches(db: Session = Depends(get_db)) -> list[ProcessWatchRead]:
-    return [to_read(row) for row in list_process_watches(db)]
+    now = datetime.now(timezone.utc)
+    return [to_read(row, server_now=now) for row in list_process_watches(db)]
 
 
 @router.post("", response_model=ProcessWatchRead, status_code=status.HTTP_201_CREATED)
@@ -69,8 +72,10 @@ def delete_watch(
 @router.post("/{watch_id}/check", response_model=ProcessWatchRead)
 def check_watch_now(
     watch_id: int,
+    force: bool = False,
     db: Session = Depends(get_db),
     _admin=Depends(require_admin),
 ) -> ProcessWatchRead:
-    row = check_watch(db, _watch_or_404(db, watch_id))
-    return to_read(row)
+    now = datetime.now(timezone.utc)
+    row = check_watch(db, _watch_or_404(db, watch_id), now=now, force=force)
+    return to_read(row, server_now=now)

@@ -32,10 +32,25 @@ function intervalMs(row: ProcessWatch): number {
   return row.check_interval_unit === 'minutes' ? row.check_interval * 60_000 : row.check_interval * 1000
 }
 
-function remainingMs(row: ProcessWatch, now: number): number {
+function remainingMs(row: ProcessWatch, clientNow: number, clockOffset: number): number {
   const checked = parseWhen(row.last_checked_at)
   if (checked == null) return 0
-  return Math.max(0, checked + intervalMs(row) - now)
+  return Math.max(0, checked + intervalMs(row) - (clientNow + clockOffset))
+}
+
+function rowDetail(row: ProcessWatch): string {
+  return [
+    `${row.ssh_username}@${row.ip_address}:${row.ssh_port}`,
+    row.description,
+    row.recipients.join(', '),
+    `check every ${everyLabel(row.check_interval, row.check_interval_unit)}`,
+    `mail every ${row.mail_interval_minutes} min`,
+    mailLine(row),
+    row.last_checked_at ? `checked ${formatWhen(row.last_checked_at)}` : '',
+    row.last_error ?? '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function countdownText(ms: number): string {
@@ -112,12 +127,22 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [mailEvery, setMailEvery] = useState('5')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [query, setQuery] = useState('')
+  const [menuId, setMenuId] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const inFlight = useRef<Set<number>>(new Set())
   const retryAt = useRef<Record<number, number>>({})
+  const clockOffset = useRef(0)
+
+  function noteServerTime(sample: ProcessWatch | undefined) {
+    const server = parseWhen(sample?.server_now)
+    if (server != null) clockOffset.current = server - Date.now()
+  }
 
   const load = useCallback(async () => {
-    setRows(await listProcessWatches())
+    const next = await listProcessWatches()
+    noteServerTime(next[0])
+    setRows(next)
   }, [])
 
   function closeForm() {
@@ -174,7 +199,10 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   useEffect(() => {
     const timer = window.setInterval(() => {
       void listProcessWatches()
-        .then(setRows)
+        .then((next) => {
+          noteServerTime(next[0])
+          setRows(next)
+        })
         .catch(() => undefined)
     }, 3000)
     return () => window.clearInterval(timer)
@@ -186,11 +214,12 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
       if (!row.enabled) continue
       if (inFlight.current.has(row.id)) continue
       if ((retryAt.current[row.id] ?? 0) > now) continue
-      if (remainingMs(row, now) > 0) continue
+      if (remainingMs(row, now, clockOffset.current) > 0) continue
       inFlight.current.add(row.id)
       setCheckingId(row.id)
       void checkProcessWatch(row.id)
         .then((updated) => {
+          noteServerTime(updated)
           setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
         })
         .catch((err: unknown) => {
@@ -204,6 +233,25 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     }
   }, [isAdmin, now, rows])
 
+  useEffect(() => {
+    if (menuId == null) return
+    function close() {
+      setMenuId(null)
+    }
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [menuId])
+
+  const needle = query.trim().toLowerCase()
+  const shown = needle
+    ? rows.filter((row) =>
+        [row.label, row.process_name, row.pid, row.description, row.ip_address, row.status, row.ssh_username]
+          .join(' ')
+          .toLowerCase()
+          .includes(needle),
+      )
+    : rows
+
   return (
     <>
       <section className="panel">
@@ -211,8 +259,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           <div>
             <h2>Watches</h2>
             <p className="muted-block">
-              Each watch checks itself when its timer reaches zero. The timer counts down on the card.
-              Mail repeats on the mail interval while the process stays down.
+              Each active watch checks itself when its timer reaches zero. The timer uses the server clock,
+              so every open session counts down together. Mail repeats on the mail interval while the process stays down.
             </p>
           </div>
           {isAdmin ? (
@@ -368,114 +416,166 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           </form>
         ) : null}
         {!isAdmin ? <p className="muted">Only an admin can add or edit a watch.</p> : null}
+        <input
+          className="process-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search label, process, or IP"
+          aria-label="Search watches"
+        />
         {rows.length === 0 ? (
           <p className="muted">No process watches yet.</p>
+        ) : shown.length === 0 ? (
+          <p className="muted">No matching watches.</p>
         ) : (
-          <div className="alert-list">
-            {rows.map((row) => (
-              <article className="alert-item" key={row.id}>
-                <span
-                  className={`badge ${
-                    row.status === 'down' ? 'critical' : row.status === 'up' ? 'ok' : 'pending'
-                  }`}
-                >
-                  {row.status === 'unknown' ? 'not checked' : row.status}
-                </span>
-                <div className="alert-copy">
-                  <div className="alert-title-line">
-                    <strong>{watchTitle(row)}</strong>
-                    <span className="muted">
-                      {row.process_name} · {row.ssh_username}@{row.ip_address}:{row.ssh_port}
-                    </span>
-                  </div>
-                  {row.description ? <p className="alert-message">{row.description}</p> : null}
-                  <p className="alert-message process-countdown">
-                    {!row.enabled
-                      ? 'Inactive'
-                      : checkingId === row.id
-                        ? 'Checking…'
-                        : `Next check in ${countdownText(remainingMs(row, now))}`}
-                  </p>
-                  <p className="alert-message">
-                    {row.recipients.join(', ')} · check every {everyLabel(row.check_interval, row.check_interval_unit)} ·
-                    mail every {row.mail_interval_minutes} min · {mailLine(row)}
-                    {row.last_checked_at ? ` · checked ${formatWhen(row.last_checked_at)}` : ''}
-                  </p>
-                  {row.last_error ? <p className="alert-message">{row.last_error}</p> : null}
-                </div>
-                {isAdmin ? (
-                  <div className="alert-actions">
-                    <button
-                      type="button"
-                      className={`process-switch ${row.enabled ? 'on' : ''}`}
-                      aria-pressed={row.enabled}
-                      onClick={async () => {
-                        setError(null)
-                        try {
-                          const updated = await updateProcessWatch(row.id, {
-                            ip_address: row.ip_address,
-                            ssh_port: row.ssh_port,
-                            ssh_username: row.ssh_username,
-                            ssh_password: '',
-                            label: row.label,
-                            description: row.description,
-                            process_name: row.process_name,
-                            recipients: row.recipients,
-                            check_interval: row.check_interval,
-                            check_interval_unit: row.check_interval_unit,
-                            mail_interval_minutes: row.mail_interval_minutes,
-                            enabled: !row.enabled,
-                          })
-                          setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : 'Failed to update process watch')
-                        }
-                      }}
-                    >
-                      <span />
-                      {row.enabled ? 'Active' : 'Inactive'}
-                    </button>
-                    <button type="button" className="btn ghost" onClick={() => openEdit(row)}>
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      disabled={!row.enabled || checkingId === row.id}
-                      onClick={async () => {
-                        setCheckingId(row.id)
-                        setError(null)
-                        try {
-                          const updated = await checkProcessWatch(row.id)
-                          setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : 'Process check failed')
-                        } finally {
-                          setCheckingId(null)
-                        }
-                      }}
-                    >
-                      {checkingId === row.id ? 'Checking…' : 'Check now'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={async () => {
-                        setError(null)
-                        try {
-                          await deleteProcessWatch(row.id)
-                          setRows((prev) => prev.filter((item) => item.id !== row.id))
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : 'Failed to delete process watch')
-                        }
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ) : null}
-              </article>
-            ))}
+          <div className="table-wrap">
+            <table className="process-table">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Process name</th>
+                  <th>PID</th>
+                  <th>Status</th>
+                  <th>Next check</th>
+                  <th>Active</th>
+                  {isAdmin ? <th aria-label="Actions" /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((row) => (
+                  <tr key={row.id} title={rowDetail(row)}>
+                    <td>
+                      <strong>{watchTitle(row)}</strong>
+                      {row.description ? <div className="muted">{row.description}</div> : null}
+                    </td>
+                    <td>
+                      {row.process_name}
+                      <div className="muted">
+                        {row.ssh_username}@{row.ip_address}:{row.ssh_port}
+                      </div>
+                    </td>
+                    <td className="process-pid">{row.status === 'up' && row.pid ? row.pid : '—'}</td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          row.status === 'down' ? 'critical' : row.status === 'up' ? 'ok' : 'pending'
+                        }`}
+                      >
+                        {row.status === 'unknown' ? 'not checked' : row.status}
+                      </span>
+                    </td>
+                    <td className="process-countdown">
+                      {!row.enabled
+                        ? 'Inactive'
+                        : checkingId === row.id
+                          ? 'Checking…'
+                          : countdownText(remainingMs(row, now, clockOffset.current))}
+                    </td>
+                    <td>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className={`process-switch ${row.enabled ? 'on' : ''}`}
+                          aria-pressed={row.enabled}
+                          onClick={async () => {
+                            setError(null)
+                            try {
+                              const updated = await updateProcessWatch(row.id, {
+                                ip_address: row.ip_address,
+                                ssh_port: row.ssh_port,
+                                ssh_username: row.ssh_username,
+                                ssh_password: '',
+                                label: row.label,
+                                description: row.description,
+                                process_name: row.process_name,
+                                recipients: row.recipients,
+                                check_interval: row.check_interval,
+                                check_interval_unit: row.check_interval_unit,
+                                mail_interval_minutes: row.mail_interval_minutes,
+                                enabled: !row.enabled,
+                              })
+                              noteServerTime(updated)
+                              setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : 'Failed to update process watch')
+                            }
+                          }}
+                        >
+                          <span />
+                          {row.enabled ? 'Active' : 'Inactive'}
+                        </button>
+                      ) : (
+                        <span className="muted">{row.enabled ? 'Active' : 'Inactive'}</span>
+                      )}
+                    </td>
+                    {isAdmin ? (
+                      <td className="process-menu">
+                        <button
+                          type="button"
+                          className="process-menu-btn"
+                          aria-label={`Actions for ${watchTitle(row)}`}
+                          aria-expanded={menuId === row.id}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setMenuId((current) => (current === row.id ? null : row.id))
+                          }}
+                        >
+                          ···
+                        </button>
+                        {menuId === row.id ? (
+                          <div className="process-menu-pop" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuId(null)
+                                openEdit(row)
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!row.enabled || checkingId === row.id}
+                              onClick={async () => {
+                                setMenuId(null)
+                                setCheckingId(row.id)
+                                setError(null)
+                                try {
+                                  const updated = await checkProcessWatch(row.id, { force: true })
+                                  noteServerTime(updated)
+                                  setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+                                } catch (err) {
+                                  setError(err instanceof Error ? err.message : 'Process check failed')
+                                } finally {
+                                  setCheckingId(null)
+                                }
+                              }}
+                            >
+                              {checkingId === row.id ? 'Checking…' : 'Check now'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setMenuId(null)
+                                setError(null)
+                                try {
+                                  await deleteProcessWatch(row.id)
+                                  setRows((prev) => prev.filter((item) => item.id !== row.id))
+                                } catch (err) {
+                                  setError(err instanceof Error ? err.message : 'Failed to delete process watch')
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

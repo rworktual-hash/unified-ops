@@ -1737,6 +1737,7 @@ export type ProcessWatch = {
   label: string
   description: string
   process_name: string
+  pid: string
   recipients: string[]
   check_interval: number
   check_interval_unit: 'seconds' | 'minutes'
@@ -1751,6 +1752,7 @@ export type ProcessWatch = {
   mail_error: string | null
   last_error: string | null
   created_at: string
+  server_now: string
 }
 
 export type ProcessWatchCreate = {
@@ -1794,8 +1796,9 @@ export async function deleteProcessWatch(id: number): Promise<void> {
   if (!res.ok) return llmObsError(res, 'Failed to delete process watch')
 }
 
-export async function checkProcessWatch(id: number): Promise<ProcessWatch> {
-  const res = await apiFetch(`/process-watches/${id}/check`, { method: 'POST' })
+export async function checkProcessWatch(id: number, options?: { force?: boolean }): Promise<ProcessWatch> {
+  const query = options?.force ? '?force=true' : ''
+  const res = await apiFetch(`/process-watches/${id}/check${query}`, { method: 'POST' })
   if (!res.ok) return llmObsError(res, 'Process check failed')
   return res.json()
 }
