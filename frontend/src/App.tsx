@@ -685,7 +685,7 @@ function App() {
             <header className="page-head servers-status">
               <p className="fleet-status-line">
                 {liveAlerts.length} live · {alerts.filter((a) => a.status === 'open').length} SSH ·{' '}
-                {processWatches.filter((row) => row.status === 'down').length} process
+                {processWatches.filter((row) => row.enabled && row.status === 'down').length} process
               </p>
               <label className="checkbox inline">
                 <input

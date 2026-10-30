@@ -232,6 +232,41 @@ def test_api_check_reports_ssh_failure_without_marking_down(client, monkeypatch)
     assert PASSWORD not in checked.text
 
 
+def test_inactive_watch_is_not_monitored(client, session, monkeypatch):
+    created = client.post(
+        "/api/process-watches",
+        json=_payload(description="Speech service on the edge"),
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["description"] == "Speech service on the edge"
+    assert body["enabled"] is True
+    watch_id = body["id"]
+
+    updated = client.patch(
+        f"/api/process-watches/{watch_id}",
+        json=_payload(description="Speech service on the edge", enabled=False, ssh_password=""),
+    )
+    assert updated.status_code == 200
+    assert updated.json()["enabled"] is False
+    assert updated.json()["description"] == "Speech service on the edge"
+
+    def fail(**_kwargs):
+        raise AssertionError("inactive watch must not open SSH")
+
+    monkeypatch.setattr("app.services.process_watch.fetch_process_listing", fail)
+    checked = client.post(f"/api/process-watches/{watch_id}/check")
+    assert checked.status_code == 200
+    assert checked.json()["status"] == "unknown"
+    assert checked.json()["last_error"] is None
+
+    row = session.get(ProcessWatch, watch_id)
+    session.refresh(row)
+    result = check_enabled_watches(session, now=T0)
+    assert result["checked"] == 0
+    assert row.status == "unknown"
+
+
 def test_scheduled_check_waits_for_the_watch_interval(session, monkeypatch):
     row = create_process_watch(
         session,

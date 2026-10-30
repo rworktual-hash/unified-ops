@@ -63,6 +63,13 @@ def validate_label(value: str) -> str:
     return label
 
 
+def validate_description(value: str) -> str:
+    text = value.strip()
+    if len(text) > 2000 or any(ord(ch) < 32 and ch not in "\n\r\t" for ch in text):
+        raise ProcessWatchError("Description is too long")
+    return text
+
+
 def validate_check_interval(amount: int, unit: str) -> None:
     if unit == "seconds":
         if amount < 15 or amount > 86400:
@@ -95,6 +102,7 @@ def to_read(row: ProcessWatch) -> ProcessWatchRead:
         ssh_port=row.ssh_port,
         ssh_username=row.ssh_username,
         label=row.label or "",
+        description=row.description or "",
         process_name=row.process_name,
         recipients=recipient_list(row.recipients),
         check_interval=row.check_interval,
@@ -128,12 +136,13 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWat
         ssh_username=username,
         ssh_password=payload.ssh_password,
         label=validate_label(payload.label),
+        description=validate_description(payload.description),
         process_name=name,
         recipients=",".join(recipients),
         check_interval=payload.check_interval,
         check_interval_unit=payload.check_interval_unit,
         mail_interval_minutes=payload.mail_interval_minutes,
-        enabled=True,
+        enabled=payload.enabled,
         status="unknown",
         created_at=datetime.now(timezone.utc),
     )
@@ -155,11 +164,13 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     row.ssh_port = payload.ssh_port
     row.ssh_username = username
     row.label = validate_label(payload.label)
+    row.description = validate_description(payload.description)
     row.process_name = name
     row.recipients = ",".join(parse_recipients(payload.recipients))
     row.check_interval = payload.check_interval
     row.check_interval_unit = payload.check_interval_unit
     row.mail_interval_minutes = payload.mail_interval_minutes
+    row.enabled = payload.enabled
     password = payload.ssh_password.strip()
     if password:
         row.ssh_password = password
@@ -223,6 +234,8 @@ def check_watch(
     send: Callable[..., None] | None = None,
 ) -> ProcessWatch:
     now = now or datetime.now(timezone.utc)
+    if not row.enabled:
+        return row
     fetch_fn = fetch or _fetch_listing
     send_fn = send or send_process_down_mail
     row.last_checked_at = now

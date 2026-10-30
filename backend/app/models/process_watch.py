@@ -15,6 +15,7 @@ class ProcessWatch(Base):
     ssh_username: Mapped[str] = mapped_column(String(128), nullable=False, default="root")
     ssh_password: Mapped[str] = mapped_column(String(512), nullable=False)
     label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
     process_name: Mapped[str] = mapped_column(String(128), nullable=False)
     recipients: Mapped[str] = mapped_column(Text, nullable=False)
     check_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=60)

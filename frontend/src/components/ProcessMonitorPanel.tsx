@@ -53,8 +53,8 @@ export function ProcessAlertSection({
   watches: ProcessWatch[]
   showResolved: boolean
 }) {
-  const open = watches.filter((row) => row.status === 'down')
-  const resolved = watches.filter((row) => row.status === 'up' && row.resolved_at)
+  const open = watches.filter((row) => row.enabled && row.status === 'down')
+  const resolved = watches.filter((row) => row.enabled && row.status === 'up' && row.resolved_at)
   const shown = showResolved ? [...open, ...resolved] : open
   return (
     <section className="panel">
@@ -103,6 +103,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [username, setUsername] = useState('root')
   const [password, setPassword] = useState('')
   const [label, setLabel] = useState('')
+  const [description, setDescription] = useState('')
+  const [enabled, setEnabled] = useState(true)
   const [processName, setProcessName] = useState('')
   const [recipients, setRecipients] = useState('')
   const [checkEvery, setCheckEvery] = useState('60')
@@ -126,6 +128,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setUsername('root')
     setPassword('')
     setLabel('')
+    setDescription('')
+    setEnabled(true)
     setProcessName('')
     setRecipients('')
     setCheckEvery('60')
@@ -141,6 +145,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   function openEdit(row: ProcessWatch) {
     setEditingId(row.id)
     setLabel(row.label)
+    setDescription(row.description)
+    setEnabled(row.enabled)
     setIp(row.ip_address)
     setPort(String(row.ssh_port))
     setUsername(row.ssh_username)
@@ -177,6 +183,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   useEffect(() => {
     if (!isAdmin) return
     for (const row of rows) {
+      if (!row.enabled) continue
       if (inFlight.current.has(row.id)) continue
       if ((retryAt.current[row.id] ?? 0) > now) continue
       if (remainingMs(row, now) > 0) continue
@@ -229,7 +236,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   ssh_username: username.trim() || 'root',
                   ssh_password: password,
                   label: label.trim(),
+                  description: description.trim(),
                   process_name: processName.trim(),
+                  enabled,
                   recipients: recipients.split(/[,;\s]+/).filter(Boolean),
                   check_interval: Number(checkEvery),
                   check_interval_unit: checkUnit,
@@ -258,6 +267,26 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 placeholder="STT TTS"
                 required
               />
+            </label>
+            <label className="field-label process-description">
+              Description
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="What this service does"
+                rows={3}
+              />
+            </label>
+            <label className="process-switch-field">
+              <button
+                type="button"
+                className={`process-switch ${enabled ? 'on' : ''}`}
+                aria-pressed={enabled}
+                onClick={() => setEnabled((current) => !current)}
+              >
+                <span />
+              </button>
+              {enabled ? 'Active' : 'Inactive'}
             </label>
             <label className="field-label">
               Server IP
@@ -359,10 +388,13 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       {row.process_name} · {row.ssh_username}@{row.ip_address}:{row.ssh_port}
                     </span>
                   </div>
+                  {row.description ? <p className="alert-message">{row.description}</p> : null}
                   <p className="alert-message process-countdown">
-                    {checkingId === row.id
-                      ? 'Checking…'
-                      : `Next check in ${countdownText(remainingMs(row, now))}`}
+                    {!row.enabled
+                      ? 'Inactive'
+                      : checkingId === row.id
+                        ? 'Checking…'
+                        : `Next check in ${countdownText(remainingMs(row, now))}`}
                   </p>
                   <p className="alert-message">
                     {row.recipients.join(', ')} · check every {everyLabel(row.check_interval, row.check_interval_unit)} ·
@@ -373,13 +405,43 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 </div>
                 {isAdmin ? (
                   <div className="alert-actions">
+                    <button
+                      type="button"
+                      className={`process-switch ${row.enabled ? 'on' : ''}`}
+                      aria-pressed={row.enabled}
+                      onClick={async () => {
+                        setError(null)
+                        try {
+                          const updated = await updateProcessWatch(row.id, {
+                            ip_address: row.ip_address,
+                            ssh_port: row.ssh_port,
+                            ssh_username: row.ssh_username,
+                            ssh_password: '',
+                            label: row.label,
+                            description: row.description,
+                            process_name: row.process_name,
+                            recipients: row.recipients,
+                            check_interval: row.check_interval,
+                            check_interval_unit: row.check_interval_unit,
+                            mail_interval_minutes: row.mail_interval_minutes,
+                            enabled: !row.enabled,
+                          })
+                          setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Failed to update process watch')
+                        }
+                      }}
+                    >
+                      <span />
+                      {row.enabled ? 'Active' : 'Inactive'}
+                    </button>
                     <button type="button" className="btn ghost" onClick={() => openEdit(row)}>
                       Edit
                     </button>
                     <button
                       type="button"
                       className="btn ghost"
-                      disabled={checkingId === row.id}
+                      disabled={!row.enabled || checkingId === row.id}
                       onClick={async () => {
                         setCheckingId(row.id)
                         setError(null)

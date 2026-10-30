@@ -1735,6 +1735,7 @@ export type ProcessWatch = {
   ssh_port: number
   ssh_username: string
   label: string
+  description: string
   process_name: string
   recipients: string[]
   check_interval: number
@@ -1758,11 +1759,13 @@ export type ProcessWatchCreate = {
   ssh_username: string
   ssh_password: string
   label: string
+  description: string
   process_name: string
   recipients: string[]
   check_interval: number
   check_interval_unit: 'seconds' | 'minutes'
   mail_interval_minutes: number
+  enabled: boolean
 }
 
 export async function listProcessWatches(): Promise<ProcessWatch[]> {

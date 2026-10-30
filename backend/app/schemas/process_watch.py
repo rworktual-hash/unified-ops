@@ -10,11 +10,13 @@ class ProcessWatchCreate(BaseModel):
     ssh_username: str = Field(default="root", min_length=1, max_length=128)
     ssh_password: str = Field(min_length=1, max_length=512)
     label: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="", max_length=2000)
     process_name: str = Field(min_length=1, max_length=128)
     recipients: list[str] = Field(min_length=1, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
     mail_interval_minutes: int = Field(ge=1, le=10080)
+    enabled: bool = True
 
 
 class ProcessWatchUpdate(BaseModel):
@@ -23,11 +25,13 @@ class ProcessWatchUpdate(BaseModel):
     ssh_username: str = Field(min_length=1, max_length=128)
     ssh_password: str = Field(default="", max_length=512)
     label: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="", max_length=2000)
     process_name: str = Field(min_length=1, max_length=128)
     recipients: list[str] = Field(min_length=1, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
     mail_interval_minutes: int = Field(ge=1, le=10080)
+    enabled: bool = True
 
 
 class ProcessWatchRead(BaseModel):
@@ -36,6 +40,7 @@ class ProcessWatchRead(BaseModel):
     ssh_port: int
     ssh_username: str
     label: str
+    description: str
     process_name: str
     recipients: list[str]
     check_interval: int

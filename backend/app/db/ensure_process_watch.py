@@ -1,4 +1,4 @@
-"""Add label and per-watch check interval on databases created before those columns."""
+"""Add columns on databases created before the current process watch shape."""
 
 import logging
 
@@ -17,6 +17,10 @@ _ADDS = (
     (
         "check_interval_unit",
         "ALTER TABLE process_watches ADD COLUMN check_interval_unit VARCHAR(16) NOT NULL DEFAULT 'seconds'",
+    ),
+    (
+        "description",
+        "ALTER TABLE process_watches ADD COLUMN description VARCHAR(2000) NOT NULL DEFAULT ''",
     ),
 )
 
