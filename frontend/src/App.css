@@ -3769,6 +3769,14 @@ button.ai-legend-btn:hover,
   color: var(--muted);
 }
 
+.process-head {
+  align-items: flex-start;
+}
+
+.process-head .btn {
+  flex-shrink: 0;
+}
+
 .process-create {
   display: flex;
   flex-wrap: wrap;

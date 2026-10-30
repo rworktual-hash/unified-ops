@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.process_watch import ProcessWatch
 from app.monitoring.process_check import fetch_process_listing, process_in_listing, valid_process_name
-from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead
+from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
 from app.services.process_mail import MailNotConfigured, send_process_down_mail
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -138,6 +138,31 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWat
         created_at=datetime.now(timezone.utc),
     )
     db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUpdate) -> ProcessWatch:
+    name = payload.process_name.strip()
+    if not valid_process_name(name):
+        raise ProcessWatchError("Process name must use letters, numbers, and ._/: - only")
+    username = payload.ssh_username.strip()
+    if not username or any(ch.isspace() for ch in username):
+        raise ProcessWatchError("Username is invalid")
+    validate_check_interval(payload.check_interval, payload.check_interval_unit)
+    row.ip_address = validate_ip(payload.ip_address)
+    row.ssh_port = payload.ssh_port
+    row.ssh_username = username
+    row.label = validate_label(payload.label)
+    row.process_name = name
+    row.recipients = ",".join(parse_recipients(payload.recipients))
+    row.check_interval = payload.check_interval
+    row.check_interval_unit = payload.check_interval_unit
+    row.mail_interval_minutes = payload.mail_interval_minutes
+    password = payload.ssh_password.strip()
+    if password:
+        row.ssh_password = password
     db.commit()
     db.refresh(row)
     return row

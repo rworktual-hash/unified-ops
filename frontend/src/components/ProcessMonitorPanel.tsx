@@ -4,6 +4,7 @@ import {
   createProcessWatch,
   deleteProcessWatch,
   listProcessWatches,
+  updateProcessWatch,
   type ProcessWatch,
 } from '../api'
 import { formatWhen, parseWhen } from '../formatWhen'
@@ -107,6 +108,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [checkEvery, setCheckEvery] = useState('60')
   const [checkUnit, setCheckUnit] = useState<'seconds' | 'minutes'>('seconds')
   const [mailEvery, setMailEvery] = useState('5')
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const inFlight = useRef<Set<number>>(new Set())
   const retryAt = useRef<Record<number, number>>({})
@@ -114,6 +117,42 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const load = useCallback(async () => {
     setRows(await listProcessWatches())
   }, [])
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setIp('')
+    setPort('22')
+    setUsername('root')
+    setPassword('')
+    setLabel('')
+    setProcessName('')
+    setRecipients('')
+    setCheckEvery('60')
+    setCheckUnit('seconds')
+    setMailEvery('5')
+  }
+
+  function openAdd() {
+    closeForm()
+    setShowForm(true)
+  }
+
+  function openEdit(row: ProcessWatch) {
+    setEditingId(row.id)
+    setLabel(row.label)
+    setIp(row.ip_address)
+    setPort(String(row.ssh_port))
+    setUsername(row.ssh_username)
+    setPassword('')
+    setProcessName(row.process_name)
+    setRecipients(row.recipients.join(', '))
+    setCheckEvery(String(row.check_interval))
+    setCheckUnit(row.check_interval_unit === 'minutes' ? 'minutes' : 'seconds')
+    setMailEvery(String(row.mail_interval_minutes))
+    setShowForm(true)
+    setError(null)
+  }
 
   useEffect(() => {
     void load().catch((err: unknown) => {
@@ -161,7 +200,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   return (
     <>
       <section className="panel">
-        <div className="panel-head">
+        <div className="panel-head process-head">
           <div>
             <h2>Watches</h2>
             <p className="muted-block">
@@ -169,9 +208,14 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               Mail repeats on the mail interval while the process stays down.
             </p>
           </div>
+          {isAdmin ? (
+            <button type="button" className="btn primary" onClick={openAdd}>
+              Add service
+            </button>
+          ) : null}
         </div>
         {error ? <p className="banner error">{error}</p> : null}
-        {isAdmin ? (
+        {isAdmin && showForm ? (
           <form
             className="process-create"
             onSubmit={async (event) => {
@@ -179,7 +223,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               setBusy(true)
               setError(null)
               try {
-                const created = await createProcessWatch({
+                const body = {
                   ip_address: ip.trim(),
                   ssh_port: Number(port),
                   ssh_username: username.trim() || 'root',
@@ -190,15 +234,17 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   check_interval: Number(checkEvery),
                   check_interval_unit: checkUnit,
                   mail_interval_minutes: Number(mailEvery),
-                })
-                setIp('')
-                setLabel('')
-                setPassword('')
-                setProcessName('')
-                setRecipients('')
-                setRows((prev) => [created, ...prev.filter((row) => row.id !== created.id)])
+                }
+                if (editingId == null) {
+                  const created = await createProcessWatch(body)
+                  setRows((prev) => [created, ...prev.filter((row) => row.id !== created.id)])
+                } else {
+                  const updated = await updateProcessWatch(editingId, body)
+                  setRows((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
+                }
+                closeForm()
               } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to add process watch')
+                setError(err instanceof Error ? err.message : 'Failed to save process watch')
               } finally {
                 setBusy(false)
               }
@@ -237,7 +283,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="new-password"
-                required
+                required={editingId == null}
+                placeholder={editingId == null ? '' : 'Leave blank to keep the current password'}
               />
             </label>
             <label className="field-label">
@@ -284,12 +331,14 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               />
             </label>
             <button type="submit" className="btn primary" disabled={busy}>
-              Add watch
+              {editingId == null ? 'Add service' : 'Save'}
+            </button>
+            <button type="button" className="btn ghost" disabled={busy} onClick={closeForm}>
+              Cancel
             </button>
           </form>
-        ) : (
-          <p className="muted">Only an admin can add or check a watch.</p>
-        )}
+        ) : null}
+        {!isAdmin ? <p className="muted">Only an admin can add or edit a watch.</p> : null}
         {rows.length === 0 ? (
           <p className="muted">No process watches yet.</p>
         ) : (
@@ -324,6 +373,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 </div>
                 {isAdmin ? (
                   <div className="alert-actions">
+                    <button type="button" className="btn ghost" onClick={() => openEdit(row)}>
+                      Edit
+                    </button>
                     <button
                       type="button"
                       className="btn ghost"

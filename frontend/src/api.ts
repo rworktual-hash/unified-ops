@@ -1777,6 +1777,15 @@ export async function createProcessWatch(body: ProcessWatchCreate): Promise<Proc
   return res.json()
 }
 
+export async function updateProcessWatch(
+  id: number,
+  body: ProcessWatchCreate & { ssh_password?: string },
+): Promise<ProcessWatch> {
+  const res = await apiFetch(`/process-watches/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+  if (!res.ok) return llmObsError(res, 'Failed to update process watch')
+  return res.json()
+}
+
 export async function deleteProcessWatch(id: number): Promise<void> {
   const res = await apiFetch(`/process-watches/${id}`, { method: 'DELETE' })
   if (!res.ok) return llmObsError(res, 'Failed to delete process watch')

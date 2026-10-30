@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.db.session import get_db
-from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead
+from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
 from app.services.process_watch import (
     ProcessWatchError,
     check_watch,
@@ -12,6 +12,7 @@ from app.services.process_watch import (
     get_process_watch,
     list_process_watches,
     to_read,
+    update_process_watch,
 )
 
 router = APIRouter(prefix="/process-watches", tags=["process-watches"])
@@ -37,6 +38,20 @@ def create_watch(
 ) -> ProcessWatchRead:
     try:
         row = create_process_watch(db, payload)
+    except ProcessWatchError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return to_read(row)
+
+
+@router.patch("/{watch_id}", response_model=ProcessWatchRead)
+def update_watch(
+    watch_id: int,
+    payload: ProcessWatchUpdate,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+) -> ProcessWatchRead:
+    try:
+        row = update_process_watch(db, _watch_or_404(db, watch_id), payload)
     except ProcessWatchError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return to_read(row)

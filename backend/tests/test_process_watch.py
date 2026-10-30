@@ -176,6 +176,30 @@ def test_api_hides_the_password_and_rejects_a_bad_process_name(client):
     assert rejected.status_code == 422
 
 
+def test_edit_keeps_the_password_when_it_is_left_blank(client, session):
+    created = client.post("/api/process-watches", json=_payload())
+    watch_id = created.json()["id"]
+    updated = client.patch(
+        f"/api/process-watches/{watch_id}",
+        json=_payload(label="Renamed", ssh_password=""),
+    )
+    assert updated.status_code == 200
+    assert updated.json()["label"] == "Renamed"
+    assert PASSWORD not in updated.text
+    row = session.get(ProcessWatch, watch_id)
+    session.refresh(row)
+    assert row.ssh_password == PASSWORD
+
+    changed = client.patch(
+        f"/api/process-watches/{watch_id}",
+        json=_payload(ssh_password="new-secret"),
+    )
+    assert changed.status_code == 200
+    assert "new-secret" not in changed.text
+    session.refresh(row)
+    assert row.ssh_password == "new-secret"
+
+
 def test_api_check_reports_ssh_failure_without_marking_down(client, monkeypatch):
     created = client.post("/api/process-watches", json=_payload())
     watch_id = created.json()["id"]
