@@ -42,7 +42,7 @@ if settings.process_watch_check_enabled:
     _beat["check-process-watches"] = {
         "task": "app.tasks.process_watch.check_process_watches_task",
         "schedule": interval,
-        "options": {"expires": max(20.0, interval - 10)},
+        "options": {"expires": max(10.0, interval - 5)},
     }
 
 celery_app.conf.beat_schedule = _beat

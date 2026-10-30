@@ -1734,8 +1734,11 @@ export type ProcessWatch = {
   ip_address: string
   ssh_port: number
   ssh_username: string
+  label: string
   process_name: string
   recipients: string[]
+  check_interval: number
+  check_interval_unit: 'seconds' | 'minutes'
   mail_interval_minutes: number
   enabled: boolean
   status: string
@@ -1754,8 +1757,11 @@ export type ProcessWatchCreate = {
   ssh_port: number
   ssh_username: string
   ssh_password: string
+  label: string
   process_name: string
   recipients: string[]
+  check_interval: number
+  check_interval_unit: 'seconds' | 'minutes'
   mail_interval_minutes: number
 }
 

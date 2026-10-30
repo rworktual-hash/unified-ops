@@ -13,7 +13,7 @@ from app.db.session import Base, get_db
 from app.models.process_watch import ProcessWatch
 from app.monitoring.process_check import ProcessCheckError, process_in_listing
 from app.schemas.process_watch import ProcessWatchCreate
-from app.services.process_watch import check_watch, create_process_watch
+from app.services.process_watch import check_enabled_watches, check_watch, create_process_watch
 
 ADMIN = CurrentUser(id=1, email="admin@worktual.tech", role="admin", is_active=True)
 T0 = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
@@ -58,8 +58,11 @@ def _payload(**overrides):
         "ssh_port": 22,
         "ssh_username": "root",
         "ssh_password": PASSWORD,
+        "label": "Edge nginx",
         "process_name": "nginx",
         "recipients": ["ops@example.com", "lead@example.com"],
+        "check_interval": 60,
+        "check_interval_unit": "seconds",
         "mail_interval_minutes": 5,
     }
     body.update(overrides)
@@ -153,7 +156,16 @@ def test_api_hides_the_password_and_rejects_a_bad_process_name(client):
     assert "ssh_password" not in body
     assert PASSWORD not in created.text
     assert body["status"] == "unknown"
+    assert body["label"] == "Edge nginx"
+    assert body["check_interval"] == 60
+    assert body["check_interval_unit"] == "seconds"
     assert body["recipients"] == ["ops@example.com", "lead@example.com"]
+
+    too_fast = client.post(
+        "/api/process-watches",
+        json=_payload(label="Too fast", check_interval=5, check_interval_unit="seconds"),
+    )
+    assert too_fast.status_code == 422
 
     listed = client.get("/api/process-watches")
     assert listed.status_code == 200
@@ -179,3 +191,27 @@ def test_api_check_reports_ssh_failure_without_marking_down(client, monkeypatch)
     assert payload["last_error"] == "SSH failed"
     assert payload["mail_sent"] is None
     assert PASSWORD not in checked.text
+
+
+def test_scheduled_check_waits_for_the_watch_interval(session, monkeypatch):
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(_payload(check_interval=30, check_interval_unit="seconds")),
+    )
+    calls = {"n": 0}
+
+    def listing(_row):
+        calls["n"] += 1
+        return "nginx: master process nginx\n"
+
+    check_watch(session, row, now=T0, fetch=listing, send=lambda **_kwargs: None)
+    assert calls["n"] == 1
+
+    monkeypatch.setattr("app.services.process_watch._fetch_listing", listing)
+    early = check_enabled_watches(session, now=T0 + timedelta(seconds=10))
+    assert early["checked"] == 0
+    assert calls["n"] == 1
+
+    due = check_enabled_watches(session, now=T0 + timedelta(seconds=30))
+    assert due["checked"] == 1
+    assert calls["n"] == 2

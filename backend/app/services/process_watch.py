@@ -56,14 +56,49 @@ def recipient_list(stored: str) -> list[str]:
     return [part for part in stored.split(",") if part]
 
 
+def validate_label(value: str) -> str:
+    label = value.strip()
+    if not label or len(label) > 128 or any(ord(ch) < 32 for ch in label):
+        raise ProcessWatchError("Label is required")
+    return label
+
+
+def validate_check_interval(amount: int, unit: str) -> None:
+    if unit == "seconds":
+        if amount < 15 or amount > 86400:
+            raise ProcessWatchError("Check interval must be at least 15 seconds")
+        return
+    if unit == "minutes":
+        if amount < 1 or amount > 10080:
+            raise ProcessWatchError("Check interval in minutes must be from 1 to 10080")
+        return
+    raise ProcessWatchError("Check interval unit must be seconds or minutes")
+
+
+def _check_delta(row: ProcessWatch) -> timedelta:
+    if row.check_interval_unit == "minutes":
+        return timedelta(minutes=row.check_interval)
+    return timedelta(seconds=row.check_interval)
+
+
+def check_is_due(row: ProcessWatch, now: datetime) -> bool:
+    last = _aware(row.last_checked_at)
+    if last is None:
+        return True
+    return now - last >= _check_delta(row)
+
+
 def to_read(row: ProcessWatch) -> ProcessWatchRead:
     return ProcessWatchRead(
         id=row.id,
         ip_address=row.ip_address,
         ssh_port=row.ssh_port,
         ssh_username=row.ssh_username,
+        label=row.label or "",
         process_name=row.process_name,
         recipients=recipient_list(row.recipients),
+        check_interval=row.check_interval,
+        check_interval_unit=row.check_interval_unit,
         mail_interval_minutes=row.mail_interval_minutes,
         enabled=row.enabled,
         status=row.status,
@@ -86,13 +121,17 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWat
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
     recipients = parse_recipients(payload.recipients)
+    validate_check_interval(payload.check_interval, payload.check_interval_unit)
     row = ProcessWatch(
         ip_address=validate_ip(payload.ip_address),
         ssh_port=payload.ssh_port,
         ssh_username=username,
         ssh_password=payload.ssh_password,
+        label=validate_label(payload.label),
         process_name=name,
         recipients=",".join(recipients),
+        check_interval=payload.check_interval,
+        check_interval_unit=payload.check_interval_unit,
         mail_interval_minutes=payload.mail_interval_minutes,
         enabled=True,
         status="unknown",
@@ -200,16 +239,19 @@ def _fetch_listing(row: ProcessWatch) -> str:
     )
 
 
-def check_enabled_watches(db: Session) -> dict[str, int]:
+def check_enabled_watches(db: Session, *, now: datetime | None = None) -> dict[str, int]:
+    now = now or datetime.now(timezone.utc)
     rows = db.query(ProcessWatch).filter(ProcessWatch.enabled.is_(True)).order_by(ProcessWatch.id).all()
     checked = 0
     down = 0
     mailed = 0
     failed = 0
     for row in rows:
+        if not check_is_due(row, now):
+            continue
         mailed_at = row.last_emailed_at
         try:
-            check_watch(db, row)
+            check_watch(db, row, now=now)
         except Exception:
             failed += 1
             continue

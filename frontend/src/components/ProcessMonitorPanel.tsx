@@ -18,6 +18,15 @@ function mailLine(row: ProcessWatch): string {
   return 'No mail yet'
 }
 
+function watchTitle(row: ProcessWatch): string {
+  return row.label.trim() || row.process_name
+}
+
+function everyLabel(amount: number, unit: 'seconds' | 'minutes' | string): string {
+  const name = unit === 'minutes' ? 'min' : 'sec'
+  return `${amount} ${name}`
+}
+
 export function ProcessAlertSection({
   watches,
   showResolved,
@@ -44,8 +53,10 @@ export function ProcessAlertSection({
               </span>
               <div className="alert-copy">
                 <div className="alert-title-line">
-                  <strong>{row.process_name}</strong>
-                  <span className="muted">{row.ip_address}</span>
+                  <strong>{watchTitle(row)}</strong>
+                  <span className="muted">
+                    {row.process_name} · {row.ip_address}
+                  </span>
                 </div>
                 <p className="alert-title">
                   {row.status === 'down' ? 'Process is not running' : 'Process is running again'}
@@ -72,9 +83,12 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [port, setPort] = useState('22')
   const [username, setUsername] = useState('root')
   const [password, setPassword] = useState('')
+  const [label, setLabel] = useState('')
   const [processName, setProcessName] = useState('')
   const [recipients, setRecipients] = useState('')
-  const [interval, setIntervalMinutes] = useState('5')
+  const [checkEvery, setCheckEvery] = useState('60')
+  const [checkUnit, setCheckUnit] = useState<'seconds' | 'minutes'>('seconds')
+  const [mailEvery, setMailEvery] = useState('5')
 
   const load = useCallback(async () => {
     setRows(await listProcessWatches())
@@ -93,8 +107,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           <div>
             <h2>Watches</h2>
             <p className="muted-block">
-              SSH checks the process about once a minute. Mail repeats on the interval you set until
-              the process is running again.
+              Each watch is checked on its own interval. Mail repeats on the mail interval while the
+              process stays down.
             </p>
           </div>
         </div>
@@ -112,11 +126,15 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   ssh_port: Number(port),
                   ssh_username: username.trim() || 'root',
                   ssh_password: password,
+                  label: label.trim(),
                   process_name: processName.trim(),
                   recipients: recipients.split(/[,;\s]+/).filter(Boolean),
-                  mail_interval_minutes: Number(interval),
+                  check_interval: Number(checkEvery),
+                  check_interval_unit: checkUnit,
+                  mail_interval_minutes: Number(mailEvery),
                 })
                 setIp('')
+                setLabel('')
                 setPassword('')
                 setProcessName('')
                 setRecipients('')
@@ -128,6 +146,15 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               }
             }}
           >
+            <label className="field-label">
+              Label
+              <input
+                value={label}
+                onChange={(event) => setLabel(event.target.value)}
+                placeholder="STT TTS"
+                required
+              />
+            </label>
             <label className="field-label">
               Server IP
               <input value={ip} onChange={(event) => setIp(event.target.value)} required />
@@ -174,10 +201,26 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               />
             </label>
             <label className="field-label">
+              Check every
+              <input
+                value={checkEvery}
+                onChange={(event) => setCheckEvery(event.target.value)}
+                inputMode="numeric"
+                required
+              />
+            </label>
+            <label className="field-label">
+              Check unit
+              <select value={checkUnit} onChange={(event) => setCheckUnit(event.target.value as 'seconds' | 'minutes')}>
+                <option value="seconds">seconds</option>
+                <option value="minutes">minutes</option>
+              </select>
+            </label>
+            <label className="field-label">
               Mail every (minutes)
               <input
-                value={interval}
-                onChange={(event) => setIntervalMinutes(event.target.value)}
+                value={mailEvery}
+                onChange={(event) => setMailEvery(event.target.value)}
                 inputMode="numeric"
                 required
               />
@@ -204,14 +247,14 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 </span>
                 <div className="alert-copy">
                   <div className="alert-title-line">
-                    <strong>{row.process_name}</strong>
+                    <strong>{watchTitle(row)}</strong>
                     <span className="muted">
-                      {row.ssh_username}@{row.ip_address}:{row.ssh_port}
+                      {row.process_name} · {row.ssh_username}@{row.ip_address}:{row.ssh_port}
                     </span>
                   </div>
                   <p className="alert-message">
-                    {row.recipients.join(', ')} · mail every {row.mail_interval_minutes} min ·{' '}
-                    {mailLine(row)}
+                    {row.recipients.join(', ')} · check every {everyLabel(row.check_interval, row.check_interval_unit)} ·
+                    mail every {row.mail_interval_minutes} min · {mailLine(row)}
                     {row.last_checked_at ? ` · checked ${formatWhen(row.last_checked_at)}` : ''}
                   </p>
                   {row.last_error ? <p className="alert-message">{row.last_error}</p> : null}
