@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     metrics_collect_interval_seconds: float = 300.0
     # When true, Celery Beat schedules collect_all_active_servers_task (needs Redis + worker + beat).
     metrics_scheduled_collect_enabled: bool = False
+    process_watch_check_enabled: bool = True
+    process_watch_check_interval_seconds: float = 60.0
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_tls: bool = True
 
     alert_mem_used_pct_warning: float = 85.0
     alert_disk_used_pct_warning: float = 85.0

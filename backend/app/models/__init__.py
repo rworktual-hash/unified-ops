@@ -1,5 +1,6 @@
 from app.models.agent_action import AgentAction
 from app.models.llm_obs import LlmObsApiKey, LlmObsProject, LlmObsRun, LlmObsTrace
+from app.models.process_watch import ProcessWatch
 from app.models.approval_request import ApprovalRequest
 from app.models.alert import Alert
 from app.models.gpu_metric import GpuMetric
@@ -19,4 +20,5 @@ __all__ = [
     "LlmObsApiKey",
     "LlmObsTrace",
     "LlmObsRun",
+    "ProcessWatch",
 ]

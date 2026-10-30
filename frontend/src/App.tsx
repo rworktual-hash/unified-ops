@@ -22,6 +22,7 @@ import {
   listLiveSuggestions,
   fetchLiveAlertInDepth,
   listApprovals,
+  listProcessWatches,
   listServers,
   rejectApproval,
   resolveAlert,
@@ -29,6 +30,7 @@ import {
   UnauthorizedError,
   type AiInsightExtra,
   type AppUser,
+  type ProcessWatch,
   type VoiceMgExtra,
 } from './api'
 import { clearStoredToken } from './authStorage'
@@ -53,6 +55,7 @@ import { EmailPanel } from './components/EmailPanel'
 import { InfrastructurePanel } from './components/InfrastructurePanel'
 import { VoiceMgPanel } from './components/VoiceMgPanel'
 import { LlmObsPanel } from './components/LlmObsPanel'
+import { ProcessAlertSection, ProcessMonitorPanel } from './components/ProcessMonitorPanel'
 import { UsersPanel } from './components/UsersPanel'
 import type {
   AgentAction,
@@ -89,6 +92,7 @@ type NavId =
   | 'voicemg'
   | 'chat'
   | 'llmobs'
+  | 'processmonitor'
   | 'alerts'
   | 'approvals'
   | 'activity'
@@ -105,6 +109,7 @@ function App() {
   const [collectingId, setCollectingId] = useState<number | null>(null)
   const [metricsByServer, setMetricsByServer] = useState<Record<number, MetricsBundle | null>>({})
   const [alerts, setAlerts] = useState<Alert[]>([])
+  const [processWatches, setProcessWatches] = useState<ProcessWatch[]>([])
   const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([])
   const [liveAlertsReason, setLiveAlertsReason] = useState<string | null>(null)
   const [alertsLoaded, setAlertsLoaded] = useState(false)
@@ -235,6 +240,21 @@ function App() {
     if (session && session !== 'pending') void load()
   }, [session, load])
 
+  useEffect(() => {
+    if (!session || session === 'pending' || nav !== 'alerts') return
+    let cancelled = false
+    void listProcessWatches()
+      .then((rows) => {
+        if (!cancelled) setProcessWatches(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setProcessWatches([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [session, nav])
+
   const pollAiExtras = useCallback(async () => {
     try {
       const extras = await fetchAiInsightExtras()
@@ -350,6 +370,7 @@ function App() {
     ...(voiceMgServers.length > 0 ? [{ id: 'voicemg' as const, label: 'VoiceMG' }] : []),
     { id: 'chat', label: 'Chat' },
     { id: 'llmobs', label: 'LLM Observability' },
+    { id: 'processmonitor', label: 'Process Monitor' },
     { id: 'alerts', label: 'Alerts' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'activity', label: 'Agent log' },
@@ -653,6 +674,8 @@ function App() {
 
         {nav === 'llmobs' && <LlmObsPanel />}
 
+        {nav === 'processmonitor' && <ProcessMonitorPanel isAdmin={session.role === 'admin'} />}
+
         {nav === 'alerts' && !alertsLoaded && (
           <p className="muted">Loading alerts…</p>
         )}
@@ -661,7 +684,8 @@ function App() {
           <>
             <header className="page-head servers-status">
               <p className="fleet-status-line">
-                {liveAlerts.length} live · {alerts.filter((a) => a.status === 'open').length} SSH
+                {liveAlerts.length} live · {alerts.filter((a) => a.status === 'open').length} SSH ·{' '}
+                {processWatches.filter((row) => row.status === 'down').length} process
               </p>
               <label className="checkbox inline">
                 <input
@@ -798,6 +822,7 @@ function App() {
                 </div>
               ) : null}
             </section>
+            <ProcessAlertSection watches={processWatches} showResolved={showResolved} />
             <section className="panel">
               <div className="panel-head">
                 <h2>SSH Collect</h2>
@@ -947,6 +972,7 @@ function App() {
 
         {          nav !== 'chat' &&
           nav !== 'llmobs' &&
+          nav !== 'processmonitor' &&
           nav !== 'users' &&
           nav !== 'approvals' &&
           nav !== 'infrastructure' &&

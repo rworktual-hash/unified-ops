@@ -5,7 +5,7 @@ celery_app = Celery(
     "unified_ops",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.metrics", "app.tasks.email_sync", "app.tasks.legacy_sync"],
+    include=["app.tasks.metrics", "app.tasks.email_sync", "app.tasks.legacy_sync", "app.tasks.process_watch"],
 )
 
 celery_app.conf.update(
@@ -37,4 +37,12 @@ if settings.legacy_metrics_scheduled_sync_enabled and settings.legacy_metrics_da
         "schedule": interval,
         "options": {"expires": max(60.0, interval - 30)},
     }
+if settings.process_watch_check_enabled:
+    interval = settings.process_watch_check_interval_seconds
+    _beat["check-process-watches"] = {
+        "task": "app.tasks.process_watch.check_process_watches_task",
+        "schedule": interval,
+        "options": {"expires": max(20.0, interval - 10)},
+    }
+
 celery_app.conf.beat_schedule = _beat

@@ -3769,6 +3769,19 @@ button.ai-legend-btn:hover,
   color: var(--muted);
 }
 
+.process-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.process-create .field-label {
+  min-width: 10rem;
+  margin-bottom: 0;
+}
+
 .llm-block pre {
   margin: 0.3rem 0 0;
   padding: 0.65rem 0.75rem;

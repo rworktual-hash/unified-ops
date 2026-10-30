@@ -1729,6 +1729,59 @@ export async function fetchLlmObsTrace(traceId: number | string): Promise<LlmObs
   return res.json()
 }
 
+export type ProcessWatch = {
+  id: number
+  ip_address: string
+  ssh_port: number
+  ssh_username: string
+  process_name: string
+  recipients: string[]
+  mail_interval_minutes: number
+  enabled: boolean
+  status: string
+  last_checked_at: string | null
+  down_since: string | null
+  resolved_at: string | null
+  last_emailed_at: string | null
+  mail_sent: boolean | null
+  mail_error: string | null
+  last_error: string | null
+  created_at: string
+}
+
+export type ProcessWatchCreate = {
+  ip_address: string
+  ssh_port: number
+  ssh_username: string
+  ssh_password: string
+  process_name: string
+  recipients: string[]
+  mail_interval_minutes: number
+}
+
+export async function listProcessWatches(): Promise<ProcessWatch[]> {
+  const res = await apiFetch('/process-watches')
+  if (!res.ok) return llmObsError(res, 'Failed to load process watches')
+  return res.json()
+}
+
+export async function createProcessWatch(body: ProcessWatchCreate): Promise<ProcessWatch> {
+  const res = await apiFetch('/process-watches', { method: 'POST', body: JSON.stringify(body) })
+  if (!res.ok) return llmObsError(res, 'Failed to add process watch')
+  return res.json()
+}
+
+export async function deleteProcessWatch(id: number): Promise<void> {
+  const res = await apiFetch(`/process-watches/${id}`, { method: 'DELETE' })
+  if (!res.ok) return llmObsError(res, 'Failed to delete process watch')
+}
+
+export async function checkProcessWatch(id: number): Promise<ProcessWatch> {
+  const res = await apiFetch(`/process-watches/${id}/check`, { method: 'POST' })
+  if (!res.ok) return llmObsError(res, 'Process check failed')
+  return res.json()
+}
+
 export async function syncLegacyMetrics(domain?: string): Promise<{ ok: boolean; results: unknown[] }> {
   const path = domain ? `/legacy-metrics/sync/${domain}` : '/legacy-metrics/sync'
   const res = await apiFetch(path, { method: 'POST' })
