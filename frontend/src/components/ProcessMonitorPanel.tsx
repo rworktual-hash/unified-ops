@@ -23,11 +23,6 @@ function watchTitle(row: ProcessWatch): string {
   return row.label.trim() || row.process_name
 }
 
-function everyLabel(amount: number, unit: 'seconds' | 'minutes' | string): string {
-  const name = unit === 'minutes' ? 'min' : 'sec'
-  return `${amount} ${name}`
-}
-
 function intervalMs(row: ProcessWatch): number {
   return row.check_interval_unit === 'minutes' ? row.check_interval * 60_000 : row.check_interval * 1000
 }
@@ -36,19 +31,6 @@ function remainingMs(row: ProcessWatch, clientNow: number, clockOffset: number):
   const checked = parseWhen(row.last_checked_at)
   if (checked == null) return 0
   return Math.max(0, checked + intervalMs(row) - (clientNow + clockOffset))
-}
-
-function rowDetail(row: ProcessWatch): string {
-  return [
-    row.recipients.join(', '),
-    `check every ${everyLabel(row.check_interval, row.check_interval_unit)}`,
-    `mail every ${row.mail_interval_minutes} min`,
-    mailLine(row),
-    row.last_checked_at ? `checked ${formatWhen(row.last_checked_at)}` : '',
-    row.last_error ?? '',
-  ]
-    .filter(Boolean)
-    .join(' · ')
 }
 
 function countdownText(ms: number): string {
@@ -441,7 +423,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               </thead>
               <tbody>
                 {shown.map((row) => (
-                  <tr key={row.id} title={rowDetail(row)}>
+                  <tr key={row.id}>
                     <td>
                       <strong>{watchTitle(row)}</strong>
                     </td>
