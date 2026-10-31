@@ -117,6 +117,7 @@ export function ProcessAlertSection({
 export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [rows, setRows] = useState<ProcessWatch[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [checkingId, setCheckingId] = useState<number | null>(null)
   const [ip, setIp] = useState('')
@@ -174,6 +175,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setCheckEvery('60')
     setCheckUnit('seconds')
     setMailEvery('5')
+    setFormError(null)
   }
 
   function openAdd() {
@@ -198,6 +200,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setMailEvery(String(row.mail_interval_minutes))
     setShowForm(true)
     setError(null)
+    setFormError(null)
     setFormScroll((tick) => tick + 1)
   }
 
@@ -301,7 +304,6 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               <p className="muted-block">Every process-down alert is sent to these addresses.</p>
             </div>
           </div>
-          {mailError ? <p className="banner error">{mailError}</p> : null}
           <form
             className="process-mail-form"
             onSubmit={async (event) => {
@@ -331,10 +333,14 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 placeholder="a@worktual.com, b@worktual.com"
               />
             </label>
-            <button type="submit" className="btn primary" disabled={savingDefaults}>
-              {savingDefaults ? 'Saving…' : 'Save'}
+            <button
+              type="submit"
+              className={mailSaved ? 'btn process-mail-done' : 'btn primary'}
+              disabled={savingDefaults}
+            >
+              {savingDefaults ? 'Saving…' : mailSaved ? 'Saved' : 'Save'}
             </button>
-            {mailSaved ? <p className="process-mail-saved">Saved</p> : null}
+            {mailError ? <p className="banner error process-form-error">{mailError}</p> : null}
           </form>
         </section>
       ) : null}
@@ -363,11 +369,11 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               event.preventDefault()
               const overlap = mailsAlreadyDefault(recipients, defaultMails)
               if (overlap.length > 0) {
-                setError(duplicateMailMessage(overlap))
+                setFormError(duplicateMailMessage(overlap))
                 return
               }
               setBusy(true)
-              setError(null)
+              setFormError(null)
               try {
                 const body = {
                   ip_address: ip.trim(),
@@ -392,7 +398,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 }
                 closeForm()
               } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to save process watch')
+                setFormError(err instanceof Error ? err.message : 'Failed to save process watch')
               } finally {
                 setBusy(false)
               }
@@ -468,7 +474,10 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               Additional mail ids
               <input
                 value={recipients}
-                onChange={(event) => setRecipients(event.target.value)}
+                onChange={(event) => {
+                  setRecipients(event.target.value)
+                  setFormError(null)
+                }}
                 placeholder="Extra addresses for this service"
               />
             </label>
@@ -503,6 +512,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             <button type="button" className="btn ghost" disabled={busy} onClick={closeForm}>
               Cancel
             </button>
+            {formError ? <p className="banner error process-form-error">{formError}</p> : null}
           </form>
         ) : null}
         {!isAdmin ? <p className="muted">Only an admin can add or edit a watch.</p> : null}

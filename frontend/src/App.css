@@ -3793,11 +3793,19 @@ button.ai-legend-btn:hover,
   margin-bottom: 0;
 }
 
-.process-mail-saved {
-  margin: 0 0 0.55rem;
-  color: #166534;
-  font-size: 0.875rem;
-  font-weight: 600;
+.process-mail-done {
+  background: #166534;
+  color: #fff;
+  border-color: #166534;
+}
+
+.process-mail-done:hover:not(:disabled) {
+  background: #14532d;
+}
+
+.process-form-error {
+  flex: 1 1 100%;
+  margin: 0.25rem 0 0;
 }
 
 .process-create {
