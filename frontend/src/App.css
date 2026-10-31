@@ -2318,6 +2318,7 @@ pre.diagnosis {
 
 .login-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: #f3f4f6;
@@ -2347,14 +2348,17 @@ pre.diagnosis {
 .login-stage {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.9fr);
   gap: 1.25rem;
-  align-items: stretch;
-  width: min(1080px, calc(100% - 2.5rem));
-  margin: 2.25rem auto 1rem;
+  align-items: center;
+  justify-items: stretch;
+  width: min(1040px, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: 1.5rem 0;
 }
 
 .login-hero {
+  align-self: center;
   background: #14141c;
   color: #f4f4f5;
   border-radius: 22px;
@@ -2431,6 +2435,8 @@ pre.diagnosis {
 }
 
 .login-card {
+  align-self: center;
+  width: 100%;
   background: #fff;
   border-radius: 22px;
   padding: 1.8rem 1.6rem 1.5rem;
@@ -2538,10 +2544,31 @@ pre.diagnosis {
   font-size: 0.82rem;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .login-stage {
     grid-template-columns: 1fr;
-    margin-top: 1.25rem;
+    width: min(520px, calc(100% - 2rem));
+    padding: 1.25rem 0;
+  }
+
+  .login-hero h1 {
+    font-size: 1.55rem;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 901px) {
+  .login-stage {
+    padding: 0.75rem 0;
+  }
+
+  .login-hero,
+  .login-card {
+    padding-top: 1.25rem;
+    padding-bottom: 1.15rem;
+  }
+
+  .login-hero-logo {
+    margin-bottom: 0.85rem;
   }
 }
 
