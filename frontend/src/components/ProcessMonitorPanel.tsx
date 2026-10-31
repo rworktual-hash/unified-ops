@@ -113,6 +113,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const inFlight = useRef<Set<number>>(new Set())
   const retryAt = useRef<Record<number, number>>({})
   const clockOffset = useRef(0)
+  const formRef = useRef<HTMLFormElement>(null)
+  const [formScroll, setFormScroll] = useState(0)
 
   function noteServerTime(sample: ProcessWatch | undefined) {
     const server = parseWhen(sample?.server_now)
@@ -145,6 +147,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   function openAdd() {
     closeForm()
     setShowForm(true)
+    setFormScroll((tick) => tick + 1)
   }
 
   function openEdit(row: ProcessWatch) {
@@ -163,7 +166,13 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setMailEvery(String(row.mail_interval_minutes))
     setShowForm(true)
     setError(null)
+    setFormScroll((tick) => tick + 1)
   }
+
+  useEffect(() => {
+    if (!showForm) return
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [showForm, formScroll])
 
   useEffect(() => {
     void load().catch((err: unknown) => {
@@ -252,6 +261,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
         {error ? <p className="banner error">{error}</p> : null}
         {isAdmin && showForm ? (
           <form
+            ref={formRef}
             className="process-create"
             onSubmit={async (event) => {
               event.preventDefault()

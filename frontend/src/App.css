@@ -3778,6 +3778,7 @@ button.ai-legend-btn:hover,
 }
 
 .process-create {
+  scroll-margin-top: 1rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
