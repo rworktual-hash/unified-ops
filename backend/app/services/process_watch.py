@@ -11,6 +11,7 @@ from app.models.process_watch import ProcessWatch
 from app.monitoring.process_check import (
     fetch_exact_pid,
     fetch_process_listing,
+    fetch_service_port,
     format_pids,
     matching_pids,
     valid_process_name,
@@ -111,6 +112,7 @@ def to_read(row: ProcessWatch, *, server_now: datetime | None = None) -> Process
         description=row.description or "",
         process_name=row.process_name,
         pid=row.pid or "",
+        service_port=row.service_port or "",
         recipients=recipient_list(row.recipients),
         check_interval=row.check_interval,
         check_interval_unit=row.check_interval_unit,
@@ -138,8 +140,10 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWat
         raise ProcessWatchError("Username is invalid")
     recipients = parse_recipients(payload.recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
+    ip_address = validate_ip(payload.ip_address)
+    _ensure_unique_endpoint(db, ip_address, payload.ssh_port)
     row = ProcessWatch(
-        ip_address=validate_ip(payload.ip_address),
+        ip_address=ip_address,
         ssh_port=payload.ssh_port,
         ssh_username=username,
         ssh_password=payload.ssh_password,
@@ -168,7 +172,9 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
-    row.ip_address = validate_ip(payload.ip_address)
+    ip_address = validate_ip(payload.ip_address)
+    _ensure_unique_endpoint(db, ip_address, payload.ssh_port, exclude_id=row.id)
+    row.ip_address = ip_address
     row.ssh_port = payload.ssh_port
     row.ssh_username = username
     row.label = validate_label(payload.label)
@@ -182,6 +188,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     if not payload.enabled:
         row.status = "unknown"
         row.pid = ""
+        row.service_port = ""
         row.last_error = None
     password = payload.ssh_password.strip()
     if password:
@@ -269,11 +276,13 @@ def check_watch(
             row.resolved_at = now
         row.status = "up"
         row.pid = format_pids(pids)
+        row.service_port = "" if fetch is not None else _service_port(row, row.pid.split(",")[0].strip())
         db.commit()
         db.refresh(row)
         return row
 
     row.pid = ""
+    row.service_port = ""
     newly_down = row.status != "down"
     if newly_down:
         row.down_since = now
@@ -284,6 +293,27 @@ def check_watch(
     db.commit()
     db.refresh(row)
     return row
+
+
+def _ensure_unique_endpoint(db: Session, ip_address: str, ssh_port: int, exclude_id: int | None = None) -> None:
+    query = db.query(ProcessWatch).filter(
+        ProcessWatch.ip_address == ip_address,
+        ProcessWatch.ssh_port == ssh_port,
+    )
+    if exclude_id is not None:
+        query = query.filter(ProcessWatch.id != exclude_id)
+    if query.first() is not None:
+        raise ProcessWatchError("A watch already exists for this IP and port")
+
+
+def _service_port(row: ProcessWatch, pid: str) -> str:
+    return fetch_service_port(
+        host=row.ip_address,
+        port=row.ssh_port,
+        username=row.ssh_username,
+        ssh_password=row.ssh_password,
+        pid=pid,
+    )
 
 
 def _exact_pid(row: ProcessWatch) -> tuple[str, str]:

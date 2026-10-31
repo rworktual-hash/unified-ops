@@ -9,6 +9,7 @@ from app.monitoring.ssh_client import ssh_session
 
 # Fixed command. Process names are never interpolated into the shell.
 CMD_PS_ARGS = "ps -eo pid=,args="
+CMD_SS_LISTEN = "ss -ltnp"
 _PGREP_UNAVAILABLE = "__PGREP_UNAVAILABLE__"
 
 PROCESS_NAME_RE = re.compile(r"^[A-Za-z0-9._/: -]{1,128}$")
@@ -120,6 +121,47 @@ def fetch_exact_pid(
     except Exception as exc:
         raise ProcessCheckError(str(exc) or "SSH failed") from exc
     return interpret_pgrep(out)
+
+
+def listening_ports(ss_text: str, pid: str) -> str:
+    """Comma-separated listen ports for one PID. The PID is matched in Python."""
+    if not pid.isdigit():
+        return ""
+    found: list[str] = []
+    for line in ss_text.splitlines():
+        if f"pid={pid}," not in line and f"pid={pid})" not in line:
+            continue
+        match = re.search(r":(\d+)", line)
+        if match and match.group(1) not in found:
+            found.append(match.group(1))
+    return ", ".join(found[:8])
+
+
+def fetch_service_port(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    ssh_password: str,
+    pid: str,
+) -> str:
+    if not pid.isdigit():
+        return ""
+    try:
+        with ssh_session(
+            host=host,
+            port=port,
+            username=username,
+            credential_ref=None,
+            ssh_password=ssh_password,
+            ssh_auth_mode="password",
+        ) as client:
+            _stdin, stdout, _stderr = client.exec_command(CMD_SS_LISTEN, timeout=settings.ssh_command_timeout)
+            out = stdout.read().decode("utf-8", errors="replace")
+            stdout.channel.recv_exit_status()
+    except Exception:
+        return ""
+    return listening_ports(out, pid)
 
 
 def fetch_process_listing(

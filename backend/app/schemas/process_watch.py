@@ -43,6 +43,7 @@ class ProcessWatchRead(BaseModel):
     description: str
     process_name: str
     pid: str
+    service_port: str
     recipients: list[str]
     check_interval: int
     check_interval_unit: str

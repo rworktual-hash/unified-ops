@@ -23,6 +23,7 @@ _ADDS = (
         "ALTER TABLE process_watches ADD COLUMN description VARCHAR(2000) NOT NULL DEFAULT ''",
     ),
     ("pid", "ALTER TABLE process_watches ADD COLUMN pid VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("service_port", "ALTER TABLE process_watches ADD COLUMN service_port VARCHAR(64) NOT NULL DEFAULT ''"),
 )
 
 

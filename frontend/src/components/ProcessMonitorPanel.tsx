@@ -225,7 +225,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const needle = query.trim().toLowerCase()
   const shown = needle
     ? rows.filter((row) =>
-        [row.label, row.process_name, row.pid, row.description, row.ip_address, row.status, row.ssh_username]
+        [row.label, row.process_name, row.pid, row.service_port, row.description, row.ip_address, row.status, row.ssh_username]
           .join(' ')
           .toLowerCase()
           .includes(needle),
@@ -415,6 +415,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   <th>Label</th>
                   <th>Process name</th>
                   <th>Server</th>
+                  <th>Service port</th>
                   <th>PID</th>
                   <th>Status</th>
                   <th>Next check</th>
@@ -429,8 +430,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       <strong>{watchTitle(row)}</strong>
                     </td>
                     <td>{row.process_name}</td>
-                    <td className="process-server">
-                      {row.ssh_username}@{row.ip_address}:{row.ssh_port}
+                    <td className="process-server">{row.ip_address}</td>
+                    <td className="process-pid">
+                      {row.enabled && row.status === 'up' && row.service_port ? row.service_port : '—'}
                     </td>
                     <td className="process-pid">{row.enabled && row.status === 'up' && row.pid ? row.pid : '—'}</td>
                     <td>

@@ -14,6 +14,7 @@ from app.models.process_watch import ProcessWatch
 from app.monitoring.process_check import (
     ProcessCheckError,
     interpret_pgrep,
+    listening_ports,
     matching_pids,
     pgrep_command,
     process_in_listing,
@@ -109,11 +110,13 @@ def test_pgrep_pid_wins_and_a_miss_does_not_fall_back_to_ps(session, monkeypatch
     def ps_must_not_run(_row):
         raise AssertionError("ps fallback")
 
+    monkeypatch.setattr("app.services.process_watch.fetch_service_port", lambda **_kwargs: "5060")
     monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("pid", "55"))
     monkeypatch.setattr("app.services.process_watch._fetch_listing", ps_must_not_run)
     check_watch(session, row, now=T0, force=True)
     assert row.status == "up"
     assert row.pid == "55"
+    assert row.service_port == "5060"
 
     monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("down", ""))
     check_watch(session, row, now=T0 + timedelta(seconds=60), force=True)
@@ -128,6 +131,42 @@ def test_pgrep_pid_wins_and_a_miss_does_not_fall_back_to_ps(session, monkeypatch
     check_watch(session, row, now=T0 + timedelta(seconds=120), force=True)
     assert row.status == "up"
     assert row.pid == "77"
+
+
+def test_listening_port_is_taken_from_the_pid_line():
+    listing = "\n".join(
+        [
+            "State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess",
+            'LISTEN 0 128 0.0.0.0:5060 0.0.0.0:* users:(("pbx_mg",pid=2298672,fd=8))',
+            'LISTEN 0 128 [::]:5060 [::]:* users:(("pbx_mg",pid=2298672,fd=9))',
+            'LISTEN 0 128 0.0.0.0:80 0.0.0.0:* users:(("nginx",pid=101,fd=6))',
+        ]
+    )
+    assert listening_ports(listing, "2298672") == "5060"
+    assert listening_ports(listing, "101") == "80"
+    assert listening_ports(listing, "999") == ""
+
+
+def test_same_ip_and_port_cannot_be_added_twice(client):
+    created = client.post("/api/process-watches", json=_payload())
+    assert created.status_code == 201
+    duplicate = client.post("/api/process-watches", json=_payload(label="Second"))
+    assert duplicate.status_code == 422
+    assert "IP and port" in duplicate.json()["detail"]
+
+    other_port = client.post("/api/process-watches", json=_payload(label="Other port", ssh_port=4204))
+    assert other_port.status_code == 201
+    watch_id = created.json()["id"]
+    renamed = client.patch(
+        f"/api/process-watches/{watch_id}",
+        json=_payload(label="Renamed", ssh_password=""),
+    )
+    assert renamed.status_code == 200
+    clash = client.patch(
+        f"/api/process-watches/{watch_id}",
+        json=_payload(ssh_port=4204, ssh_password=""),
+    )
+    assert clash.status_code == 422
 
 
 def test_process_listing_matches_the_name_and_ignores_the_ps_command():
@@ -313,10 +352,12 @@ def test_inactive_watch_is_not_monitored(client, session, monkeypatch):
         return "  101 nginx: master process nginx\n"
 
     monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("unavailable", ""))
+    monkeypatch.setattr("app.services.process_watch.fetch_service_port", lambda **_kwargs: "5060")
     monkeypatch.setattr("app.services.process_watch.fetch_process_listing", running)
     checked_up = client.post(f"/api/process-watches/{watch_id}/check")
     assert checked_up.json()["status"] == "up"
     assert checked_up.json()["pid"] == "101"
+    assert checked_up.json()["service_port"] == "5060"
 
     updated = client.patch(
         f"/api/process-watches/{watch_id}",
