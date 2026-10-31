@@ -12,7 +12,7 @@ class ProcessWatchCreate(BaseModel):
     label: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=2000)
     process_name: str = Field(min_length=1, max_length=128)
-    recipients: list[str] = Field(min_length=1, max_length=20)
+    recipients: list[str] = Field(default_factory=list, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
     mail_interval_minutes: int = Field(ge=1, le=10080)
@@ -27,11 +27,15 @@ class ProcessWatchUpdate(BaseModel):
     label: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=2000)
     process_name: str = Field(min_length=1, max_length=128)
-    recipients: list[str] = Field(min_length=1, max_length=20)
+    recipients: list[str] = Field(default_factory=list, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
     mail_interval_minutes: int = Field(ge=1, le=10080)
     enabled: bool = True
+
+
+class ProcessMailDefaults(BaseModel):
+    recipients: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ProcessWatchRead(BaseModel):

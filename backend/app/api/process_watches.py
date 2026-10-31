@@ -5,14 +5,21 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.db.session import get_db
-from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
+from app.schemas.process_watch import (
+    ProcessMailDefaults,
+    ProcessWatchCreate,
+    ProcessWatchRead,
+    ProcessWatchUpdate,
+)
 from app.services.process_watch import (
     ProcessWatchError,
     check_watch,
     create_process_watch,
     delete_process_watch,
+    get_default_recipients,
     get_process_watch,
     list_process_watches,
+    set_default_recipients,
     to_read,
     update_process_watch,
 )
@@ -25,6 +32,26 @@ def _watch_or_404(db: Session, watch_id: int):
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watch not found")
     return row
+
+
+@router.get("/defaults", response_model=ProcessMailDefaults)
+def read_default_recipients(
+    db: Session = Depends(get_db),
+) -> ProcessMailDefaults:
+    return ProcessMailDefaults(recipients=get_default_recipients(db))
+
+
+@router.put("/defaults", response_model=ProcessMailDefaults)
+def write_default_recipients(
+    payload: ProcessMailDefaults,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_admin),
+) -> ProcessMailDefaults:
+    try:
+        recipients = set_default_recipients(db, payload)
+    except ProcessWatchError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return ProcessMailDefaults(recipients=recipients)
 
 
 @router.get("", response_model=list[ProcessWatchRead])

@@ -6,6 +6,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 
 
+class ProcessMailDefault(Base):
+    """One shared recipient list for every process-down alert."""
+
+    __tablename__ = "process_mail_defaults"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    recipients: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
 class ProcessWatch(Base):
     __tablename__ = "process_watches"
 

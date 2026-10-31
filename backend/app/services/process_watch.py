@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models.process_watch import ProcessWatch
+from app.models.process_watch import ProcessMailDefault, ProcessWatch
 from app.monitoring.process_check import (
     ProcessCheckError,
     fetch_exact_pid,
@@ -18,7 +18,7 @@ from app.monitoring.process_check import (
     probe_ssh_login,
     valid_process_name,
 )
-from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
+from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
 from app.services.process_mail import MailNotConfigured, send_process_down_mail
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -36,7 +36,7 @@ def _aware(value: datetime | None) -> datetime | None:
     return value
 
 
-def parse_recipients(raw: list[str]) -> list[str]:
+def parse_recipients(raw: list[str], *, required: bool = True) -> list[str]:
     found: list[str] = []
     for item in raw:
         for part in re.split(r"[,;\s]+", item.strip()):
@@ -47,7 +47,7 @@ def parse_recipients(raw: list[str]) -> list[str]:
                 raise ProcessWatchError(f"Invalid email: {part.strip()}")
             if address not in found:
                 found.append(address)
-    if not found:
+    if required and not found:
         raise ProcessWatchError("At least one email is required")
     if len(found) > 20:
         raise ProcessWatchError("At most 20 emails")
@@ -140,7 +140,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
     username = payload.ssh_username.strip()
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
-    recipients = parse_recipients(payload.recipients)
+    recipients = parse_recipients(payload.recipients, required=False)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port)
@@ -194,7 +194,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     row.label = validate_label(payload.label)
     row.description = validate_description(payload.description)
     row.process_name = name
-    row.recipients = ",".join(parse_recipients(payload.recipients))
+    row.recipients = ",".join(parse_recipients(payload.recipients, required=False))
     row.check_interval = payload.check_interval
     row.check_interval_unit = payload.check_interval_unit
     row.mail_interval_minutes = payload.mail_interval_minutes
@@ -234,13 +234,46 @@ def _mail_due(row: ProcessWatch, now: datetime, *, newly_down: bool) -> bool:
     return now - last >= timedelta(minutes=row.mail_interval_minutes)
 
 
-def _send_down_mail(row: ProcessWatch, now: datetime, send: Callable[..., None]) -> None:
+def get_default_recipients(db: Session) -> list[str]:
+    row = db.get(ProcessMailDefault, 1)
+    if row is None:
+        return []
+    return recipient_list(row.recipients)
+
+
+def set_default_recipients(db: Session, payload: ProcessMailDefaults) -> list[str]:
+    addresses = parse_recipients(payload.recipients, required=False)
+    row = db.get(ProcessMailDefault, 1)
+    if row is None:
+        row = ProcessMailDefault(id=1, recipients=",".join(addresses))
+        db.add(row)
+    else:
+        row.recipients = ",".join(addresses)
+    db.commit()
+    return addresses
+
+
+def combined_recipients(db: Session, row: ProcessWatch) -> list[str]:
+    found: list[str] = []
+    for address in get_default_recipients(db) + recipient_list(row.recipients):
+        if address not in found:
+            found.append(address)
+    return found
+
+
+def _send_down_mail(db: Session, row: ProcessWatch, now: datetime, send: Callable[..., None]) -> None:
     down_since = _aware(row.down_since) or now
+    recipients = combined_recipients(db, row)
+    if not recipients:
+        row.last_emailed_at = now
+        row.mail_sent = False
+        row.mail_error = "Mail was not sent. Add a default or additional mail id."
+        return
     try:
         send(
             ip_address=row.ip_address,
             process_name=row.process_name,
-            recipients=recipient_list(row.recipients),
+            recipients=recipients,
             down_since=down_since.isoformat(),
         )
     except MailNotConfigured:
@@ -303,7 +336,7 @@ def check_watch(
         row.resolved_at = None
     row.status = "down"
     if _mail_due(row, now, newly_down=newly_down):
-        _send_down_mail(row, now, send_fn)
+        _send_down_mail(db, row, now, send_fn)
     db.commit()
     db.refresh(row)
     return row

@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import CurrentUser, get_current_user
 from app.api.process_watches import router
 from app.db.session import Base, get_db
-from app.models.process_watch import ProcessWatch
+from app.models.process_watch import ProcessMailDefault, ProcessWatch
 from app.monitoring.process_check import (
     ProcessCheckError,
     interpret_pgrep,
@@ -20,8 +20,14 @@ from app.monitoring.process_check import (
     process_in_listing,
 )
 from app.services.process_mail import process_down_body
-from app.schemas.process_watch import ProcessWatchCreate
-from app.services.process_watch import ProcessWatchError, check_enabled_watches, check_watch, create_process_watch
+from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate
+from app.services.process_watch import (
+    ProcessWatchError,
+    check_enabled_watches,
+    check_watch,
+    create_process_watch,
+    set_default_recipients,
+)
 
 ADMIN = CurrentUser(id=1, email="admin@worktual.tech", role="admin", is_active=True)
 T0 = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
@@ -35,7 +41,7 @@ def session():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[ProcessWatch.__table__])
+    Base.metadata.create_all(engine, tables=[ProcessWatch.__table__, ProcessMailDefault.__table__])
     factory = sessionmaker(bind=engine)
     db = factory()
     try:
@@ -216,6 +222,17 @@ def test_a_running_process_stores_its_pid(session):
     check_watch(session, row, now=T0 + timedelta(seconds=60), fetch=gone, send=lambda **_kwargs: None, force=True)
     assert row.status == "down"
     assert row.pid == ""
+
+
+def test_alert_goes_to_the_default_list_and_the_additional_address(session):
+    set_default_recipients(session, ProcessMailDefaults(recipients=["team@example.com"]))
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(_payload(recipients=["lead@example.com"])),
+    )
+    sent: list[dict] = []
+    check_watch(session, row, now=T0, fetch=lambda _row: "", send=lambda **kwargs: sent.append(kwargs))
+    assert sent[0]["recipients"] == ["team@example.com", "lead@example.com"]
 
 
 def test_down_mail_repeats_on_the_interval_then_stops_when_the_process_returns(session):
