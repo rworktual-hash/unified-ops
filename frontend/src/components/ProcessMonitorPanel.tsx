@@ -35,6 +35,30 @@ function remainingMs(row: ProcessWatch, clientNow: number, clockOffset: number):
   return Math.max(0, checked + intervalMs(row) - (clientNow + clockOffset))
 }
 
+function mailsAlreadyDefault(additional: string, defaults: string): string[] {
+  const known = new Set(
+    defaults
+      .split(/[,;\s]+/)
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  const overlap: string[] = []
+  const seen = new Set<string>()
+  for (const part of additional.split(/[,;\s]+/)) {
+    const address = part.trim().toLowerCase()
+    if (!address || seen.has(address)) continue
+    seen.add(address)
+    if (known.has(address)) overlap.push(address)
+  }
+  return overlap
+}
+
+function duplicateMailMessage(overlap: string[]): string {
+  const listed = overlap.join(', ')
+  const verb = overlap.length === 1 ? 'is' : 'are'
+  return `${listed} ${verb} already in the default mail ids. Remove from additional mail ids.`
+}
+
 function countdownText(ms: number): string {
   const total = Math.ceil(ms / 1000)
   const minutes = Math.floor(total / 60)
@@ -337,6 +361,11 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             className="process-create"
             onSubmit={async (event) => {
               event.preventDefault()
+              const overlap = mailsAlreadyDefault(recipients, defaultMails)
+              if (overlap.length > 0) {
+                setError(duplicateMailMessage(overlap))
+                return
+              }
               setBusy(true)
               setError(null)
               try {

@@ -141,6 +141,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
     recipients = parse_recipients(payload.recipients, required=False)
+    _reject_if_in_defaults(db, recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port)
@@ -185,6 +186,8 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     username = payload.ssh_username.strip()
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
+    recipients = parse_recipients(payload.recipients, required=False)
+    _reject_if_in_defaults(db, recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port, exclude_id=row.id)
@@ -194,7 +197,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     row.label = validate_label(payload.label)
     row.description = validate_description(payload.description)
     row.process_name = name
-    row.recipients = ",".join(parse_recipients(payload.recipients, required=False))
+    row.recipients = ",".join(recipients)
     row.check_interval = payload.check_interval
     row.check_interval_unit = payload.check_interval_unit
     row.mail_interval_minutes = payload.mail_interval_minutes
@@ -232,6 +235,18 @@ def _mail_due(row: ProcessWatch, now: datetime, *, newly_down: bool) -> bool:
     if last is None:
         return True
     return now - last >= timedelta(minutes=row.mail_interval_minutes)
+
+
+def _reject_if_in_defaults(db: Session, recipients: list[str]) -> None:
+    defaults = set(get_default_recipients(db))
+    overlap = [address for address in recipients if address in defaults]
+    if not overlap:
+        return
+    listed = ", ".join(overlap)
+    verb = "is" if len(overlap) == 1 else "are"
+    raise ProcessWatchError(
+        f"{listed} {verb} already in the default mail ids. Remove from additional mail ids."
+    )
 
 
 def get_default_recipients(db: Session) -> list[str]:

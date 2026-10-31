@@ -20,13 +20,14 @@ from app.monitoring.process_check import (
     process_in_listing,
 )
 from app.services.process_mail import process_down_body
-from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate
+from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate, ProcessWatchUpdate
 from app.services.process_watch import (
     ProcessWatchError,
     check_enabled_watches,
     check_watch,
     create_process_watch,
     set_default_recipients,
+    update_process_watch,
 )
 
 ADMIN = CurrentUser(id=1, email="admin@worktual.tech", role="admin", is_active=True)
@@ -222,6 +223,25 @@ def test_a_running_process_stores_its_pid(session):
     check_watch(session, row, now=T0 + timedelta(seconds=60), fetch=gone, send=lambda **_kwargs: None, force=True)
     assert row.status == "down"
     assert row.pid == ""
+
+
+def test_additional_address_already_in_the_default_list_is_rejected(session):
+    set_default_recipients(session, ProcessMailDefaults(recipients=["team@example.com"]))
+    with pytest.raises(ProcessWatchError, match="team@example.com is already in the default mail ids"):
+        create_process_watch(
+            session,
+            ProcessWatchCreate.model_validate(_payload(recipients=["Team@example.com", "lead@example.com"])),
+        )
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(_payload(recipients=["lead@example.com"])),
+    )
+    with pytest.raises(ProcessWatchError, match="team@example.com is already in the default mail ids"):
+        update_process_watch(
+            session,
+            row,
+            ProcessWatchUpdate.model_validate(_payload(recipients=["team@example.com"], ssh_password="")),
+        )
 
 
 def test_alert_goes_to_the_default_list_and_the_additional_address(session):
