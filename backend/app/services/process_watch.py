@@ -5,6 +5,7 @@ import re
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.process_watch import ProcessMailDefault, ProcessWatch
@@ -228,15 +229,6 @@ def delete_process_watch(db: Session, row: ProcessWatch) -> None:
     db.commit()
 
 
-def _mail_due(row: ProcessWatch, now: datetime, *, newly_down: bool) -> bool:
-    if newly_down:
-        return True
-    last = _aware(row.last_emailed_at)
-    if last is None:
-        return True
-    return now - last >= timedelta(minutes=row.mail_interval_minutes)
-
-
 def _reject_if_in_defaults(db: Session, recipients: list[str]) -> None:
     defaults = set(get_default_recipients(db))
     overlap = [address for address in recipients if address in defaults]
@@ -363,28 +355,83 @@ def check_watch(
         return row
 
     row.last_error = None
+    watch_id = row.id
     if pids:
-        recovered = row.status == "down"
-        if recovered:
-            row.resolved_at = now
-        row.status = "up"
-        row.pid = format_pids(pids)
-        row.service_port = "" if fetch is not None else _service_port(row, row.pid.split(",")[0].strip())
-        if recovered:
+        pid_text = format_pids(pids)
+        port_text = "" if fetch is not None else _service_port(row, pid_text.split(",")[0].strip())
+        db.expire(row)
+        claimed = (
+            db.query(ProcessWatch)
+            .filter(ProcessWatch.id == watch_id, ProcessWatch.status == "down")
+            .update(
+                {
+                    ProcessWatch.status: "up",
+                    ProcessWatch.resolved_at: now,
+                    ProcessWatch.pid: pid_text,
+                    ProcessWatch.service_port: port_text,
+                    ProcessWatch.last_error: None,
+                    ProcessWatch.last_checked_at: now,
+                },
+                synchronize_session=False,
+            )
+        )
+        db.commit()
+        row = db.get(ProcessWatch, watch_id)
+        if claimed:
             _send_up_mail(db, row, now, send_up)
+        else:
+            row.status = "up"
+            row.pid = pid_text
+            row.service_port = port_text
+            row.last_error = None
+            row.last_checked_at = now
         db.commit()
         db.refresh(row)
         return row
 
-    row.pid = ""
-    row.service_port = ""
-    newly_down = row.status != "down"
-    if newly_down:
-        row.down_since = now
-        row.resolved_at = None
-    row.status = "down"
-    if _mail_due(row, now, newly_down=newly_down):
+    db.expire(row)
+    current = db.get(ProcessWatch, watch_id)
+    cutoff = now - timedelta(minutes=current.mail_interval_minutes)
+    down_values = {
+        ProcessWatch.pid: "",
+        ProcessWatch.service_port: "",
+        ProcessWatch.last_error: None,
+        ProcessWatch.last_checked_at: now,
+        ProcessWatch.last_emailed_at: now,
+    }
+    claimed = (
+        db.query(ProcessWatch)
+        .filter(ProcessWatch.id == watch_id, ProcessWatch.status != "down")
+        .update(
+            {
+                **down_values,
+                ProcessWatch.status: "down",
+                ProcessWatch.down_since: now,
+                ProcessWatch.resolved_at: None,
+            },
+            synchronize_session=False,
+        )
+    )
+    if not claimed:
+        claimed = (
+            db.query(ProcessWatch)
+            .filter(
+                ProcessWatch.id == watch_id,
+                ProcessWatch.status == "down",
+                or_(ProcessWatch.last_emailed_at.is_(None), ProcessWatch.last_emailed_at <= cutoff),
+            )
+            .update(down_values, synchronize_session=False)
+        )
+    db.commit()
+    row = db.get(ProcessWatch, watch_id)
+    if claimed:
         _send_down_mail(db, row, now, send_down)
+    else:
+        row.status = "down"
+        row.pid = ""
+        row.service_port = ""
+        row.last_error = None
+        row.last_checked_at = now
     db.commit()
     db.refresh(row)
     return row

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import threading
 
 import pytest
 from fastapi import FastAPI
@@ -304,6 +305,54 @@ def test_down_mail_repeats_on_the_interval_then_stops_when_the_process_returns(s
 
     check_watch(session, row, now=T0 + timedelta(minutes=20), fetch=running, send=send)
     assert len(sent) == 3
+
+
+def test_two_checkers_send_one_down_mail_and_one_up_mail(tmp_path):
+    engine = create_engine(
+        f"sqlite:///{tmp_path}/watches.db",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine, tables=[ProcessWatch.__table__, ProcessMailDefault.__table__])
+    factory = sessionmaker(bind=engine)
+    setup = factory()
+    row = create_process_watch(setup, ProcessWatchCreate.model_validate(_payload()))
+    watch_id = row.id
+    setup.close()
+    sent: list[dict] = []
+    errors: list[BaseException] = []
+    lock = threading.Lock()
+
+    def send(**kwargs):
+        with lock:
+            sent.append(kwargs)
+
+    def check(now, listing):
+        db = factory()
+        try:
+            current = db.get(ProcessWatch, watch_id)
+            check_watch(db, current, now=now, fetch=lambda _row: listing, send=send, force=True)
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            db.close()
+
+    def together(now, listing):
+        threads = [threading.Thread(target=check, args=(now, listing)) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    together(T0, "")
+    assert errors == []
+    assert len(sent) == 1
+    assert "down_since" in sent[0]
+
+    sent.clear()
+    together(T0 + timedelta(minutes=1), "nginx: master process nginx\n")
+    assert errors == []
+    assert len(sent) == 1
+    assert "restored_at" in sent[0]
 
 
 def test_ssh_failure_does_not_mark_the_process_down_or_send_mail(session):
