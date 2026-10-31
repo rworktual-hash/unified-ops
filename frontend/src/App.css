@@ -3924,6 +3924,10 @@ button.ai-legend-btn:hover,
   text-align: right;
 }
 
+.process-menu.open {
+  z-index: 6;
+}
+
 .process-menu-btn {
   border: 0;
   background: transparent;
@@ -3944,7 +3948,7 @@ button.ai-legend-btn:hover,
   position: absolute;
   right: 0;
   top: calc(100% + 0.2rem);
-  z-index: 5;
+  z-index: 6;
   min-width: 9rem;
   display: flex;
   flex-direction: column;
@@ -3953,6 +3957,11 @@ button.ai-legend-btn:hover,
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.process-menu-pop.up {
+  top: auto;
+  bottom: calc(100% + 0.2rem);
 }
 
 .process-menu-pop button {

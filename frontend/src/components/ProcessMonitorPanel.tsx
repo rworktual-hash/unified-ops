@@ -141,6 +141,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [mailError, setMailError] = useState<string | null>(null)
   const [tab, setTab] = useState<'watches' | 'mails'>('watches')
   const [menuId, setMenuId] = useState<number | null>(null)
+  const [menuUp, setMenuUp] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const inFlight = useRef<Set<number>>(new Set())
   const retryAt = useRef<Record<number, number>>({})
@@ -615,7 +616,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       )}
                     </td>
                     {isAdmin ? (
-                      <td className="process-menu">
+                      <td className={menuId === row.id ? 'process-menu open' : 'process-menu'}>
                         <button
                           type="button"
                           className="process-menu-btn"
@@ -623,13 +624,22 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                           aria-expanded={menuId === row.id}
                           onClick={(event) => {
                             event.stopPropagation()
-                            setMenuId((current) => (current === row.id ? null : row.id))
+                            if (menuId === row.id) {
+                              setMenuId(null)
+                              return
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            setMenuUp(window.innerHeight - rect.bottom < 160)
+                            setMenuId(row.id)
                           }}
                         >
                           ···
                         </button>
                         {menuId === row.id ? (
-                          <div className="process-menu-pop" onClick={(event) => event.stopPropagation()}>
+                          <div
+                            className={menuUp ? 'process-menu-pop up' : 'process-menu-pop'}
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <button
                               type="button"
                               onClick={() => {
