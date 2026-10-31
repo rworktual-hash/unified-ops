@@ -19,7 +19,7 @@ from app.monitoring.process_check import (
     pgrep_command,
     process_in_listing,
 )
-from app.services.process_mail import process_down_body
+from app.services.process_mail import process_down_body, process_up_body
 from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate, ProcessWatchUpdate
 from app.services.process_watch import (
     ProcessWatchError,
@@ -97,6 +97,22 @@ def test_down_mail_uses_the_team_notice_in_ist():
     assert "Server IP: 10.180.1.244" in body
     assert "Status: DOWN" in body
     assert "Detected At: 30-Oct-2026 19:35:30 IST" in body
+    assert "This is an automated notification. Please do not reply." in body
+
+
+def test_up_mail_uses_the_team_notice_once_the_service_returns():
+    body = process_up_body(
+        ip_address="10.180.1.244",
+        process_name="stt_tts_mg",
+        restored_at="2026-10-30T14:10:00+00:00",
+    )
+    assert "Hello Team," in body
+    assert "The following service is running again." in body
+    assert "Service: stt_tts_mg" in body
+    assert "Server IP: 10.180.1.244" in body
+    assert "Status: UP" in body
+    assert "Restored At: 30-Oct-2026 19:40:00 IST" in body
+    assert "No further alerts will be sent until the service goes down again." in body
     assert "This is an automated notification. Please do not reply." in body
 
 
@@ -283,9 +299,11 @@ def test_down_mail_repeats_on_the_interval_then_stops_when_the_process_returns(s
     check_watch(session, row, now=T0 + timedelta(minutes=10), fetch=running, send=send)
     assert row.status == "up"
     assert row.resolved_at is not None
+    assert len(sent) == 3
+    assert sent[-1]["restored_at"]
 
     check_watch(session, row, now=T0 + timedelta(minutes=20), fetch=running, send=send)
-    assert len(sent) == 2
+    assert len(sent) == 3
 
 
 def test_ssh_failure_does_not_mark_the_process_down_or_send_mail(session):

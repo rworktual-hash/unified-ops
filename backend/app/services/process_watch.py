@@ -19,7 +19,7 @@ from app.monitoring.process_check import (
     valid_process_name,
 )
 from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
-from app.services.process_mail import MailNotConfigured, send_process_down_mail
+from app.services.process_mail import MailNotConfigured, send_process_down_mail, send_process_up_mail
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -306,6 +306,35 @@ def _send_down_mail(db: Session, row: ProcessWatch, now: datetime, send: Callabl
     row.mail_error = None
 
 
+def _send_up_mail(db: Session, row: ProcessWatch, now: datetime, send: Callable[..., None]) -> None:
+    recipients = combined_recipients(db, row)
+    if not recipients:
+        row.last_emailed_at = now
+        row.mail_sent = False
+        row.mail_error = "Mail was not sent. Add a default or additional mail id."
+        return
+    try:
+        send(
+            ip_address=row.ip_address,
+            process_name=row.process_name,
+            recipients=recipients,
+            restored_at=now.isoformat(),
+        )
+    except MailNotConfigured:
+        row.last_emailed_at = now
+        row.mail_sent = False
+        row.mail_error = "Mail was not sent. SMTP is not configured."
+        return
+    except Exception as exc:
+        row.last_emailed_at = now
+        row.mail_sent = False
+        row.mail_error = f"Mail was not sent. {exc}"[:500]
+        return
+    row.last_emailed_at = now
+    row.mail_sent = True
+    row.mail_error = None
+
+
 def check_watch(
     db: Session,
     row: ProcessWatch,
@@ -322,7 +351,8 @@ def check_watch(
         db.refresh(row)
         if not row.enabled or not check_is_due(row, now):
             return row
-    send_fn = send or send_process_down_mail
+    send_down = send or send_process_down_mail
+    send_up = send or send_process_up_mail
     row.last_checked_at = now
     try:
         pids = _resolve_pids(row, fetch)
@@ -334,11 +364,14 @@ def check_watch(
 
     row.last_error = None
     if pids:
-        if row.status == "down":
+        recovered = row.status == "down"
+        if recovered:
             row.resolved_at = now
         row.status = "up"
         row.pid = format_pids(pids)
         row.service_port = "" if fetch is not None else _service_port(row, row.pid.split(",")[0].strip())
+        if recovered:
+            _send_up_mail(db, row, now, send_up)
         db.commit()
         db.refresh(row)
         return row
@@ -351,7 +384,7 @@ def check_watch(
         row.resolved_at = None
     row.status = "down"
     if _mail_due(row, now, newly_down=newly_down):
-        _send_down_mail(db, row, now, send_fn)
+        _send_down_mail(db, row, now, send_down)
     db.commit()
     db.refresh(row)
     return row

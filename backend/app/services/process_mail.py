@@ -54,17 +54,32 @@ def process_down_body(*, ip_address: str, process_name: str, down_since: str) ->
     )
 
 
-def send_process_down_mail(*, ip_address: str, process_name: str, recipients: list[str], down_since: str) -> None:
+def process_up_body(*, ip_address: str, process_name: str, restored_at: str) -> str:
+    restored = format_detected_at(restored_at)
+    return "\n".join(
+        [
+            "Hello Team,",
+            "",
+            "The following service is running again.",
+            "",
+            f"Service: {process_name}",
+            f"Server IP: {ip_address}",
+            "Status: UP",
+            f"Restored At: {restored}",
+            "",
+            "No further alerts will be sent until the service goes down again.",
+            "",
+            "Regards,",
+            "Worktual Monitoring System",
+            "",
+            "This is an automated notification. Please do not reply.",
+        ]
+    )
+
+
+def _deliver(message: EmailMessage) -> None:
     if not settings.smtp_host.strip() or not settings.smtp_from.strip():
         raise MailNotConfigured("SMTP is not configured")
-    if not recipients:
-        raise MailSendError("No recipients")
-
-    message = EmailMessage()
-    message["Subject"] = f"Process down: {process_name} on {ip_address}"
-    message["From"] = settings.smtp_from.strip()
-    message["To"] = ", ".join(recipients)
-    message.set_content(process_down_body(ip_address=ip_address, process_name=process_name, down_since=down_since))
     try:
         with smtplib.SMTP(settings.smtp_host.strip(), settings.smtp_port, timeout=20) as smtp:
             if settings.smtp_tls:
@@ -76,3 +91,25 @@ def send_process_down_mail(*, ip_address: str, process_name: str, recipients: li
         raise
     except Exception as exc:
         raise MailSendError(str(exc) or "SMTP send failed") from exc
+
+
+def send_process_down_mail(*, ip_address: str, process_name: str, recipients: list[str], down_since: str) -> None:
+    if not recipients:
+        raise MailSendError("No recipients")
+    message = EmailMessage()
+    message["Subject"] = f"Process down: {process_name} on {ip_address}"
+    message["From"] = settings.smtp_from.strip()
+    message["To"] = ", ".join(recipients)
+    message.set_content(process_down_body(ip_address=ip_address, process_name=process_name, down_since=down_since))
+    _deliver(message)
+
+
+def send_process_up_mail(*, ip_address: str, process_name: str, recipients: list[str], restored_at: str) -> None:
+    if not recipients:
+        raise MailSendError("No recipients")
+    message = EmailMessage()
+    message["Subject"] = f"Process up: {process_name} on {ip_address}"
+    message["From"] = settings.smtp_from.strip()
+    message["To"] = ", ".join(recipients)
+    message.set_content(process_up_body(ip_address=ip_address, process_name=process_name, restored_at=restored_at))
+    _deliver(message)
