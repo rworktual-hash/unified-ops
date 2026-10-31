@@ -3777,6 +3777,29 @@ button.ai-legend-btn:hover,
   flex-shrink: 0;
 }
 
+.process-tabs {
+  margin-bottom: 1rem;
+}
+
+.process-mail-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.process-mail-form .field-label {
+  flex: 1 1 18rem;
+  margin-bottom: 0;
+}
+
+.process-mail-saved {
+  margin: 0 0 0.55rem;
+  color: #166534;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .process-create {
   scroll-margin-top: 1rem;
   display: flex;

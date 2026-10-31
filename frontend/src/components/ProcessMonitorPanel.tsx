@@ -112,6 +112,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [query, setQuery] = useState('')
   const [defaultMails, setDefaultMails] = useState('')
   const [savingDefaults, setSavingDefaults] = useState(false)
+  const [mailSaved, setMailSaved] = useState(false)
+  const [mailError, setMailError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'watches' | 'mails'>('watches')
   const [menuId, setMenuId] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const inFlight = useRef<Set<number>>(new Set())
@@ -249,43 +252,69 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   return (
     <>
       {isAdmin ? (
+        <nav className="bv-tabs process-tabs" aria-label="Process Monitor">
+          <button
+            type="button"
+            className={tab === 'watches' ? 'bv-tab active' : 'bv-tab'}
+            onClick={() => setTab('watches')}
+          >
+            Watches
+          </button>
+          <button
+            type="button"
+            className={tab === 'mails' ? 'bv-tab active' : 'bv-tab'}
+            onClick={() => setTab('mails')}
+          >
+            Default mail ids
+          </button>
+        </nav>
+      ) : null}
+      {tab === 'mails' && isAdmin ? (
         <section className="panel">
           <div className="panel-head">
             <div>
               <h2>Default mail ids</h2>
-              <p className="muted-block">Every process alert is sent to these addresses.</p>
+              <p className="muted-block">Every process-down alert is sent to these addresses.</p>
             </div>
           </div>
+          {mailError ? <p className="banner error">{mailError}</p> : null}
           <form
-            className="process-create"
+            className="process-mail-form"
             onSubmit={async (event) => {
               event.preventDefault()
               setSavingDefaults(true)
-              setError(null)
+              setMailError(null)
+              setMailSaved(false)
               try {
                 const saved = await saveDefaultProcessMails(defaultMails.split(/[,;\s]+/).filter(Boolean))
                 setDefaultMails(saved.join(', '))
+                setMailSaved(true)
               } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to save default mail ids')
+                setMailError(err instanceof Error ? err.message : 'Failed to save default mail ids')
               } finally {
                 setSavingDefaults(false)
               }
             }}
           >
-            <label className="field-label process-description">
+            <label className="field-label">
               Mail ids
               <input
                 value={defaultMails}
-                onChange={(event) => setDefaultMails(event.target.value)}
+                onChange={(event) => {
+                  setDefaultMails(event.target.value)
+                  setMailSaved(false)
+                }}
                 placeholder="a@worktual.com, b@worktual.com"
               />
             </label>
             <button type="submit" className="btn primary" disabled={savingDefaults}>
-              Save
+              {savingDefaults ? 'Saving…' : 'Save'}
             </button>
+            {mailSaved ? <p className="process-mail-saved">Saved</p> : null}
           </form>
         </section>
       ) : null}
+      {tab === 'watches' || !isAdmin ? (
       <section className="panel">
         <div className="panel-head process-head">
           <div>
@@ -617,6 +646,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           </div>
         )}
       </section>
+      ) : null}
     </>
   )
 }
