@@ -21,7 +21,7 @@ from app.monitoring.process_check import (
 )
 from app.services.process_mail import process_down_body
 from app.schemas.process_watch import ProcessWatchCreate
-from app.services.process_watch import check_enabled_watches, check_watch, create_process_watch
+from app.services.process_watch import ProcessWatchError, check_enabled_watches, check_watch, create_process_watch
 
 ADMIN = CurrentUser(id=1, email="admin@worktual.tech", role="admin", is_active=True)
 T0 = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
@@ -45,7 +45,9 @@ def session():
 
 
 @pytest.fixture
-def client(session):
+def client(session, monkeypatch):
+    monkeypatch.setattr("app.services.process_watch.probe_ssh_login", lambda **_kwargs: None)
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("down", ""))
     app = FastAPI()
     app.include_router(router, prefix="/api")
 
@@ -145,6 +147,26 @@ def test_listening_port_is_taken_from_the_pid_line():
     assert listening_ports(listing, "2298672") == "5060"
     assert listening_ports(listing, "101") == "80"
     assert listening_ports(listing, "999") == ""
+
+
+def test_create_rejects_a_failed_ssh_login(session, monkeypatch):
+    def fail(**_kwargs):
+        raise ProcessCheckError("Authentication failed")
+
+    monkeypatch.setattr("app.services.process_watch.probe_ssh_login", fail)
+    with pytest.raises(ProcessWatchError, match="Authentication failed"):
+        create_process_watch(session, ProcessWatchCreate.model_validate(_payload()), verify_ssh=True)
+    assert session.query(ProcessWatch).count() == 0
+
+
+def test_create_checks_the_process_after_ssh_login(session, monkeypatch):
+    monkeypatch.setattr("app.services.process_watch.probe_ssh_login", lambda **_kwargs: None)
+    monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("pid", "55"))
+    monkeypatch.setattr("app.services.process_watch.fetch_service_port", lambda **_kwargs: "5060")
+    row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()), verify_ssh=True)
+    assert row.status == "up"
+    assert row.pid == "55"
+    assert row.service_port == "5060"
 
 
 def test_same_ip_and_port_cannot_be_added_twice(client):
@@ -274,7 +296,7 @@ def test_api_hides_the_password_and_rejects_a_bad_process_name(client):
     body = created.json()
     assert "ssh_password" not in body
     assert PASSWORD not in created.text
-    assert body["status"] == "unknown"
+    assert body["status"] == "down"
     assert body["label"] == "Edge nginx"
     assert body["check_interval"] == 60
     assert body["check_interval_unit"] == "seconds"
@@ -319,9 +341,9 @@ def test_edit_keeps_the_password_when_it_is_left_blank(client, session):
     assert row.ssh_password == "new-secret"
 
 
-def test_api_check_reports_ssh_failure_without_marking_down(client, monkeypatch):
-    created = client.post("/api/process-watches", json=_payload())
-    watch_id = created.json()["id"]
+def test_api_check_reports_ssh_failure_without_marking_down(client, session, monkeypatch):
+    row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()))
+    watch_id = row.id
 
     def fail(**_kwargs):
         raise ProcessCheckError("SSH failed")
@@ -354,7 +376,7 @@ def test_inactive_watch_is_not_monitored(client, session, monkeypatch):
     monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("unavailable", ""))
     monkeypatch.setattr("app.services.process_watch.fetch_service_port", lambda **_kwargs: "5060")
     monkeypatch.setattr("app.services.process_watch.fetch_process_listing", running)
-    checked_up = client.post(f"/api/process-watches/{watch_id}/check")
+    checked_up = client.post(f"/api/process-watches/{watch_id}/check?force=true")
     assert checked_up.json()["status"] == "up"
     assert checked_up.json()["pid"] == "101"
     assert checked_up.json()["service_port"] == "5060"

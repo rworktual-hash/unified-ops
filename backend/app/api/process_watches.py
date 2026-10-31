@@ -40,7 +40,7 @@ def create_watch(
     _admin=Depends(require_admin),
 ) -> ProcessWatchRead:
     try:
-        row = create_process_watch(db, payload)
+        row = create_process_watch(db, payload, verify_ssh=True)
     except ProcessWatchError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return to_read(row)

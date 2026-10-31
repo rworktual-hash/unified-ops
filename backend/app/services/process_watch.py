@@ -9,11 +9,13 @@ from sqlalchemy.orm import Session
 
 from app.models.process_watch import ProcessWatch
 from app.monitoring.process_check import (
+    ProcessCheckError,
     fetch_exact_pid,
     fetch_process_listing,
     fetch_service_port,
     format_pids,
     matching_pids,
+    probe_ssh_login,
     valid_process_name,
 )
 from app.schemas.process_watch import ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
@@ -131,7 +133,7 @@ def to_read(row: ProcessWatch, *, server_now: datetime | None = None) -> Process
     )
 
 
-def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWatch:
+def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh: bool = False) -> ProcessWatch:
     name = payload.process_name.strip()
     if not valid_process_name(name):
         raise ProcessWatchError("Process name must use letters, numbers, and ._/: - only")
@@ -142,6 +144,16 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWat
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port)
+    if verify_ssh:
+        try:
+            probe_ssh_login(
+                host=ip_address,
+                port=payload.ssh_port,
+                username=username,
+                ssh_password=payload.ssh_password,
+            )
+        except ProcessCheckError as exc:
+            raise ProcessWatchError(str(exc) or "SSH login failed") from exc
     row = ProcessWatch(
         ip_address=ip_address,
         ssh_port=payload.ssh_port,
@@ -161,6 +173,8 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate) -> ProcessWat
     db.add(row)
     db.commit()
     db.refresh(row)
+    if verify_ssh:
+        return check_watch(db, row, force=True)
     return row
 
 

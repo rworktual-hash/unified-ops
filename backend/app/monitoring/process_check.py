@@ -97,6 +97,25 @@ def interpret_pgrep(output: str) -> tuple[str, str]:
     return ("unavailable", "")
 
 
+def probe_ssh_login(*, host: str, port: int, username: str, ssh_password: str) -> None:
+    """Open an SSH session. Raises ProcessCheckError when the login fails."""
+    try:
+        with ssh_session(
+            host=host,
+            port=port,
+            username=username,
+            credential_ref=None,
+            ssh_password=ssh_password,
+            ssh_auth_mode="password",
+        ) as client:
+            _stdin, stdout, _stderr = client.exec_command("true", timeout=settings.ssh_command_timeout)
+            code = stdout.channel.recv_exit_status()
+    except Exception as exc:
+        raise ProcessCheckError(str(exc) or "SSH login failed") from exc
+    if code != 0:
+        raise ProcessCheckError("SSH login failed")
+
+
 def fetch_exact_pid(
     *,
     host: str,
