@@ -3963,13 +3963,22 @@ button.ai-legend-btn:hover,
   cursor: pointer;
 }
 
+.process-table th {
+  vertical-align: top;
+}
+
 .process-filter {
   display: block;
   width: 100%;
+  max-width: 9.5rem;
   margin-top: 0.3rem;
   font: inherit;
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+.process-empty {
+  padding: 1rem 0.5rem;
 }
 
 .process-changes {

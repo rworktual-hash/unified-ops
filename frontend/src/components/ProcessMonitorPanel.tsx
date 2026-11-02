@@ -70,6 +70,22 @@ function statusKind(row: ProcessWatch): 'up' | 'down' | 'unknown' {
   return 'unknown'
 }
 
+function displayedColumn(row: ProcessWatch, key: SortKey): string {
+  if (key === 'label') return (row.label.trim() || row.process_name).trim()
+  if ((key === 'service_port' || key === 'pid') && (!row.enabled || row.status !== 'up')) return ''
+  return String(row[key] ?? '').trim()
+}
+
+function filterChoices(rows: ProcessWatch[], key: SortKey): string[] {
+  const values = new Set(rows.map((row) => displayedColumn(row, key)))
+  return [...values].sort((left, right) => {
+    if (!left && !right) return 0
+    if (!left) return 1
+    if (!right) return -1
+    return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+  })
+}
+
 function countdownText(ms: number): string {
   const total = Math.ceil(ms / 1000)
   const minutes = Math.floor(total / 60)
@@ -156,6 +172,13 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [statusFilter, setStatusFilter] = useState<'all' | 'up' | 'down' | 'unknown'>('all')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [columnFilters, setColumnFilters] = useState<Record<SortKey, string>>({
+    label: '',
+    process_name: '',
+    ip_address: '',
+    service_port: '',
+    pid: '',
+  })
   const [menuId, setMenuId] = useState<number | null>(null)
   const [menuUp, setMenuUp] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -298,12 +321,15 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     if (statusFilter !== 'all' && statusKind(row) !== statusFilter) return false
     if (activeFilter === 'active' && !row.enabled) return false
     if (activeFilter === 'inactive' && row.enabled) return false
+    for (const key of ['label', 'process_name', 'ip_address', 'service_port', 'pid'] as const) {
+      if (columnFilters[key] !== '' && displayedColumn(row, key) !== columnFilters[key]) return false
+    }
     return true
   })
   const shown = sortKey
     ? [...filtered].sort((left, right) => {
-        const leftValue = String(left[sortKey] ?? '').trim()
-        const rightValue = String(right[sortKey] ?? '').trim()
+        const leftValue = displayedColumn(left, sortKey)
+        const rightValue = displayedColumn(right, sortKey)
         if (!leftValue && !rightValue) return 0
         if (!leftValue) return 1
         if (!rightValue) return -1
@@ -324,6 +350,30 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   function sortMark(key: SortKey) {
     if (sortKey !== key) return ''
     return sortDir === 'asc' ? ' ↑' : ' ↓'
+  }
+
+  function columnHead(key: SortKey, title: string) {
+    return (
+      <th>
+        <button type="button" className="process-sort" onClick={() => toggleSort(key)}>
+          {title}
+          {sortMark(key)}
+        </button>
+        <select
+          className="process-filter"
+          aria-label={`Filter ${title}`}
+          value={columnFilters[key]}
+          onChange={(event) => setColumnFilters((current) => ({ ...current, [key]: event.target.value }))}
+        >
+          <option value="">All</option>
+          {filterChoices(rows, key).map((value) => (
+            <option key={value || 'blank'} value={value}>
+              {value || '—'}
+            </option>
+          ))}
+        </select>
+      </th>
+    )
   }
 
   return (
@@ -608,38 +658,16 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
         />
         {rows.length === 0 ? (
           <p className="muted">No process watches yet.</p>
-        ) : shown.length === 0 ? (
-          <p className="muted">No matching watches.</p>
         ) : (
           <div className="table-wrap">
             <table className="process-table">
               <thead>
                 <tr>
-                  <th>
-                    <button type="button" className="process-sort" onClick={() => toggleSort('label')}>
-                      Label{sortMark('label')}
-                    </button>
-                  </th>
-                  <th>
-                    <button type="button" className="process-sort" onClick={() => toggleSort('process_name')}>
-                      Process name{sortMark('process_name')}
-                    </button>
-                  </th>
-                  <th>
-                    <button type="button" className="process-sort" onClick={() => toggleSort('ip_address')}>
-                      Server{sortMark('ip_address')}
-                    </button>
-                  </th>
-                  <th>
-                    <button type="button" className="process-sort" onClick={() => toggleSort('service_port')}>
-                      Service port{sortMark('service_port')}
-                    </button>
-                  </th>
-                  <th>
-                    <button type="button" className="process-sort" onClick={() => toggleSort('pid')}>
-                      PID{sortMark('pid')}
-                    </button>
-                  </th>
+                  {columnHead('label', 'Label')}
+                  {columnHead('process_name', 'Process name')}
+                  {columnHead('ip_address', 'Server')}
+                  {columnHead('service_port', 'Service port')}
+                  {columnHead('pid', 'PID')}
                   <th>
                     Status
                     <select
@@ -672,6 +700,13 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 </tr>
               </thead>
               <tbody>
+                {shown.length === 0 ? (
+                  <tr>
+                    <td className="muted process-empty" colSpan={isAdmin ? 9 : 8}>
+                      No matching watches. Choose All to see every service.
+                    </td>
+                  </tr>
+                ) : null}
                 {shown.map((row) => (
                   <tr key={row.id}>
                     <td>
