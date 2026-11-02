@@ -659,6 +659,17 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
         ) : (
           <div className="table-wrap">
             <table className="process-table">
+              <colgroup>
+                <col className="process-col-label" />
+                <col className="process-col-name" />
+                <col className="process-col-server" />
+                <col className="process-col-port" />
+                <col className="process-col-pid" />
+                <col className="process-col-status" />
+                <col className="process-col-next" />
+                <col className="process-col-active" />
+                {isAdmin ? <col className="process-col-menu" /> : null}
+              </colgroup>
               <thead>
                 <tr>
                   {columnHead('label', 'Label')}

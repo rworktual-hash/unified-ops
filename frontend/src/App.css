@@ -3993,9 +3993,29 @@ button.ai-legend-btn:hover,
   color: #111;
 }
 
+.process-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 72rem;
+}
+
+.process-col-label { width: 16rem; }
+.process-col-name { width: 10.5rem; }
+.process-col-server { width: 9rem; }
+.process-col-port { width: 11rem; }
+.process-col-pid { width: 6.5rem; }
+.process-col-status { width: 8.5rem; }
+.process-col-next { width: 7rem; }
+.process-col-active { width: 8.5rem; }
+.process-col-menu { width: 2.75rem; }
+
 .process-table th {
   vertical-align: middle;
   white-space: nowrap;
+}
+
+.process-table td:first-child {
+  overflow-wrap: break-word;
 }
 
 .process-filter {
