@@ -339,30 +339,36 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   function columnHead(key: SortKey, title: string) {
     return (
       <th>
-        <span className="process-sort-label">{title}</span>
-        <span className="process-sort-arrows">
-          <button
-            type="button"
-            className={sortKey === key && sortDir === 'asc' ? 'process-arrow on' : 'process-arrow'}
-            aria-label={`Sort ${title} ascending`}
-            onClick={() => {
-              setSortKey(key)
-              setSortDir('asc')
-            }}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            className={sortKey === key && sortDir === 'desc' ? 'process-arrow on' : 'process-arrow'}
-            aria-label={`Sort ${title} descending`}
-            onClick={() => {
-              setSortKey(key)
-              setSortDir('desc')
-            }}
-          >
-            ↓
-          </button>
+        <span className="process-col-head">
+          <span className="process-sort-label">{title}</span>
+          <span className="process-sort-arrows">
+            <button
+              type="button"
+              className={sortKey === key && sortDir === 'asc' ? 'process-arrow on' : 'process-arrow'}
+              aria-label={`Sort ${title} ascending`}
+              onClick={() => {
+                setSortKey(key)
+                setSortDir('asc')
+              }}
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M6 2.4 9.3 7.4H2.7Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={sortKey === key && sortDir === 'desc' ? 'process-arrow on' : 'process-arrow'}
+              aria-label={`Sort ${title} descending`}
+              onClick={() => {
+                setSortKey(key)
+                setSortDir('desc')
+              }}
+            >
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M6 9.6 2.7 4.6h6.6Z" />
+              </svg>
+            </button>
+          </span>
         </span>
       </th>
     )
@@ -661,6 +667,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   {columnHead('service_port', 'Service port')}
                   {columnHead('pid', 'PID')}
                   <th>
+                    <span className="process-col-head">
                     Status
                     <select
                       className="process-filter"
@@ -673,9 +680,11 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       <option value="down">Down</option>
                       <option value="unknown">Not checked</option>
                     </select>
+                    </span>
                   </th>
                   <th>Next check</th>
                   <th>
+                    <span className="process-col-head">
                     Active
                     <select
                       className="process-filter"
@@ -687,6 +696,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select>
+                    </span>
                   </th>
                   {isAdmin ? <th aria-label="Actions" /> : null}
                 </tr>

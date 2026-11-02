@@ -3953,50 +3953,62 @@ button.ai-legend-btn:hover,
   transform: translateX(0.9rem);
 }
 
-.process-sort-label {
-  display: block;
-  font-weight: 650;
+.process-col-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   white-space: nowrap;
+  font-weight: 650;
 }
 
 .process-sort-arrows {
   display: inline-flex;
-  gap: 0.2rem;
-  margin-top: 0.28rem;
+  align-items: center;
 }
 
 .process-arrow {
-  width: 1.35rem;
-  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85rem;
+  height: 0.95rem;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 0;
   background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.75rem;
-  line-height: 1;
+  color: #c5c5c8;
   cursor: pointer;
 }
 
+.process-arrow svg {
+  width: 0.62rem;
+  height: 0.62rem;
+  fill: currentColor;
+}
+
+.process-arrow:hover {
+  color: #6e6e73;
+}
+
 .process-arrow.on {
-  background: #111;
-  border-color: #111;
-  color: #fff;
+  color: #111;
 }
 
 .process-table th {
-  vertical-align: top;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .process-filter {
-  display: block;
-  width: 100%;
-  max-width: 9.5rem;
-  margin-top: 0.3rem;
+  width: auto;
+  margin: 0;
+  padding: 0.05rem 1.1rem 0.05rem 0.15rem;
+  border: 0;
+  background: transparent;
   font: inherit;
   font-size: 0.75rem;
   font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
 }
 
 .process-empty {
