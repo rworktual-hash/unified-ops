@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import CurrentUser, get_current_user
 from app.api.process_watches import router
 from app.db.session import Base, get_db
-from app.models.process_watch import ProcessMailDefault, ProcessWatch, ProcessWatchChange
+from app.models.process_watch import ProcessMailDefault, ProcessWatch, ProcessWatchChange, ProcessWatchMail
 from app.monitoring.process_check import (
     ProcessCheckError,
     interpret_pgrep,
@@ -30,6 +30,7 @@ from app.services.process_watch import (
     get_default_entries,
     get_default_recipients,
     list_process_watch_changes,
+    list_process_watch_mail,
     set_default_recipients,
     update_process_watch,
 )
@@ -48,7 +49,12 @@ def session():
     )
     Base.metadata.create_all(
         engine,
-        tables=[ProcessWatch.__table__, ProcessMailDefault.__table__, ProcessWatchChange.__table__],
+        tables=[
+            ProcessWatch.__table__,
+            ProcessMailDefault.__table__,
+            ProcessWatchChange.__table__,
+            ProcessWatchMail.__table__,
+        ],
     )
     factory = sessionmaker(bind=engine)
     db = factory()
@@ -352,6 +358,22 @@ def test_down_mail_repeats_on_the_interval_then_stops_when_the_process_returns(s
     assert len(sent) == 3
 
 
+def test_history_keeps_one_down_and_one_up_when_the_down_mail_repeats(session):
+    row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()))
+
+    def send(**_kwargs):
+        return None
+
+    check_watch(session, row, now=T0, fetch=lambda _row: "", send=send)
+    check_watch(session, row, now=T0 + timedelta(minutes=5), fetch=lambda _row: "", send=send)
+    check_watch(session, row, now=T0 + timedelta(minutes=10), fetch=lambda _row: "nginx: master process nginx", send=send)
+    history = list_process_watch_mail(session)
+    assert [(item.kind, item.label, item.ip_address) for item in history] == [
+        ("up", "Edge nginx", "10.1.1.8"),
+        ("down", "Edge nginx", "10.1.1.8"),
+    ]
+
+
 def test_two_checkers_send_one_down_mail_and_one_up_mail(tmp_path):
     engine = create_engine(
         f"sqlite:///{tmp_path}/watches.db",
@@ -359,7 +381,12 @@ def test_two_checkers_send_one_down_mail_and_one_up_mail(tmp_path):
     )
     Base.metadata.create_all(
         engine,
-        tables=[ProcessWatch.__table__, ProcessMailDefault.__table__, ProcessWatchChange.__table__],
+        tables=[
+            ProcessWatch.__table__,
+            ProcessMailDefault.__table__,
+            ProcessWatchChange.__table__,
+            ProcessWatchMail.__table__,
+        ],
     )
     factory = sessionmaker(bind=engine)
     setup = factory()

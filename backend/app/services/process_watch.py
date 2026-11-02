@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models.process_watch import ProcessMailDefault, ProcessWatch, ProcessWatchChange
+from app.models.process_watch import ProcessMailDefault, ProcessWatch, ProcessWatchChange, ProcessWatchMail
 from app.monitoring.process_check import (
     ProcessCheckError,
     fetch_exact_pid,
@@ -25,6 +25,7 @@ from app.schemas.process_watch import (
     ProcessMailEntry,
     ProcessWatchChangeRead,
     ProcessWatchCreate,
+    ProcessWatchMailRead,
     ProcessWatchRead,
     ProcessWatchUpdate,
 )
@@ -311,6 +312,27 @@ def _edit_summary(
     return "\n".join(lines)
 
 
+def _add_mail_history(db: Session, row: ProcessWatch, *, kind: str, mailed_at: datetime) -> None:
+    db.add(
+        ProcessWatchMail(
+            watch_id=row.id,
+            label=(row.label or row.process_name or "").strip()[:128],
+            ip_address=row.ip_address,
+            process_name=row.process_name,
+            kind=kind,
+            mailed_at=mailed_at,
+        )
+    )
+
+
+def list_process_watch_mail(db: Session, *, limit: int = 80) -> list[ProcessWatchMail]:
+    return db.query(ProcessWatchMail).order_by(ProcessWatchMail.id.desc()).limit(limit).all()
+
+
+def to_mail(row: ProcessWatchMail) -> ProcessWatchMailRead:
+    return ProcessWatchMailRead.model_validate(row)
+
+
 def list_process_watch_changes(db: Session, *, limit: int = 40) -> list[ProcessWatchChange]:
     return db.query(ProcessWatchChange).order_by(ProcessWatchChange.id.desc()).limit(limit).all()
 
@@ -511,6 +533,8 @@ def check_watch(
         row = db.get(ProcessWatch, watch_id)
         if claimed:
             _send_up_mail(db, row, now, send_up)
+            if row.mail_sent:
+                _add_mail_history(db, row, kind="up", mailed_at=now)
         else:
             row.status = "up"
             row.pid = pid_text
@@ -531,7 +555,7 @@ def check_watch(
         ProcessWatch.last_checked_at: now,
         ProcessWatch.last_emailed_at: now,
     }
-    claimed = (
+    first_down = (
         db.query(ProcessWatch)
         .filter(ProcessWatch.id == watch_id, ProcessWatch.status != "down")
         .update(
@@ -544,8 +568,9 @@ def check_watch(
             synchronize_session=False,
         )
     )
-    if not claimed:
-        claimed = (
+    repeat = 0
+    if not first_down:
+        repeat = (
             db.query(ProcessWatch)
             .filter(
                 ProcessWatch.id == watch_id,
@@ -556,8 +581,10 @@ def check_watch(
         )
     db.commit()
     row = db.get(ProcessWatch, watch_id)
-    if claimed:
+    if first_down or repeat:
         _send_down_mail(db, row, now, send_down)
+        if first_down and row.mail_sent:
+            _add_mail_history(db, row, kind="down", mailed_at=now)
     else:
         row.status = "down"
         row.pid = ""

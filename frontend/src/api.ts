@@ -1779,6 +1779,22 @@ export type ProcessWatchChange = {
   created_at: string
 }
 
+export type ProcessWatchMail = {
+  id: number
+  watch_id: number | null
+  label: string
+  ip_address: string
+  process_name: string
+  kind: 'down' | 'up'
+  mailed_at: string
+}
+
+export async function listProcessWatchMail(): Promise<ProcessWatchMail[]> {
+  const res = await apiFetch('/process-watches/history')
+  if (!res.ok) return llmObsError(res, 'Failed to load mail history')
+  return res.json()
+}
+
 export async function listProcessWatchChanges(): Promise<ProcessWatchChange[]> {
   const res = await apiFetch('/process-watches/changes')
   if (!res.ok) return llmObsError(res, 'Failed to load latest changes')

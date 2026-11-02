@@ -5,12 +5,14 @@ import {
   deleteProcessWatch,
   getDefaultProcessMails,
   listProcessWatchChanges,
+  listProcessWatchMail,
   listProcessWatches,
   saveDefaultProcessMails,
   updateProcessWatch,
   type ProcessMailEntry,
   type ProcessWatch,
   type ProcessWatchChange,
+  type ProcessWatchMail,
 } from '../api'
 import { formatWhen, parseWhen } from '../formatWhen'
 
@@ -169,8 +171,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [savingDefaults, setSavingDefaults] = useState(false)
   const [mailSaved, setMailSaved] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'watches' | 'mails' | 'changes'>('watches')
+  const [tab, setTab] = useState<'watches' | 'mails' | 'changes' | 'history'>('watches')
   const [changes, setChanges] = useState<ProcessWatchChange[]>([])
+  const [history, setHistory] = useState<ProcessWatchMail[]>([])
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [statusFilter, setStatusFilter] = useState<'all' | 'up' | 'down' | 'unknown'>('all')
@@ -193,12 +196,21 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setChanges(await listProcessWatchChanges())
   }, [])
 
+  const loadHistory = useCallback(async () => {
+    setHistory(await listProcessWatchMail())
+  }, [])
+
   const load = useCallback(async () => {
-    const [next, defaults] = await Promise.all([listProcessWatches(), getDefaultProcessMails(), loadChanges()])
+    const [next, defaults] = await Promise.all([
+      listProcessWatches(),
+      getDefaultProcessMails(),
+      loadChanges(),
+      loadHistory(),
+    ])
     noteServerTime(next[0])
     setRows(next)
     setDefaultEntries(defaults)
-  }, [loadChanges])
+  }, [loadChanges, loadHistory])
 
   function closeForm() {
     setShowForm(false)
@@ -268,9 +280,10 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           setRows(next)
         })
         .catch(() => undefined)
+      void loadHistory().catch(() => undefined)
     }, 3000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [loadHistory])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -396,6 +409,13 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             onClick={() => setTab('changes')}
           >
             Latest changes
+          </button>
+          <button
+            type="button"
+            className={tab === 'history' ? 'bv-tab active' : 'bv-tab'}
+            onClick={() => setTab('history')}
+          >
+            History
           </button>
         </nav>
       ) : null}
@@ -546,6 +566,36 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                     <time>{formatWhen(change.created_at)}</time>
                   </div>
                   <p>{change.summary}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+      {tab === 'history' && isAdmin ? (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>History</h2>
+              <p className="muted-block">
+                One row when a down mail starts, and one when the service is up again. Repeat down mails are not listed.
+              </p>
+            </div>
+          </div>
+          {history.length === 0 ? (
+            <p className="muted">No mail history yet.</p>
+          ) : (
+            <ul className="process-changes">
+              {history.map((item) => (
+                <li key={item.id}>
+                  <div>
+                    <strong>{item.label || item.process_name || 'Service'}</strong>
+                    <time>{formatWhen(item.mailed_at)}</time>
+                  </div>
+                  <p>
+                    <span className={`badge ${item.kind === 'down' ? 'critical' : 'ok'}`}>{item.kind}</span>
+                    {item.ip_address} · Mail sent
+                  </p>
                 </li>
               ))}
             </ul>

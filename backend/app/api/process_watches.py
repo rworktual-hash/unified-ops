@@ -9,6 +9,7 @@ from app.schemas.process_watch import (
     ProcessMailDefaults,
     ProcessWatchChangeRead,
     ProcessWatchCreate,
+    ProcessWatchMailRead,
     ProcessWatchRead,
     ProcessWatchUpdate,
 )
@@ -20,9 +21,11 @@ from app.services.process_watch import (
     get_default_entries,
     get_process_watch,
     list_process_watch_changes,
+    list_process_watch_mail,
     list_process_watches,
     set_default_recipients,
     to_change,
+    to_mail,
     to_read,
     update_process_watch,
 )
@@ -57,6 +60,11 @@ def write_default_recipients(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     entries = get_default_entries(db)
     return ProcessMailDefaults(recipients=[entry.email for entry in entries], entries=entries)
+
+
+@router.get("/history", response_model=list[ProcessWatchMailRead])
+def list_mail_history(db: Session = Depends(get_db)) -> list[ProcessWatchMailRead]:
+    return [to_mail(row) for row in list_process_watch_mail(db)]
 
 
 @router.get("/changes", response_model=list[ProcessWatchChangeRead])

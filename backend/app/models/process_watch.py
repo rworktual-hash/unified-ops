@@ -16,6 +16,20 @@ class ProcessMailDefault(Base):
     teams: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
+class ProcessWatchMail(Base):
+    """One row when a down mail starts, and one when the recovery mail is sent."""
+
+    __tablename__ = "process_watch_mail_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watch_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=False, default="")
+    process_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    mailed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ProcessWatchChange(Base):
     """An edit to a watch. Automatic checks are not recorded."""
 

@@ -44,6 +44,18 @@ class ProcessMailDefaults(BaseModel):
     entries: list[ProcessMailEntry] = Field(default_factory=list, max_length=20)
 
 
+class ProcessWatchMailRead(BaseModel):
+    id: int
+    watch_id: int | None
+    label: str
+    ip_address: str
+    process_name: str
+    kind: Literal["down", "up"]
+    mailed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ProcessWatchChangeRead(BaseModel):
     id: int
     watch_id: int | None
