@@ -34,8 +34,14 @@ class ProcessWatchUpdate(BaseModel):
     enabled: bool = True
 
 
+class ProcessMailEntry(BaseModel):
+    email: str
+    team: str = ""
+
+
 class ProcessMailDefaults(BaseModel):
     recipients: list[str] = Field(default_factory=list, max_length=20)
+    entries: list[ProcessMailEntry] = Field(default_factory=list, max_length=20)
 
 
 class ProcessWatchChangeRead(BaseModel):

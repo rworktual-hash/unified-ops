@@ -33,9 +33,15 @@ def ensure_process_watch_schema() -> None:
         return
     cols = {column["name"] for column in insp.get_columns("process_watches")}
     pending = [sql for name, sql in _ADDS if name not in cols]
-    if not pending:
+    if pending:
+        with engine.begin() as conn:
+            for sql in pending:
+                conn.execute(text(sql))
+        logger.info("Added process_watches columns: %s", ", ".join(name for name, _sql in _ADDS if name not in cols))
+    if not insp.has_table("process_mail_defaults"):
         return
-    with engine.begin() as conn:
-        for sql in pending:
-            conn.execute(text(sql))
-    logger.info("Added process_watches columns: %s", ", ".join(name for name, _sql in _ADDS if name not in cols))
+    mail_cols = {column["name"] for column in insp.get_columns("process_mail_defaults")}
+    if "teams" not in mail_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE process_mail_defaults ADD COLUMN teams TEXT NOT NULL DEFAULT ''"))
+        logger.info("Added process_mail_defaults.teams")

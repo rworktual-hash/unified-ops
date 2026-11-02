@@ -27,6 +27,8 @@ from app.services.process_watch import (
     check_enabled_watches,
     check_watch,
     create_process_watch,
+    get_default_entries,
+    get_default_recipients,
     list_process_watch_changes,
     set_default_recipients,
     update_process_watch,
@@ -265,6 +267,24 @@ def test_an_edit_is_listed_with_what_changed_and_a_check_is_not(session):
     assert "Label: Edge nginx → QA REBUILD VOICE MG 2" in changes[0].summary
     check_watch(session, row, now=T0, fetch=lambda _row: "", send=lambda **_kwargs: None, force=True)
     assert len(list_process_watch_changes(session)) == 2
+
+
+def test_default_mail_rows_keep_the_team_beside_each_address(session):
+    set_default_recipients(
+        session,
+        ProcessMailDefaults(
+            entries=[
+                {"email": "umn@worktual.com", "team": "Voice"},
+                {"email": "k.kirubakaran@worktual.com", "team": "Platform"},
+            ]
+        ),
+    )
+    entries = get_default_entries(session)
+    assert [(entry.email, entry.team) for entry in entries] == [
+        ("umn@worktual.com", "Voice"),
+        ("k.kirubakaran@worktual.com", "Platform"),
+    ]
+    assert get_default_recipients(session) == ["umn@worktual.com", "k.kirubakaran@worktual.com"]
 
 
 def test_additional_address_already_in_the_default_list_is_rejected(session):

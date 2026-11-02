@@ -3842,6 +3842,26 @@ button.ai-legend-btn:hover,
   margin-bottom: 1rem;
 }
 
+.process-mail-table {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.process-mail-table input {
+  width: 100%;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.process-mail-table td:last-child {
+  width: 6.5rem;
+  text-align: right;
+}
+
 .process-mail-form {
   display: flex;
   flex-wrap: wrap;

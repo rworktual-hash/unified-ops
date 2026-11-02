@@ -1791,21 +1791,27 @@ export async function listProcessWatches(): Promise<ProcessWatch[]> {
   return res.json()
 }
 
-export async function getDefaultProcessMails(): Promise<string[]> {
-  const res = await apiFetch('/process-watches/defaults')
-  if (!res.ok) return llmObsError(res, 'Failed to load default mail ids')
-  const body = (await res.json()) as { recipients: string[] }
-  return body.recipients
+export type ProcessMailEntry = {
+  email: string
+  team: string
 }
 
-export async function saveDefaultProcessMails(recipients: string[]): Promise<string[]> {
+export async function getDefaultProcessMails(): Promise<ProcessMailEntry[]> {
+  const res = await apiFetch('/process-watches/defaults')
+  if (!res.ok) return llmObsError(res, 'Failed to load default mail ids')
+  const body = (await res.json()) as { recipients: string[]; entries?: ProcessMailEntry[] }
+  if (body.entries) return body.entries
+  return body.recipients.map((email) => ({ email, team: '' }))
+}
+
+export async function saveDefaultProcessMails(entries: ProcessMailEntry[]): Promise<ProcessMailEntry[]> {
   const res = await apiFetch('/process-watches/defaults', {
     method: 'PUT',
-    body: JSON.stringify({ recipients }),
+    body: JSON.stringify({ entries }),
   })
   if (!res.ok) return llmObsError(res, 'Failed to save default mail ids')
-  const body = (await res.json()) as { recipients: string[] }
-  return body.recipients
+  const body = (await res.json()) as { entries: ProcessMailEntry[] }
+  return body.entries
 }
 
 export async function createProcessWatch(body: ProcessWatchCreate): Promise<ProcessWatch> {

@@ -8,6 +8,7 @@ import {
   listProcessWatches,
   saveDefaultProcessMails,
   updateProcessWatch,
+  type ProcessMailEntry,
   type ProcessWatch,
   type ProcessWatchChange,
 } from '../api'
@@ -37,13 +38,8 @@ function remainingMs(row: ProcessWatch, clientNow: number, clockOffset: number):
   return Math.max(0, checked + intervalMs(row) - (clientNow + clockOffset))
 }
 
-function mailsAlreadyDefault(additional: string, defaults: string): string[] {
-  const known = new Set(
-    defaults
-      .split(/[,;\s]+/)
-      .map((part) => part.trim().toLowerCase())
-      .filter(Boolean),
-  )
+function mailsAlreadyDefault(additional: string, defaults: { email: string }[]): string[] {
+  const known = new Set(defaults.map((entry) => entry.email.trim().toLowerCase()).filter(Boolean))
   const overlap: string[] = []
   const seen = new Set<string>()
   for (const part of additional.split(/[,;\s]+/)) {
@@ -167,7 +163,9 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [query, setQuery] = useState('')
-  const [defaultMails, setDefaultMails] = useState('')
+  const [defaultEntries, setDefaultEntries] = useState<ProcessMailEntry[]>([])
+  const [newMail, setNewMail] = useState('')
+  const [newTeam, setNewTeam] = useState('')
   const [savingDefaults, setSavingDefaults] = useState(false)
   const [mailSaved, setMailSaved] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
@@ -199,7 +197,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     const [next, defaults] = await Promise.all([listProcessWatches(), getDefaultProcessMails(), loadChanges()])
     noteServerTime(next[0])
     setRows(next)
-    setDefaultMails(defaults.join(', '))
+    setDefaultEntries(defaults)
   }, [loadChanges])
 
   function closeForm() {
@@ -406,9 +404,55 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
           <div className="panel-head">
             <div>
               <h2>Default mail ids</h2>
-              <p className="muted-block">Every process-down alert is sent to these addresses.</p>
+              <p className="muted-block">Every process alert is sent to these addresses.</p>
             </div>
           </div>
+          {defaultEntries.length === 0 ? (
+            <p className="muted">No default mail ids yet.</p>
+          ) : (
+            <table className="process-mail-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Team</th>
+                  <th aria-label="Remove" />
+                </tr>
+              </thead>
+              <tbody>
+                {defaultEntries.map((entry) => (
+                  <tr key={entry.email}>
+                    <td>{entry.email}</td>
+                    <td>
+                      <input
+                        aria-label={`Team for ${entry.email}`}
+                        value={entry.team}
+                        onChange={(event) => {
+                          const team = event.target.value
+                          setDefaultEntries((current) =>
+                            current.map((item) => (item.email === entry.email ? { ...item, team } : item)),
+                          )
+                          setMailSaved(false)
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={() => {
+                          setDefaultEntries((current) => current.filter((item) => item.email !== entry.email))
+                          setMailSaved(false)
+                          setMailError(null)
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
           <form
             className="process-mail-form"
             onSubmit={async (event) => {
@@ -417,8 +461,8 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
               setMailError(null)
               setMailSaved(false)
               try {
-                const saved = await saveDefaultProcessMails(defaultMails.split(/[,;\s]+/).filter(Boolean))
-                setDefaultMails(saved.join(', '))
+                const saved = await saveDefaultProcessMails(defaultEntries)
+                setDefaultEntries(saved)
                 setMailSaved(true)
               } catch (err) {
                 setMailError(err instanceof Error ? err.message : 'Failed to save default mail ids')
@@ -428,16 +472,50 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             }}
           >
             <label className="field-label">
-              Mail ids
+              Email
               <input
-                value={defaultMails}
+                value={newMail}
                 onChange={(event) => {
-                  setDefaultMails(event.target.value)
+                  setNewMail(event.target.value)
                   setMailSaved(false)
+                  setMailError(null)
                 }}
-                placeholder="a@worktual.com, b@worktual.com"
+                placeholder="name@worktual.com"
               />
             </label>
+            <label className="field-label">
+              Team
+              <input
+                value={newTeam}
+                onChange={(event) => {
+                  setNewTeam(event.target.value)
+                  setMailSaved(false)
+                }}
+                placeholder="Voice"
+              />
+            </label>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => {
+                const email = newMail.trim().toLowerCase()
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                  setMailError('Enter an email address')
+                  return
+                }
+                if (defaultEntries.some((entry) => entry.email === email)) {
+                  setMailError(`${email} is already in the default mail ids`)
+                  return
+                }
+                setDefaultEntries((current) => [...current, { email, team: newTeam.trim() }])
+                setNewMail('')
+                setNewTeam('')
+                setMailError(null)
+                setMailSaved(false)
+              }}
+            >
+              Add
+            </button>
             <button
               type="submit"
               className={mailSaved ? 'btn process-mail-done' : 'btn primary'}
@@ -497,7 +575,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             className="process-create"
             onSubmit={async (event) => {
               event.preventDefault()
-              const overlap = mailsAlreadyDefault(recipients, defaultMails)
+              const overlap = mailsAlreadyDefault(recipients, defaultEntries)
               if (overlap.length > 0) {
                 setFormError(duplicateMailMessage(overlap))
                 return

@@ -13,6 +13,7 @@ class ProcessMailDefault(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     recipients: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    teams: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
 class ProcessWatchChange(Base):

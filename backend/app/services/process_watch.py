@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,7 @@ from app.monitoring.process_check import (
 )
 from app.schemas.process_watch import (
     ProcessMailDefaults,
+    ProcessMailEntry,
     ProcessWatchChangeRead,
     ProcessWatchCreate,
     ProcessWatchRead,
@@ -329,21 +331,61 @@ def _reject_if_in_defaults(db: Session, recipients: list[str]) -> None:
     )
 
 
-def get_default_recipients(db: Session) -> list[str]:
+def validate_team(value: str) -> str:
+    team = value.strip()
+    if len(team) > 64 or any(ord(ch) < 32 for ch in team):
+        raise ProcessWatchError("Team name is too long")
+    return team
+
+
+def _default_pairs(payload: ProcessMailDefaults) -> list[tuple[str, str]]:
+    if payload.entries:
+        pairs: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for entry in payload.entries:
+            addresses = parse_recipients([entry.email], required=True)
+            if len(addresses) != 1:
+                raise ProcessWatchError("Enter one email on each row")
+            address = addresses[0]
+            if address in seen:
+                raise ProcessWatchError(f"{address} is already in the default mail ids")
+            seen.add(address)
+            pairs.append((address, validate_team(entry.team)))
+        if len(pairs) > 20:
+            raise ProcessWatchError("At most 20 emails")
+        return pairs
+    return [(address, "") for address in parse_recipients(payload.recipients, required=False)]
+
+
+def get_default_entries(db: Session) -> list[ProcessMailEntry]:
     row = db.get(ProcessMailDefault, 1)
     if row is None:
         return []
-    return recipient_list(row.recipients)
+    emails = recipient_list(row.recipients)
+    try:
+        stored = json.loads(row.teams) if row.teams else []
+    except json.JSONDecodeError:
+        stored = []
+    teams = [str(item) for item in stored] if isinstance(stored, list) else []
+    return [
+        ProcessMailEntry(email=email, team=teams[index] if index < len(teams) else "")
+        for index, email in enumerate(emails)
+    ]
+
+
+def get_default_recipients(db: Session) -> list[str]:
+    return [entry.email for entry in get_default_entries(db)]
 
 
 def set_default_recipients(db: Session, payload: ProcessMailDefaults) -> list[str]:
-    addresses = parse_recipients(payload.recipients, required=False)
+    pairs = _default_pairs(payload)
+    addresses = [email for email, _team in pairs]
     row = db.get(ProcessMailDefault, 1)
     if row is None:
-        row = ProcessMailDefault(id=1, recipients=",".join(addresses))
+        row = ProcessMailDefault(id=1, recipients="", teams="")
         db.add(row)
-    else:
-        row.recipients = ",".join(addresses)
+    row.recipients = ",".join(addresses)
+    row.teams = json.dumps([team for _email, team in pairs])
     db.commit()
     return addresses
 
