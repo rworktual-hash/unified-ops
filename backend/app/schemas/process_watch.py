@@ -38,6 +38,16 @@ class ProcessMailDefaults(BaseModel):
     recipients: list[str] = Field(default_factory=list, max_length=20)
 
 
+class ProcessWatchChangeRead(BaseModel):
+    id: int
+    watch_id: int | None
+    label: str
+    summary: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ProcessWatchRead(BaseModel):
     id: int
     ip_address: str

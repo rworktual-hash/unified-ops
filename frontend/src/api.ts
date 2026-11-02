@@ -1771,6 +1771,20 @@ export type ProcessWatchCreate = {
   enabled: boolean
 }
 
+export type ProcessWatchChange = {
+  id: number
+  watch_id: number | null
+  label: string
+  summary: string
+  created_at: string
+}
+
+export async function listProcessWatchChanges(): Promise<ProcessWatchChange[]> {
+  const res = await apiFetch('/process-watches/changes')
+  if (!res.ok) return llmObsError(res, 'Failed to load latest changes')
+  return res.json()
+}
+
 export async function listProcessWatches(): Promise<ProcessWatch[]> {
   const res = await apiFetch('/process-watches')
   if (!res.ok) return llmObsError(res, 'Failed to load process watches')

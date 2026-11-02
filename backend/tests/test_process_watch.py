@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import CurrentUser, get_current_user
 from app.api.process_watches import router
 from app.db.session import Base, get_db
-from app.models.process_watch import ProcessMailDefault, ProcessWatch
+from app.models.process_watch import ProcessMailDefault, ProcessWatch, ProcessWatchChange
 from app.monitoring.process_check import (
     ProcessCheckError,
     interpret_pgrep,
@@ -27,6 +27,7 @@ from app.services.process_watch import (
     check_enabled_watches,
     check_watch,
     create_process_watch,
+    list_process_watch_changes,
     set_default_recipients,
     update_process_watch,
 )
@@ -43,7 +44,10 @@ def session():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[ProcessWatch.__table__, ProcessMailDefault.__table__])
+    Base.metadata.create_all(
+        engine,
+        tables=[ProcessWatch.__table__, ProcessMailDefault.__table__, ProcessWatchChange.__table__],
+    )
     factory = sessionmaker(bind=engine)
     db = factory()
     try:
@@ -89,11 +93,13 @@ def _payload(**overrides):
 
 def test_down_mail_uses_the_team_notice_in_ist():
     body = process_down_body(
+        label="QA REBUILD STT TTS MG 1",
         ip_address="10.180.1.244",
         process_name="stt_tts_mg",
         down_since="2026-10-30T14:05:30+00:00",
     )
     assert "Hello Team," in body
+    assert "Label: QA REBUILD STT TTS MG 1" in body
     assert "Service: stt_tts_mg" in body
     assert "Server IP: 10.180.1.244" in body
     assert "Status: DOWN" in body
@@ -103,12 +109,14 @@ def test_down_mail_uses_the_team_notice_in_ist():
 
 def test_up_mail_uses_the_team_notice_once_the_service_returns():
     body = process_up_body(
+        label="QA REBUILD STT TTS MG 1",
         ip_address="10.180.1.244",
         process_name="stt_tts_mg",
         restored_at="2026-10-30T14:10:00+00:00",
     )
     assert "Hello Team," in body
     assert "The following service is running again." in body
+    assert "Label: QA REBUILD STT TTS MG 1" in body
     assert "Service: stt_tts_mg" in body
     assert "Server IP: 10.180.1.244" in body
     assert "Status: UP" in body
@@ -242,6 +250,23 @@ def test_a_running_process_stores_its_pid(session):
     assert row.pid == ""
 
 
+def test_an_edit_is_listed_with_what_changed_and_a_check_is_not(session):
+    row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()))
+    added = list_process_watch_changes(session)
+    assert added[0].summary == "Added this service."
+    assert added[0].label == "Edge nginx"
+    update_process_watch(
+        session,
+        row,
+        ProcessWatchUpdate.model_validate(_payload(label="QA REBUILD VOICE MG 2", ssh_password="")),
+    )
+    changes = list_process_watch_changes(session)
+    assert changes[0].label == "QA REBUILD VOICE MG 2"
+    assert "Label: Edge nginx → QA REBUILD VOICE MG 2" in changes[0].summary
+    check_watch(session, row, now=T0, fetch=lambda _row: "", send=lambda **_kwargs: None, force=True)
+    assert len(list_process_watch_changes(session)) == 2
+
+
 def test_additional_address_already_in_the_default_list_is_rejected(session):
     set_default_recipients(session, ProcessMailDefaults(recipients=["team@example.com"]))
     with pytest.raises(ProcessWatchError, match="team@example.com is already in the default mail ids"):
@@ -312,7 +337,10 @@ def test_two_checkers_send_one_down_mail_and_one_up_mail(tmp_path):
         f"sqlite:///{tmp_path}/watches.db",
         connect_args={"check_same_thread": False},
     )
-    Base.metadata.create_all(engine, tables=[ProcessWatch.__table__, ProcessMailDefault.__table__])
+    Base.metadata.create_all(
+        engine,
+        tables=[ProcessWatch.__table__, ProcessMailDefault.__table__, ProcessWatchChange.__table__],
+    )
     factory = sessionmaker(bind=engine)
     setup = factory()
     row = create_process_watch(setup, ProcessWatchCreate.model_validate(_payload()))

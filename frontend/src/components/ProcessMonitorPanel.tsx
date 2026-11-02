@@ -4,10 +4,12 @@ import {
   createProcessWatch,
   deleteProcessWatch,
   getDefaultProcessMails,
+  listProcessWatchChanges,
   listProcessWatches,
   saveDefaultProcessMails,
   updateProcessWatch,
   type ProcessWatch,
+  type ProcessWatchChange,
 } from '../api'
 import { formatWhen, parseWhen } from '../formatWhen'
 
@@ -57,6 +59,15 @@ function duplicateMailMessage(overlap: string[]): string {
   const listed = overlap.join(', ')
   const verb = overlap.length === 1 ? 'is' : 'are'
   return `${listed} ${verb} already in the default mail ids. Remove from additional mail ids.`
+}
+
+type SortKey = 'label' | 'process_name' | 'ip_address' | 'service_port' | 'pid'
+
+function statusKind(row: ProcessWatch): 'up' | 'down' | 'unknown' {
+  if (!row.enabled || row.status === 'unknown') return 'unknown'
+  if (row.status === 'down') return 'down'
+  if (row.status === 'up') return 'up'
+  return 'unknown'
 }
 
 function countdownText(ms: number): string {
@@ -139,7 +150,12 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [savingDefaults, setSavingDefaults] = useState(false)
   const [mailSaved, setMailSaved] = useState(false)
   const [mailError, setMailError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'watches' | 'mails'>('watches')
+  const [tab, setTab] = useState<'watches' | 'mails' | 'changes'>('watches')
+  const [changes, setChanges] = useState<ProcessWatchChange[]>([])
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'up' | 'down' | 'unknown'>('all')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [menuId, setMenuId] = useState<number | null>(null)
   const [menuUp, setMenuUp] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -154,12 +170,16 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     if (server != null) clockOffset.current = server - Date.now()
   }
 
+  const loadChanges = useCallback(async () => {
+    setChanges(await listProcessWatchChanges())
+  }, [])
+
   const load = useCallback(async () => {
-    const [next, defaults] = await Promise.all([listProcessWatches(), getDefaultProcessMails()])
+    const [next, defaults] = await Promise.all([listProcessWatches(), getDefaultProcessMails(), loadChanges()])
     noteServerTime(next[0])
     setRows(next)
     setDefaultMails(defaults.join(', '))
-  }, [])
+  }, [loadChanges])
 
   function closeForm() {
     setShowForm(false)
@@ -268,14 +288,43 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   }, [menuId])
 
   const needle = query.trim().toLowerCase()
-  const shown = needle
-    ? rows.filter((row) =>
-        [row.label, row.process_name, row.pid, row.service_port, row.description, row.ip_address, row.status, row.ssh_username]
-          .join(' ')
-          .toLowerCase()
-          .includes(needle),
-      )
-    : rows
+  const filtered = rows.filter((row) => {
+    if (needle) {
+      const haystack = [row.label, row.process_name, row.pid, row.service_port, row.description, row.ip_address, row.status, row.ssh_username]
+        .join(' ')
+        .toLowerCase()
+      if (!haystack.includes(needle)) return false
+    }
+    if (statusFilter !== 'all' && statusKind(row) !== statusFilter) return false
+    if (activeFilter === 'active' && !row.enabled) return false
+    if (activeFilter === 'inactive' && row.enabled) return false
+    return true
+  })
+  const shown = sortKey
+    ? [...filtered].sort((left, right) => {
+        const leftValue = String(left[sortKey] ?? '').trim()
+        const rightValue = String(right[sortKey] ?? '').trim()
+        if (!leftValue && !rightValue) return 0
+        if (!leftValue) return 1
+        if (!rightValue) return -1
+        const result = leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' })
+        return sortDir === 'asc' ? result : -result
+      })
+    : filtered
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
+  }
+
+  function sortMark(key: SortKey) {
+    if (sortKey !== key) return ''
+    return sortDir === 'asc' ? ' ↑' : ' ↓'
+  }
 
   return (
     <>
@@ -294,6 +343,13 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             onClick={() => setTab('mails')}
           >
             Default mail ids
+          </button>
+          <button
+            type="button"
+            className={tab === 'changes' ? 'bv-tab active' : 'bv-tab'}
+            onClick={() => setTab('changes')}
+          >
+            Latest changes
           </button>
         </nav>
       ) : null}
@@ -343,6 +399,31 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             </button>
             {mailError ? <p className="banner error process-form-error">{mailError}</p> : null}
           </form>
+        </section>
+      ) : null}
+      {tab === 'changes' && isAdmin ? (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Latest changes</h2>
+              <p className="muted-block">Edits to a service. Checks and countdowns are not listed.</p>
+            </div>
+          </div>
+          {changes.length === 0 ? (
+            <p className="muted">No edits yet.</p>
+          ) : (
+            <ul className="process-changes">
+              {changes.map((change) => (
+                <li key={change.id}>
+                  <div>
+                    <strong>{change.label || 'Service'}</strong>
+                    <time>{formatWhen(change.created_at)}</time>
+                  </div>
+                  <p>{change.summary}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
       {tab === 'watches' || !isAdmin ? (
@@ -398,6 +479,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   setRows((prev) => prev.map((row) => (row.id === updated.id ? updated : row)))
                 }
                 closeForm()
+                void loadChanges()
               } catch (err) {
                 setFormError(err instanceof Error ? err.message : 'Failed to save process watch')
               } finally {
@@ -533,14 +615,59 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             <table className="process-table">
               <thead>
                 <tr>
-                  <th>Label</th>
-                  <th>Process name</th>
-                  <th>Server</th>
-                  <th>Service port</th>
-                  <th>PID</th>
-                  <th>Status</th>
+                  <th>
+                    <button type="button" className="process-sort" onClick={() => toggleSort('label')}>
+                      Label{sortMark('label')}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="process-sort" onClick={() => toggleSort('process_name')}>
+                      Process name{sortMark('process_name')}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="process-sort" onClick={() => toggleSort('ip_address')}>
+                      Server{sortMark('ip_address')}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="process-sort" onClick={() => toggleSort('service_port')}>
+                      Service port{sortMark('service_port')}
+                    </button>
+                  </th>
+                  <th>
+                    <button type="button" className="process-sort" onClick={() => toggleSort('pid')}>
+                      PID{sortMark('pid')}
+                    </button>
+                  </th>
+                  <th>
+                    Status
+                    <select
+                      className="process-filter"
+                      aria-label="Filter status"
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value as 'all' | 'up' | 'down' | 'unknown')}
+                    >
+                      <option value="all">All</option>
+                      <option value="up">Up</option>
+                      <option value="down">Down</option>
+                      <option value="unknown">Not checked</option>
+                    </select>
+                  </th>
                   <th>Next check</th>
-                  <th>Active</th>
+                  <th>
+                    Active
+                    <select
+                      className="process-filter"
+                      aria-label="Filter active"
+                      value={activeFilter}
+                      onChange={(event) => setActiveFilter(event.target.value as 'all' | 'active' | 'inactive')}
+                    >
+                      <option value="all">All</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </th>
                   {isAdmin ? <th aria-label="Actions" /> : null}
                 </tr>
               </thead>
@@ -603,6 +730,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                               })
                               noteServerTime(updated)
                               setRows((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+                              void loadChanges()
                             } catch (err) {
                               setError(err instanceof Error ? err.message : 'Failed to update process watch')
                             }
@@ -677,6 +805,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                                 try {
                                   await deleteProcessWatch(row.id)
                                   setRows((prev) => prev.filter((item) => item.id !== row.id))
+                                  void loadChanges()
                                 } catch (err) {
                                   setError(err instanceof Error ? err.message : 'Failed to delete process watch')
                                 }

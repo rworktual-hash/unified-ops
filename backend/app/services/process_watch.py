@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models.process_watch import ProcessMailDefault, ProcessWatch
+from app.models.process_watch import ProcessMailDefault, ProcessWatch, ProcessWatchChange
 from app.monitoring.process_check import (
     ProcessCheckError,
     fetch_exact_pid,
@@ -19,7 +19,13 @@ from app.monitoring.process_check import (
     probe_ssh_login,
     valid_process_name,
 )
-from app.schemas.process_watch import ProcessMailDefaults, ProcessWatchCreate, ProcessWatchRead, ProcessWatchUpdate
+from app.schemas.process_watch import (
+    ProcessMailDefaults,
+    ProcessWatchChangeRead,
+    ProcessWatchCreate,
+    ProcessWatchRead,
+    ProcessWatchUpdate,
+)
 from app.services.process_mail import MailNotConfigured, send_process_down_mail, send_process_up_mail
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -173,6 +179,8 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
         created_at=datetime.now(timezone.utc),
     )
     db.add(row)
+    db.flush()
+    _add_change(db, watch_id=row.id, label=row.label, summary="Added this service.")
     db.commit()
     db.refresh(row)
     if verify_ssh:
@@ -192,11 +200,29 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port, exclude_id=row.id)
+    label = validate_label(payload.label)
+    description = validate_description(payload.description)
+    password = payload.ssh_password.strip()
+    summary = _edit_summary(
+        row,
+        label=label,
+        description=description,
+        process_name=name,
+        ip_address=ip_address,
+        ssh_port=payload.ssh_port,
+        ssh_username=username,
+        recipients=recipients,
+        check_interval=payload.check_interval,
+        check_interval_unit=payload.check_interval_unit,
+        mail_interval_minutes=payload.mail_interval_minutes,
+        enabled=payload.enabled,
+        password_changed=bool(password),
+    )
     row.ip_address = ip_address
     row.ssh_port = payload.ssh_port
     row.ssh_username = username
-    row.label = validate_label(payload.label)
-    row.description = validate_description(payload.description)
+    row.label = label
+    row.description = description
     row.process_name = name
     row.recipients = ",".join(recipients)
     row.check_interval = payload.check_interval
@@ -208,9 +234,10 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
         row.pid = ""
         row.service_port = ""
         row.last_error = None
-    password = payload.ssh_password.strip()
     if password:
         row.ssh_password = password
+    if summary:
+        _add_change(db, watch_id=row.id, label=row.label, summary=summary)
     db.commit()
     db.refresh(row)
     return row
@@ -225,8 +252,69 @@ def get_process_watch(db: Session, watch_id: int) -> ProcessWatch | None:
 
 
 def delete_process_watch(db: Session, row: ProcessWatch) -> None:
+    _add_change(db, watch_id=row.id, label=row.label, summary="Deleted this service.")
     db.delete(row)
     db.commit()
+
+
+def _add_change(db: Session, *, watch_id: int | None, label: str, summary: str) -> None:
+    db.add(
+        ProcessWatchChange(
+            watch_id=watch_id,
+            label=(label or "").strip()[:128],
+            summary=summary[:2000],
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+
+
+def _edit_summary(
+    row: ProcessWatch,
+    *,
+    label: str,
+    description: str,
+    process_name: str,
+    ip_address: str,
+    ssh_port: int,
+    ssh_username: str,
+    recipients: list[str],
+    check_interval: int,
+    check_interval_unit: str,
+    mail_interval_minutes: int,
+    enabled: bool,
+    password_changed: bool,
+) -> str:
+    lines: list[str] = []
+
+    def add(title: str, old: object, new: object) -> None:
+        if str(old) != str(new):
+            lines.append(f"{title}: {old} → {new}")
+
+    add("Label", row.label, label)
+    add("Description", row.description, description)
+    add("Process name", row.process_name, process_name)
+    add("Server", row.ip_address, ip_address)
+    add("SSH port", row.ssh_port, ssh_port)
+    add("Username", row.ssh_username, ssh_username)
+    add("Additional mail ids", row.recipients or "—", ",".join(recipients) or "—")
+    add(
+        "Check every",
+        f"{row.check_interval} {row.check_interval_unit}",
+        f"{check_interval} {check_interval_unit}",
+    )
+    add("Mail every", f"{row.mail_interval_minutes} minutes", f"{mail_interval_minutes} minutes")
+    add("Active", "Active" if row.enabled else "Inactive", "Active" if enabled else "Inactive")
+    if password_changed:
+        lines.append("Password: updated")
+    return "\n".join(lines)
+
+
+def list_process_watch_changes(db: Session, *, limit: int = 40) -> list[ProcessWatchChange]:
+    return db.query(ProcessWatchChange).order_by(ProcessWatchChange.id.desc()).limit(limit).all()
+
+
+def to_change(row: ProcessWatchChange) -> ProcessWatchChangeRead:
+    return ProcessWatchChangeRead.model_validate(row)
 
 
 def _reject_if_in_defaults(db: Session, recipients: list[str]) -> None:
@@ -279,6 +367,7 @@ def _send_down_mail(db: Session, row: ProcessWatch, now: datetime, send: Callabl
     try:
         send(
             ip_address=row.ip_address,
+            label=row.label,
             process_name=row.process_name,
             recipients=recipients,
             down_since=down_since.isoformat(),
@@ -308,6 +397,7 @@ def _send_up_mail(db: Session, row: ProcessWatch, now: datetime, send: Callable[
     try:
         send(
             ip_address=row.ip_address,
+            label=row.label,
             process_name=row.process_name,
             recipients=recipients,
             restored_at=now.isoformat(),

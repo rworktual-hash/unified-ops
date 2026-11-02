@@ -7,6 +7,7 @@ from app.api.deps import require_admin
 from app.db.session import get_db
 from app.schemas.process_watch import (
     ProcessMailDefaults,
+    ProcessWatchChangeRead,
     ProcessWatchCreate,
     ProcessWatchRead,
     ProcessWatchUpdate,
@@ -18,8 +19,10 @@ from app.services.process_watch import (
     delete_process_watch,
     get_default_recipients,
     get_process_watch,
+    list_process_watch_changes,
     list_process_watches,
     set_default_recipients,
+    to_change,
     to_read,
     update_process_watch,
 )
@@ -52,6 +55,11 @@ def write_default_recipients(
     except ProcessWatchError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return ProcessMailDefaults(recipients=recipients)
+
+
+@router.get("/changes", response_model=list[ProcessWatchChangeRead])
+def list_changes(db: Session = Depends(get_db)) -> list[ProcessWatchChangeRead]:
+    return [to_change(row) for row in list_process_watch_changes(db)]
 
 
 @router.get("", response_model=list[ProcessWatchRead])

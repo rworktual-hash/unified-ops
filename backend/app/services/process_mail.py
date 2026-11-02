@@ -29,7 +29,7 @@ def format_detected_at(down_since: str) -> str:
     return f"{local.day:02d}-{month}-{local.year} {local:%H:%M:%S} IST"
 
 
-def process_down_body(*, ip_address: str, process_name: str, down_since: str) -> str:
+def process_down_body(*, label: str, ip_address: str, process_name: str, down_since: str) -> str:
     detected = format_detected_at(down_since)
     return "\n".join(
         [
@@ -37,6 +37,7 @@ def process_down_body(*, ip_address: str, process_name: str, down_since: str) ->
             "",
             "The following service is currently not running.",
             "",
+            f"Label: {label}",
             f"Service: {process_name}",
             f"Server IP: {ip_address}",
             "Status: DOWN",
@@ -54,7 +55,7 @@ def process_down_body(*, ip_address: str, process_name: str, down_since: str) ->
     )
 
 
-def process_up_body(*, ip_address: str, process_name: str, restored_at: str) -> str:
+def process_up_body(*, label: str, ip_address: str, process_name: str, restored_at: str) -> str:
     restored = format_detected_at(restored_at)
     return "\n".join(
         [
@@ -62,6 +63,7 @@ def process_up_body(*, ip_address: str, process_name: str, restored_at: str) -> 
             "",
             "The following service is running again.",
             "",
+            f"Label: {label}",
             f"Service: {process_name}",
             f"Server IP: {ip_address}",
             "Status: UP",
@@ -93,23 +95,33 @@ def _deliver(message: EmailMessage) -> None:
         raise MailSendError(str(exc) or "SMTP send failed") from exc
 
 
-def send_process_down_mail(*, ip_address: str, process_name: str, recipients: list[str], down_since: str) -> None:
+def send_process_down_mail(
+    *, label: str, ip_address: str, process_name: str, recipients: list[str], down_since: str
+) -> None:
     if not recipients:
         raise MailSendError("No recipients")
+    title = label.strip() or process_name
     message = EmailMessage()
-    message["Subject"] = f"Process down: {process_name} on {ip_address}"
+    message["Subject"] = f"Process down: {title} on {ip_address}"
     message["From"] = settings.smtp_from.strip()
     message["To"] = ", ".join(recipients)
-    message.set_content(process_down_body(ip_address=ip_address, process_name=process_name, down_since=down_since))
+    message.set_content(
+        process_down_body(label=title, ip_address=ip_address, process_name=process_name, down_since=down_since)
+    )
     _deliver(message)
 
 
-def send_process_up_mail(*, ip_address: str, process_name: str, recipients: list[str], restored_at: str) -> None:
+def send_process_up_mail(
+    *, label: str, ip_address: str, process_name: str, recipients: list[str], restored_at: str
+) -> None:
     if not recipients:
         raise MailSendError("No recipients")
+    title = label.strip() or process_name
     message = EmailMessage()
-    message["Subject"] = f"Process up: {process_name} on {ip_address}"
+    message["Subject"] = f"Process up: {title} on {ip_address}"
     message["From"] = settings.smtp_from.strip()
     message["To"] = ", ".join(recipients)
-    message.set_content(process_up_body(ip_address=ip_address, process_name=process_name, restored_at=restored_at))
+    message.set_content(
+        process_up_body(label=title, ip_address=ip_address, process_name=process_name, restored_at=restored_at)
+    )
     _deliver(message)

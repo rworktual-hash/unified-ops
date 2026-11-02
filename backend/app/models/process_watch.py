@@ -15,6 +15,18 @@ class ProcessMailDefault(Base):
     recipients: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
+class ProcessWatchChange(Base):
+    """An edit to a watch. Automatic checks are not recorded."""
+
+    __tablename__ = "process_watch_changes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watch_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    label: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ProcessWatch(Base):
     __tablename__ = "process_watches"
 
