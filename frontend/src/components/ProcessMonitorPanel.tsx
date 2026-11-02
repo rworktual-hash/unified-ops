@@ -76,14 +76,19 @@ function displayedColumn(row: ProcessWatch, key: SortKey): string {
   return String(row[key] ?? '').trim()
 }
 
-function filterChoices(rows: ProcessWatch[], key: SortKey): string[] {
-  const values = new Set(rows.map((row) => displayedColumn(row, key)))
-  return [...values].sort((left, right) => {
-    if (!left && !right) return 0
-    if (!left) return 1
-    if (!right) return -1
-    return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
-  })
+function sortToken(row: ProcessWatch, key: SortKey): string | number {
+  const text = displayedColumn(row, key)
+  if (!text) return ''
+  if (key === 'pid') {
+    const value = Number(text)
+    return Number.isFinite(value) ? value : text
+  }
+  if (key === 'service_port') {
+    const value = Number(text.split(/[,\s]+/)[0])
+    return Number.isFinite(value) ? value : text
+  }
+  if (key === 'ip_address') return text.split('.').map((part) => part.padStart(3, '0')).join('.')
+  return text
 }
 
 function countdownText(ms: number): string {
@@ -172,13 +177,6 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [statusFilter, setStatusFilter] = useState<'all' | 'up' | 'down' | 'unknown'>('all')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all')
-  const [columnFilters, setColumnFilters] = useState<Record<SortKey, string>>({
-    label: '',
-    process_name: '',
-    ip_address: '',
-    service_port: '',
-    pid: '',
-  })
   const [menuId, setMenuId] = useState<number | null>(null)
   const [menuUp, setMenuUp] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -321,57 +319,51 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     if (statusFilter !== 'all' && statusKind(row) !== statusFilter) return false
     if (activeFilter === 'active' && !row.enabled) return false
     if (activeFilter === 'inactive' && row.enabled) return false
-    for (const key of ['label', 'process_name', 'ip_address', 'service_port', 'pid'] as const) {
-      if (columnFilters[key] !== '' && displayedColumn(row, key) !== columnFilters[key]) return false
-    }
     return true
   })
   const shown = sortKey
     ? [...filtered].sort((left, right) => {
-        const leftValue = displayedColumn(left, sortKey)
-        const rightValue = displayedColumn(right, sortKey)
-        if (!leftValue && !rightValue) return 0
-        if (!leftValue) return 1
-        if (!rightValue) return -1
-        const result = leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' })
+        const leftValue = sortToken(left, sortKey)
+        const rightValue = sortToken(right, sortKey)
+        if (leftValue === '' && rightValue === '') return 0
+        if (leftValue === '') return 1
+        if (rightValue === '') return -1
+        const result =
+          typeof leftValue === 'number' && typeof rightValue === 'number'
+            ? leftValue - rightValue
+            : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: 'base' })
         return sortDir === 'asc' ? result : -result
       })
     : filtered
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortKey(key)
-    setSortDir('asc')
-  }
-
-  function sortMark(key: SortKey) {
-    if (sortKey !== key) return ''
-    return sortDir === 'asc' ? ' ↑' : ' ↓'
-  }
-
   function columnHead(key: SortKey, title: string) {
     return (
       <th>
-        <button type="button" className="process-sort" onClick={() => toggleSort(key)}>
-          {title}
-          {sortMark(key)}
-        </button>
-        <select
-          className="process-filter"
-          aria-label={`Filter ${title}`}
-          value={columnFilters[key]}
-          onChange={(event) => setColumnFilters((current) => ({ ...current, [key]: event.target.value }))}
-        >
-          <option value="">All</option>
-          {filterChoices(rows, key).map((value) => (
-            <option key={value || 'blank'} value={value}>
-              {value || '—'}
-            </option>
-          ))}
-        </select>
+        <span className="process-sort-label">{title}</span>
+        <span className="process-sort-arrows">
+          <button
+            type="button"
+            className={sortKey === key && sortDir === 'asc' ? 'process-arrow on' : 'process-arrow'}
+            aria-label={`Sort ${title} ascending`}
+            onClick={() => {
+              setSortKey(key)
+              setSortDir('asc')
+            }}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className={sortKey === key && sortDir === 'desc' ? 'process-arrow on' : 'process-arrow'}
+            aria-label={`Sort ${title} descending`}
+            onClick={() => {
+              setSortKey(key)
+              setSortDir('desc')
+            }}
+          >
+            ↓
+          </button>
+        </span>
       </th>
     )
   }
