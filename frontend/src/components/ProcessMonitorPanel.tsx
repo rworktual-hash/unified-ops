@@ -70,6 +70,7 @@ function statusKind(row: ProcessWatch): 'up' | 'down' | 'unknown' {
 
 function displayedColumn(row: ProcessWatch, key: SortKey): string {
   if (key === 'label') return (row.label.trim() || row.process_name).trim()
+  if (key === 'service_port' && row.listen_port) return String(row.listen_port)
   if ((key === 'service_port' || key === 'pid') && (!row.enabled || row.status !== 'up')) return ''
   return String(row[key] ?? '').trim()
 }
@@ -158,6 +159,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [description, setDescription] = useState('')
   const [enabled, setEnabled] = useState(true)
   const [processName, setProcessName] = useState('')
+  const [listenPort, setListenPort] = useState('')
   const [recipients, setRecipients] = useState('')
   const [checkEvery, setCheckEvery] = useState('60')
   const [checkUnit, setCheckUnit] = useState<'seconds' | 'minutes'>('seconds')
@@ -223,6 +225,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setDescription('')
     setEnabled(true)
     setProcessName('')
+    setListenPort('')
     setRecipients('')
     setCheckEvery('60')
     setCheckUnit('seconds')
@@ -246,6 +249,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setUsername(row.ssh_username)
     setPassword('')
     setProcessName(row.process_name)
+    setListenPort(row.listen_port ? String(row.listen_port) : '')
     setRecipients(row.recipients.join(', '))
     setCheckEvery(String(row.check_interval))
     setCheckUnit(row.check_interval_unit === 'minutes' ? 'minutes' : 'seconds')
@@ -625,6 +629,11 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
             className="process-create"
             onSubmit={async (event) => {
               event.preventDefault()
+              const portNumber = listenPort.trim() ? Number(listenPort) : 0
+              if (listenPort.trim() && (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535)) {
+                setFormError('Service port must be from 1 to 65535')
+                return
+              }
               const overlap = mailsAlreadyDefault(recipients, defaultEntries)
               if (overlap.length > 0) {
                 setFormError(duplicateMailMessage(overlap))
@@ -641,6 +650,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   label: label.trim(),
                   description: description.trim(),
                   process_name: processName.trim(),
+                  listen_port: portNumber,
                   enabled,
                   recipients: recipients.split(/[,;\s]+/).filter(Boolean),
                   check_interval: Number(checkEvery),
@@ -727,6 +737,15 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                 onChange={(event) => setProcessName(event.target.value)}
                 placeholder="nginx"
                 required
+              />
+            </label>
+            <label className="field-label">
+              Service port
+              <input
+                value={listenPort}
+                onChange={(event) => setListenPort(event.target.value)}
+                inputMode="numeric"
+                placeholder="8000 if several services share this process name"
               />
             </label>
             <label className="field-label">
@@ -856,7 +875,11 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                     <td>{row.process_name}</td>
                     <td className="process-server">{row.ip_address}</td>
                     <td className="process-pid">
-                      {row.enabled && row.status === 'up' && row.service_port ? row.service_port : '—'}
+                      {row.listen_port
+                        ? row.listen_port
+                        : row.enabled && row.status === 'up' && row.service_port
+                          ? row.service_port
+                          : '—'}
                     </td>
                     <td className="process-pid">{row.enabled && row.status === 'up' && row.pid ? row.pid : '—'}</td>
                     <td>
@@ -898,6 +921,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                                 label: row.label,
                                 description: row.description,
                                 process_name: row.process_name,
+                                listen_port: row.listen_port || 0,
                                 recipients: row.recipients,
                                 check_interval: row.check_interval,
                                 check_interval_unit: row.check_interval_unit,

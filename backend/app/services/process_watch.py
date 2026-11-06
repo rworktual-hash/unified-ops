@@ -15,6 +15,8 @@ from app.monitoring.process_check import (
     fetch_exact_pid,
     fetch_process_listing,
     fetch_service_port,
+    fetch_ss_listing,
+    pid_on_port,
     format_pids,
     matching_pids,
     probe_ssh_login,
@@ -125,6 +127,7 @@ def to_read(row: ProcessWatch, *, server_now: datetime | None = None) -> Process
         process_name=row.process_name,
         pid=row.pid or "",
         service_port=row.service_port or "",
+        listen_port=row.listen_port or 0,
         recipients=recipient_list(row.recipients),
         check_interval=row.check_interval,
         check_interval_unit=row.check_interval_unit,
@@ -155,7 +158,9 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     label = validate_label(payload.label)
+    listen_port = payload.listen_port or 0
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port, label)
+    _ensure_unique_listen_port(db, ip_address, listen_port)
     if verify_ssh:
         try:
             probe_ssh_login(
@@ -170,6 +175,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
                 username=username,
                 ssh_password=payload.ssh_password,
                 process_name=name,
+                listen_port=listen_port,
             )
         except ProcessCheckError as exc:
             raise ProcessWatchError(str(exc) or "SSH login failed") from exc
@@ -181,6 +187,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
         label=label,
         description=validate_description(payload.description),
         process_name=name,
+        listen_port=listen_port,
         recipients=",".join(recipients),
         check_interval=payload.check_interval,
         check_interval_unit=payload.check_interval_unit,
@@ -211,7 +218,9 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
     label = validate_label(payload.label)
+    listen_port = payload.listen_port or 0
     _ensure_unique_endpoint(db, ip_address, payload.ssh_port, label, exclude_id=row.id)
+    _ensure_unique_listen_port(db, ip_address, listen_port, exclude_id=row.id)
     description = validate_description(payload.description)
     password = payload.ssh_password.strip()
     summary = _edit_summary(
@@ -219,6 +228,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
         label=label,
         description=description,
         process_name=name,
+        listen_port=listen_port,
         ip_address=ip_address,
         ssh_port=payload.ssh_port,
         ssh_username=username,
@@ -235,6 +245,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     row.label = label
     row.description = description
     row.process_name = name
+    row.listen_port = listen_port
     row.recipients = ",".join(recipients)
     row.check_interval = payload.check_interval
     row.check_interval_unit = payload.check_interval_unit
@@ -285,6 +296,7 @@ def _edit_summary(
     label: str,
     description: str,
     process_name: str,
+    listen_port: int,
     ip_address: str,
     ssh_port: int,
     ssh_username: str,
@@ -304,6 +316,7 @@ def _edit_summary(
     add("Label", row.label, label)
     add("Description", row.description, description)
     add("Process name", row.process_name, process_name)
+    add("Service port", row.listen_port or "—", listen_port or "—")
     add("Server", row.ip_address, ip_address)
     add("SSH port", row.ssh_port, ssh_port)
     add("Username", row.ssh_username, ssh_username)
@@ -520,7 +533,12 @@ def check_watch(
     watch_id = row.id
     if pids:
         pid_text = format_pids(pids)
-        port_text = "" if fetch is not None else _service_port(row, pid_text.split(",")[0].strip())
+        if row.listen_port:
+            port_text = str(row.listen_port)
+        elif fetch is not None:
+            port_text = ""
+        else:
+            port_text = _service_port(row, pid_text.split(",")[0].strip())
         db.expire(row)
         claimed = (
             db.query(ProcessWatch)
@@ -622,6 +640,24 @@ def _ensure_unique_endpoint(
         raise ProcessWatchError("A watch already exists for this label on this IP and port")
 
 
+def _ensure_unique_listen_port(
+    db: Session,
+    ip_address: str,
+    listen_port: int,
+    exclude_id: int | None = None,
+) -> None:
+    if not listen_port:
+        return
+    query = db.query(ProcessWatch).filter(
+        ProcessWatch.ip_address == ip_address,
+        ProcessWatch.listen_port == listen_port,
+    )
+    if exclude_id is not None:
+        query = query.filter(ProcessWatch.id != exclude_id)
+    if query.first() is not None:
+        raise ProcessWatchError(f"A watch already exists for port {listen_port} on this server")
+
+
 def _service_port(row: ProcessWatch, pid: str) -> str:
     return fetch_service_port(
         host=row.ip_address,
@@ -639,8 +675,21 @@ def _require_process_running(
     username: str,
     ssh_password: str,
     process_name: str,
+    listen_port: int = 0,
 ) -> None:
     """Reject a new watch when the named process is not running. Nothing is saved."""
+    if listen_port:
+        listing = fetch_ss_listing(
+            host=host,
+            port=port,
+            username=username,
+            ssh_password=ssh_password,
+        )
+        if pid_on_port(listing, listen_port):
+            return
+        raise ProcessWatchError(
+            f"Nothing is listening on port {listen_port}. The service was not added."
+        )
     kind, pid = fetch_exact_pid(
         host=host,
         port=port,
@@ -675,6 +724,10 @@ def _exact_pid(row: ProcessWatch) -> tuple[str, str]:
 
 
 def _resolve_pids(row: ProcessWatch, fetch: Callable[..., str] | None) -> list[str]:
+    if row.listen_port:
+        text = fetch(row) if fetch is not None else _fetch_ss(row)
+        pid = pid_on_port(text, row.listen_port)
+        return [pid] if pid else []
     if fetch is not None:
         return matching_pids(fetch(row), row.process_name)
     kind, pid = _exact_pid(row)
@@ -683,6 +736,15 @@ def _resolve_pids(row: ProcessWatch, fetch: Callable[..., str] | None) -> list[s
     if kind == "down":
         return []
     return matching_pids(_fetch_listing(row), row.process_name)
+
+
+def _fetch_ss(row: ProcessWatch) -> str:
+    return fetch_ss_listing(
+        host=row.ip_address,
+        port=row.ssh_port,
+        username=row.ssh_username,
+        ssh_password=row.ssh_password,
+    )
 
 
 def _fetch_listing(row: ProcessWatch) -> str:

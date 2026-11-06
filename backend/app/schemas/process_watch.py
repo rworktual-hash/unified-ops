@@ -12,6 +12,7 @@ class ProcessWatchCreate(BaseModel):
     label: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=2000)
     process_name: str = Field(min_length=1, max_length=128)
+    listen_port: int = Field(default=0, ge=0, le=65535)
     recipients: list[str] = Field(default_factory=list, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
@@ -27,6 +28,7 @@ class ProcessWatchUpdate(BaseModel):
     label: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=2000)
     process_name: str = Field(min_length=1, max_length=128)
+    listen_port: int = Field(default=0, ge=0, le=65535)
     recipients: list[str] = Field(default_factory=list, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
@@ -76,6 +78,7 @@ class ProcessWatchRead(BaseModel):
     process_name: str
     pid: str
     service_port: str
+    listen_port: int = 0
     recipients: list[str]
     check_interval: int
     check_interval_unit: str

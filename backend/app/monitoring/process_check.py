@@ -142,6 +142,19 @@ def fetch_exact_pid(
     return interpret_pgrep(out)
 
 
+def pid_on_port(ss_text: str, port: int) -> str:
+    """PID listening on one TCP port. The first match is enough."""
+    if port < 1 or port > 65535:
+        return ""
+    for line in ss_text.splitlines():
+        if not re.search(rf":{port}(?!\d)", line):
+            continue
+        match = re.search(r"pid=(\d+)", line)
+        if match:
+            return match.group(1)
+    return ""
+
+
 def listening_ports(ss_text: str, pid: str) -> str:
     """Comma-separated listen ports for one PID. The PID is matched in Python."""
     if not pid.isdigit():
@@ -154,6 +167,30 @@ def listening_ports(ss_text: str, pid: str) -> str:
         if match and match.group(1) not in found:
             found.append(match.group(1))
     return ", ".join(found[:8])
+
+
+def fetch_ss_listing(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    ssh_password: str,
+) -> str:
+    try:
+        with ssh_session(
+            host=host,
+            port=port,
+            username=username,
+            credential_ref=None,
+            ssh_password=ssh_password,
+            ssh_auth_mode="password",
+        ) as client:
+            _stdin, stdout, _stderr = client.exec_command(CMD_SS_LISTEN, timeout=settings.ssh_command_timeout)
+            out = stdout.read().decode("utf-8", errors="replace")
+            stdout.channel.recv_exit_status()
+    except Exception as exc:
+        raise ProcessCheckError(str(exc) or "SSH failed") from exc
+    return out
 
 
 def fetch_service_port(

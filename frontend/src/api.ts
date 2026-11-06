@@ -1739,6 +1739,7 @@ export type ProcessWatch = {
   process_name: string
   pid: string
   service_port: string
+  listen_port: number
   recipients: string[]
   check_interval: number
   check_interval_unit: 'seconds' | 'minutes'
@@ -1764,6 +1765,7 @@ export type ProcessWatchCreate = {
   label: string
   description: string
   process_name: string
+  listen_port: number
   recipients: string[]
   check_interval: number
   check_interval_unit: 'seconds' | 'minutes'

@@ -16,6 +16,7 @@ from app.monitoring.process_check import (
     ProcessCheckError,
     interpret_pgrep,
     listening_ports,
+    pid_on_port,
     matching_pids,
     pgrep_command,
     process_in_listing,
@@ -188,6 +189,37 @@ def test_listening_port_is_taken_from_the_pid_line():
     assert listening_ports(listing, "2298672") == "5060"
     assert listening_ports(listing, "101") == "80"
     assert listening_ports(listing, "999") == ""
+
+
+def test_two_uvicorn_processes_are_chosen_by_service_port():
+    listing = "\n".join(
+        [
+            'LISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:(("uvicorn",pid=315395,fd=8))',
+            'LISTEN 0 128 0.0.0.0:8001 0.0.0.0:* users:(("uvicorn",pid=315401,fd=8))',
+            'LISTEN 0 128 0.0.0.0:8002 0.0.0.0:* users:(("uvicorn",pid=315407,fd=8))',
+        ]
+    )
+    assert pid_on_port(listing, 8000) == "315395"
+    assert pid_on_port(listing, 8001) == "315401"
+    assert pid_on_port(listing, 8002) == "315407"
+    assert pid_on_port(listing, 80000) == ""
+
+
+def test_check_follows_the_service_port_not_the_first_process(session):
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(_payload(label="STT SDK BACKEND", process_name="uvicorn", listen_port=8001)),
+    )
+    listing = "\n".join(
+        [
+            'LISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:(("uvicorn",pid=315395,fd=8))',
+            'LISTEN 0 128 0.0.0.0:8001 0.0.0.0:* users:(("uvicorn",pid=315401,fd=8))',
+        ]
+    )
+    check_watch(session, row, now=T0, fetch=lambda _row: listing, send=lambda **_kwargs: None, force=True)
+    assert row.status == "up"
+    assert row.pid == "315401"
+    assert row.service_port == "8001"
 
 
 def test_create_rejects_a_failed_ssh_login(session, monkeypatch):
