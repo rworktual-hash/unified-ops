@@ -226,12 +226,12 @@ def test_create_checks_the_process_after_ssh_login(session, monkeypatch):
 def test_same_ip_and_port_cannot_be_added_twice(client):
     created = client.post("/api/process-watches", json=_payload())
     assert created.status_code == 201
-    duplicate = client.post("/api/process-watches", json=_payload(label="Second"))
+    duplicate = client.post("/api/process-watches", json=_payload(process_name="pbx_mg"))
     assert duplicate.status_code == 422
-    assert "this process" in duplicate.json()["detail"]
+    assert "this label" in duplicate.json()["detail"]
 
-    other_process = client.post("/api/process-watches", json=_payload(label="Voice", process_name="pbx_mg"))
-    assert other_process.status_code == 201
+    other_service = client.post("/api/process-watches", json=_payload(label="STT SDK BACKEND", process_name="uvicorn"))
+    assert other_service.status_code == 201
 
     other_port = client.post("/api/process-watches", json=_payload(label="Other port", ssh_port=4204))
     assert other_port.status_code == 201
@@ -243,7 +243,7 @@ def test_same_ip_and_port_cannot_be_added_twice(client):
     assert renamed.status_code == 200
     clash = client.patch(
         f"/api/process-watches/{watch_id}",
-        json=_payload(ssh_port=4204, ssh_password=""),
+        json=_payload(label="Other port", ssh_port=4204, ssh_password=""),
     )
     assert clash.status_code == 422
 
