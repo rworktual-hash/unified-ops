@@ -154,7 +154,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
     _reject_if_in_defaults(db, recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
-    _ensure_unique_endpoint(db, ip_address, payload.ssh_port)
+    _ensure_unique_endpoint(db, ip_address, payload.ssh_port, name)
     if verify_ssh:
         try:
             probe_ssh_login(
@@ -202,7 +202,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     _reject_if_in_defaults(db, recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
-    _ensure_unique_endpoint(db, ip_address, payload.ssh_port, exclude_id=row.id)
+    _ensure_unique_endpoint(db, ip_address, payload.ssh_port, name, exclude_id=row.id)
     label = validate_label(payload.label)
     description = validate_description(payload.description)
     password = payload.ssh_password.strip()
@@ -596,15 +596,22 @@ def check_watch(
     return row
 
 
-def _ensure_unique_endpoint(db: Session, ip_address: str, ssh_port: int, exclude_id: int | None = None) -> None:
+def _ensure_unique_endpoint(
+    db: Session,
+    ip_address: str,
+    ssh_port: int,
+    process_name: str,
+    exclude_id: int | None = None,
+) -> None:
     query = db.query(ProcessWatch).filter(
         ProcessWatch.ip_address == ip_address,
         ProcessWatch.ssh_port == ssh_port,
+        ProcessWatch.process_name == process_name,
     )
     if exclude_id is not None:
         query = query.filter(ProcessWatch.id != exclude_id)
     if query.first() is not None:
-        raise ProcessWatchError("A watch already exists for this IP and port")
+        raise ProcessWatchError("A watch already exists for this process on this IP and port")
 
 
 def _service_port(row: ProcessWatch, pid: str) -> str:

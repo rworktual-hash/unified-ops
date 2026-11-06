@@ -214,7 +214,10 @@ def test_same_ip_and_port_cannot_be_added_twice(client):
     assert created.status_code == 201
     duplicate = client.post("/api/process-watches", json=_payload(label="Second"))
     assert duplicate.status_code == 422
-    assert "IP and port" in duplicate.json()["detail"]
+    assert "this process" in duplicate.json()["detail"]
+
+    other_process = client.post("/api/process-watches", json=_payload(label="Voice", process_name="pbx_mg"))
+    assert other_process.status_code == 201
 
     other_port = client.post("/api/process-watches", json=_payload(label="Other port", ssh_port=4204))
     assert other_port.status_code == 201
