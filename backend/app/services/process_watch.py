@@ -163,6 +163,13 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
                 username=username,
                 ssh_password=payload.ssh_password,
             )
+            _require_process_running(
+                host=ip_address,
+                port=payload.ssh_port,
+                username=username,
+                ssh_password=payload.ssh_password,
+                process_name=name,
+            )
         except ProcessCheckError as exc:
             raise ProcessWatchError(str(exc) or "SSH login failed") from exc
     row = ProcessWatch(
@@ -621,6 +628,38 @@ def _service_port(row: ProcessWatch, pid: str) -> str:
         username=row.ssh_username,
         ssh_password=row.ssh_password,
         pid=pid,
+    )
+
+
+def _require_process_running(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    ssh_password: str,
+    process_name: str,
+) -> None:
+    """Reject a new watch when the named process is not running. Nothing is saved."""
+    kind, pid = fetch_exact_pid(
+        host=host,
+        port=port,
+        username=username,
+        ssh_password=ssh_password,
+        process_name=process_name,
+    )
+    if kind == "pid" and pid:
+        return
+    if kind == "unavailable":
+        listing = fetch_process_listing(
+            host=host,
+            port=port,
+            username=username,
+            ssh_password=ssh_password,
+        )
+        if matching_pids(listing, process_name):
+            return
+    raise ProcessWatchError(
+        f'No process named "{process_name}" is running on this server. The service was not added.'
     )
 
 

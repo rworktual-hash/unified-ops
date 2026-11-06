@@ -67,6 +67,7 @@ def session():
 @pytest.fixture
 def client(session, monkeypatch):
     monkeypatch.setattr("app.services.process_watch.probe_ssh_login", lambda **_kwargs: None)
+    monkeypatch.setattr("app.services.process_watch._require_process_running", lambda **_kwargs: None)
     monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("down", ""))
     app = FastAPI()
     app.include_router(router, prefix="/api")
@@ -199,8 +200,21 @@ def test_create_rejects_a_failed_ssh_login(session, monkeypatch):
     assert session.query(ProcessWatch).count() == 0
 
 
+def test_create_rejects_a_process_name_that_is_not_running(session, monkeypatch):
+    monkeypatch.setattr("app.services.process_watch.probe_ssh_login", lambda **_kwargs: None)
+
+    def not_running(**_kwargs):
+        return ("down", "")
+
+    monkeypatch.setattr("app.services.process_watch.fetch_exact_pid", not_running)
+    with pytest.raises(ProcessWatchError, match="was not added"):
+        create_process_watch(session, ProcessWatchCreate.model_validate(_payload()), verify_ssh=True)
+    assert session.query(ProcessWatch).count() == 0
+
+
 def test_create_checks_the_process_after_ssh_login(session, monkeypatch):
     monkeypatch.setattr("app.services.process_watch.probe_ssh_login", lambda **_kwargs: None)
+    monkeypatch.setattr("app.services.process_watch._require_process_running", lambda **_kwargs: None)
     monkeypatch.setattr("app.services.process_watch._exact_pid", lambda _row: ("pid", "55"))
     monkeypatch.setattr("app.services.process_watch.fetch_service_port", lambda **_kwargs: "5060")
     row = create_process_watch(session, ProcessWatchCreate.model_validate(_payload()), verify_ssh=True)
