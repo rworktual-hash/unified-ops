@@ -161,6 +161,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
   const [processName, setProcessName] = useState('')
   const [listenPort, setListenPort] = useState('')
   const [recipients, setRecipients] = useState('')
+  const [restrictedRecipients, setRestrictedRecipients] = useState('')
   const [checkEvery, setCheckEvery] = useState('60')
   const [checkUnit, setCheckUnit] = useState<'seconds' | 'minutes'>('seconds')
   const [mailEvery, setMailEvery] = useState('5')
@@ -227,6 +228,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setProcessName('')
     setListenPort('')
     setRecipients('')
+    setRestrictedRecipients('')
     setCheckEvery('60')
     setCheckUnit('seconds')
     setMailEvery('5')
@@ -251,6 +253,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
     setProcessName(row.process_name)
     setListenPort(row.listen_port ? String(row.listen_port) : '')
     setRecipients(row.recipients.join(', '))
+    setRestrictedRecipients((row.restricted_recipients || []).join(', '))
     setCheckEvery(String(row.check_interval))
     setCheckUnit(row.check_interval_unit === 'minutes' ? 'minutes' : 'seconds')
     setMailEvery(String(row.mail_interval_minutes))
@@ -653,6 +656,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   listen_port: portNumber,
                   enabled,
                   recipients: recipients.split(/[,;\s]+/).filter(Boolean),
+                  restricted_recipients: restrictedRecipients.split(/[,;\s]+/).filter(Boolean),
                   check_interval: Number(checkEvery),
                   check_interval_unit: checkUnit,
                   mail_interval_minutes: Number(mailEvery),
@@ -757,6 +761,17 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                   setFormError(null)
                 }}
                 placeholder="Extra addresses for this service"
+              />
+            </label>
+            <label className="field-label">
+              Restricted mail ids
+              <input
+                value={restrictedRecipients}
+                onChange={(event) => {
+                  setRestrictedRecipients(event.target.value)
+                  setFormError(null)
+                }}
+                placeholder="Default or extra addresses that must not get this alert"
               />
             </label>
             <label className="field-label">
@@ -923,6 +938,7 @@ export function ProcessMonitorPanel({ isAdmin }: Props) {
                                 process_name: row.process_name,
                                 listen_port: row.listen_port || 0,
                                 recipients: row.recipients,
+                                restricted_recipients: row.restricted_recipients || [],
                                 check_interval: row.check_interval,
                                 check_interval_unit: row.check_interval_unit,
                                 mail_interval_minutes: row.mail_interval_minutes,

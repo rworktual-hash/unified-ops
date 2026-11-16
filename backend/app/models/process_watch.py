@@ -57,6 +57,7 @@ class ProcessWatch(Base):
     service_port: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     listen_port: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recipients: Mapped[str] = mapped_column(Text, nullable=False)
+    restricted_recipients: Mapped[str] = mapped_column(Text, nullable=False, default="")
     check_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     check_interval_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="seconds")
     mail_interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)

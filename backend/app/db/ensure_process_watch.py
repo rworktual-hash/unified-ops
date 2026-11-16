@@ -25,6 +25,10 @@ _ADDS = (
     ("pid", "ALTER TABLE process_watches ADD COLUMN pid VARCHAR(255) NOT NULL DEFAULT ''"),
     ("service_port", "ALTER TABLE process_watches ADD COLUMN service_port VARCHAR(64) NOT NULL DEFAULT ''"),
     ("listen_port", "ALTER TABLE process_watches ADD COLUMN listen_port INT NOT NULL DEFAULT 0"),
+    (
+        "restricted_recipients",
+        "ALTER TABLE process_watches ADD COLUMN restricted_recipients TEXT NOT NULL DEFAULT ''",
+    ),
 )
 
 

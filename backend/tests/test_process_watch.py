@@ -361,6 +361,33 @@ def test_additional_address_already_in_the_default_list_is_rejected(session):
         )
 
 
+def test_restricted_address_is_left_off_even_when_it_is_a_default(session):
+    set_default_recipients(session, ProcessMailDefaults(recipients=["team@example.com", "ops@example.com"]))
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(
+            _payload(recipients=["lead@example.com"], restricted_recipients=["Team@example.com", "lead@example.com"])
+        ),
+    )
+    sent: list[dict] = []
+    check_watch(session, row, now=T0, fetch=lambda _row: "", send=lambda **kwargs: sent.append(kwargs))
+    assert sent[0]["recipients"] == ["ops@example.com"]
+    assert row.mail_sent is True
+
+
+def test_alert_is_skipped_when_every_address_is_restricted(session):
+    set_default_recipients(session, ProcessMailDefaults(recipients=["team@example.com"]))
+    row = create_process_watch(
+        session,
+        ProcessWatchCreate.model_validate(_payload(recipients=[], restricted_recipients=["team@example.com"])),
+    )
+    sent: list[dict] = []
+    check_watch(session, row, now=T0, fetch=lambda _row: "", send=lambda **kwargs: sent.append(kwargs))
+    assert sent == []
+    assert row.mail_sent is False
+    assert row.mail_error == "Mail was not sent. Every mail id is on the restricted list."
+
+
 def test_alert_goes_to_the_default_list_and_the_additional_address(session):
     set_default_recipients(session, ProcessMailDefaults(recipients=["team@example.com"]))
     row = create_process_watch(

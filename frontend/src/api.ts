@@ -1741,6 +1741,7 @@ export type ProcessWatch = {
   service_port: string
   listen_port: number
   recipients: string[]
+  restricted_recipients: string[]
   check_interval: number
   check_interval_unit: 'seconds' | 'minutes'
   mail_interval_minutes: number
@@ -1767,6 +1768,7 @@ export type ProcessWatchCreate = {
   process_name: string
   listen_port: number
   recipients: string[]
+  restricted_recipients: string[]
   check_interval: number
   check_interval_unit: 'seconds' | 'minutes'
   mail_interval_minutes: number

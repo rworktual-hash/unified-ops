@@ -129,6 +129,7 @@ def to_read(row: ProcessWatch, *, server_now: datetime | None = None) -> Process
         service_port=row.service_port or "",
         listen_port=row.listen_port or 0,
         recipients=recipient_list(row.recipients),
+        restricted_recipients=recipient_list(row.restricted_recipients or ""),
         check_interval=row.check_interval,
         check_interval_unit=row.check_interval_unit,
         mail_interval_minutes=row.mail_interval_minutes,
@@ -154,6 +155,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
     recipients = parse_recipients(payload.recipients, required=False)
+    restricted = parse_recipients(payload.restricted_recipients, required=False)
     _reject_if_in_defaults(db, recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
@@ -189,6 +191,7 @@ def create_process_watch(db: Session, payload: ProcessWatchCreate, *, verify_ssh
         process_name=name,
         listen_port=listen_port,
         recipients=",".join(recipients),
+        restricted_recipients=",".join(restricted),
         check_interval=payload.check_interval,
         check_interval_unit=payload.check_interval_unit,
         mail_interval_minutes=payload.mail_interval_minutes,
@@ -214,6 +217,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     if not username or any(ch.isspace() for ch in username):
         raise ProcessWatchError("Username is invalid")
     recipients = parse_recipients(payload.recipients, required=False)
+    restricted = parse_recipients(payload.restricted_recipients, required=False)
     _reject_if_in_defaults(db, recipients)
     validate_check_interval(payload.check_interval, payload.check_interval_unit)
     ip_address = validate_ip(payload.ip_address)
@@ -233,6 +237,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
         ssh_port=payload.ssh_port,
         ssh_username=username,
         recipients=recipients,
+        restricted_recipients=restricted,
         check_interval=payload.check_interval,
         check_interval_unit=payload.check_interval_unit,
         mail_interval_minutes=payload.mail_interval_minutes,
@@ -247,6 +252,7 @@ def update_process_watch(db: Session, row: ProcessWatch, payload: ProcessWatchUp
     row.process_name = name
     row.listen_port = listen_port
     row.recipients = ",".join(recipients)
+    row.restricted_recipients = ",".join(restricted)
     row.check_interval = payload.check_interval
     row.check_interval_unit = payload.check_interval_unit
     row.mail_interval_minutes = payload.mail_interval_minutes
@@ -301,6 +307,7 @@ def _edit_summary(
     ssh_port: int,
     ssh_username: str,
     recipients: list[str],
+    restricted_recipients: list[str],
     check_interval: int,
     check_interval_unit: str,
     mail_interval_minutes: int,
@@ -321,6 +328,11 @@ def _edit_summary(
     add("SSH port", row.ssh_port, ssh_port)
     add("Username", row.ssh_username, ssh_username)
     add("Additional mail ids", row.recipients or "—", ",".join(recipients) or "—")
+    add(
+        "Restricted mail ids",
+        row.restricted_recipients or "—",
+        ",".join(restricted_recipients) or "—",
+    )
     add(
         "Check every",
         f"{row.check_interval} {row.check_interval_unit}",
@@ -434,11 +446,23 @@ def set_default_recipients(db: Session, payload: ProcessMailDefaults) -> list[st
 
 
 def combined_recipients(db: Session, row: ProcessWatch) -> list[str]:
+    blocked = set(recipient_list(row.restricted_recipients or ""))
     found: list[str] = []
     for address in get_default_recipients(db) + recipient_list(row.recipients):
-        if address not in found:
-            found.append(address)
+        if address in blocked or address in found:
+            continue
+        found.append(address)
     return found
+
+
+def _empty_mail_error(db: Session, row: ProcessWatch) -> str:
+    raw: list[str] = []
+    for address in get_default_recipients(db) + recipient_list(row.recipients):
+        if address not in raw:
+            raw.append(address)
+    if raw:
+        return "Mail was not sent. Every mail id is on the restricted list."
+    return "Mail was not sent. Add a default or additional mail id."
 
 
 def _send_down_mail(db: Session, row: ProcessWatch, now: datetime, send: Callable[..., None]) -> None:
@@ -447,7 +471,7 @@ def _send_down_mail(db: Session, row: ProcessWatch, now: datetime, send: Callabl
     if not recipients:
         row.last_emailed_at = now
         row.mail_sent = False
-        row.mail_error = "Mail was not sent. Add a default or additional mail id."
+        row.mail_error = _empty_mail_error(db, row)
         return
     try:
         send(
@@ -477,7 +501,7 @@ def _send_up_mail(db: Session, row: ProcessWatch, now: datetime, send: Callable[
     if not recipients:
         row.last_emailed_at = now
         row.mail_sent = False
-        row.mail_error = "Mail was not sent. Add a default or additional mail id."
+        row.mail_error = _empty_mail_error(db, row)
         return
     try:
         send(

@@ -14,6 +14,7 @@ class ProcessWatchCreate(BaseModel):
     process_name: str = Field(min_length=1, max_length=128)
     listen_port: int = Field(default=0, ge=0, le=65535)
     recipients: list[str] = Field(default_factory=list, max_length=20)
+    restricted_recipients: list[str] = Field(default_factory=list, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
     mail_interval_minutes: int = Field(ge=1, le=10080)
@@ -30,6 +31,7 @@ class ProcessWatchUpdate(BaseModel):
     process_name: str = Field(min_length=1, max_length=128)
     listen_port: int = Field(default=0, ge=0, le=65535)
     recipients: list[str] = Field(default_factory=list, max_length=20)
+    restricted_recipients: list[str] = Field(default_factory=list, max_length=20)
     check_interval: int = Field(ge=1, le=86400)
     check_interval_unit: Literal["seconds", "minutes"] = "seconds"
     mail_interval_minutes: int = Field(ge=1, le=10080)
@@ -80,6 +82,7 @@ class ProcessWatchRead(BaseModel):
     service_port: str
     listen_port: int = 0
     recipients: list[str]
+    restricted_recipients: list[str] = Field(default_factory=list)
     check_interval: int
     check_interval_unit: str
     mail_interval_minutes: int
