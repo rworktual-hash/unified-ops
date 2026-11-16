@@ -3,13 +3,26 @@ from collections.abc import Iterator
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy.orm import Session
 
-from app.services.chat_context import build_ops_context, context_to_prompt_block
+from app.services.chat_context import (
+    ai_insights_answer,
+    backupvault_answer,
+    build_ops_context,
+    context_to_prompt_block,
+    studio_answer,
+    voicemg_answer,
+    wants_ai_insights,
+    wants_backupvault,
+    wants_studio,
+    wants_voicemg,
+)
 from app.services.llm_client import get_chat_llm
 
 SYSTEM_PROMPT = """You are the Worktual Observability assistant.
 You help operators with the hosts, metrics, alerts, and inventory in this portal.
 Your name is Worktual Observability. Never say Unified Ops.
-Answer using ONLY the JSON context. Each host has mem, disk, load, and when present gpu, alerts, module, and email_today. email_campaign is included for mail questions.
+Answer using ONLY the JSON context. Host rows are memory, disk, and load from SSH collect. Use those only when the user asks about disk, memory, or load.
+Campaign mail numbers come from email_campaign. VoiceMG, AI Insights, and BackupVault numbers come from portal_mariadb. AI Studio customer, agent, skill, and token numbers come from ai_studio.
+Do not answer a campaign, portal, or AI Studio question with disk usage.
 email_campaign.recent_messages is the campaign log (time, from, to, subject, status). When the user asks to list the mails, list those rows. Do not say you lack the list when recent_messages is present.
 Quote sent, delivered, bounce, and queue numbers from email_campaign. The queue count is mail still waiting, not mail already sent.
 Earlier turns are included on a follow-up. "What are those 9" and "list the 9 mails" refer to the sent count and recent_messages from the previous answer. Do not say you do not know which number they mean when the earlier reply states it.
@@ -65,7 +78,7 @@ def _asks_mail_volume(message: str) -> bool:
     if not any(word in text for word in ("mail", "email", "campaign")):
         return False
     return any(
-        word in text for word in ("how many", "sent", "count", "volume", "bulk", "today", "total")
+        word in text for word in ("how many", "sent", "count", "volume", "bulk", "today", "total", "runs", "ran")
     )
 
 
@@ -104,7 +117,31 @@ def mail_volume_answer(context: dict) -> str:
         )
     if rows:
         parts.append("Email gateways today: " + "; ".join(rows) + ".")
+    recent = campaign.get("recent_messages") or []
+    if recent:
+        listed = []
+        for row in recent[:8]:
+            listed.append(
+                f"{row.get('time') or ''} {row.get('status') or ''} {row.get('from') or ''} → {row.get('to') or ''} {row.get('subject') or ''}".strip()
+            )
+        parts.append("Recent campaign log: " + "; ".join(listed) + ".")
     return " ".join(parts)
+
+
+def source_answer(db: Session, message: str, history: list[dict] | None = None) -> str | None:
+    """Answer from the database that owns the question. Host disk is not that source."""
+    if _asks_mail_volume(message) or (_wants_mail(message) and _wants_mail(_history_block(history))):
+        context = build_ops_context(db, include_campaign=True)
+        return mail_volume_answer(context)
+    if wants_studio(message):
+        return studio_answer(db)
+    if wants_voicemg(message):
+        return voicemg_answer()
+    if wants_ai_insights(message):
+        return ai_insights_answer()
+    if wants_backupvault(message):
+        return backupvault_answer()
+    return None
 
 
 def _history_block(history: list[dict] | None) -> str:
@@ -133,6 +170,9 @@ def run_chat(
     server_id: int | None = None,
     history: list[dict] | None = None,
 ) -> tuple[str, list[str]]:
+    direct = source_answer(db, user_message, history)
+    if direct is not None:
+        return direct, []
     server_ids = [server_id] if server_id is not None else None
     context = build_ops_context(
         db,
@@ -146,8 +186,6 @@ def run_chat(
         )
 
     names = [s["name"] for s in context["connected_servers"]]
-    if _asks_mail_volume(user_message):
-        return mail_volume_answer(context), names
     context_block = context_to_prompt_block(context)
     llm = get_chat_llm()
     response = llm.invoke(
@@ -183,6 +221,10 @@ def stream_chat(
     server_id: int | None = None,
     history: list[dict] | None = None,
 ) -> Iterator[str]:
+    direct = source_answer(db, user_message, history)
+    if direct is not None:
+        yield direct
+        return
     server_ids = [server_id] if server_id is not None else None
     context = build_ops_context(
         db,
@@ -193,10 +235,6 @@ def stream_chat(
         yield (
             "No active connected servers in scope. Enable DR GPU hosts (148/149) or pick a valid server."
         )
-        return
-
-    if _asks_mail_volume(user_message):
-        yield mail_volume_answer(context)
         return
 
     context_block = context_to_prompt_block(context)

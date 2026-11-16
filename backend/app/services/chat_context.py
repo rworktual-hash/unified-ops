@@ -218,3 +218,148 @@ def _email_campaign_summary() -> dict[str, Any]:
 
 def context_to_prompt_block(context: dict[str, Any]) -> str:
     return json.dumps(context, separators=(",", ":"), default=str)
+
+
+def _wants(message: str, words: tuple[str, ...]) -> bool:
+    text = message.lower()
+    return any(word in text for word in words)
+
+
+def wants_studio(message: str) -> bool:
+    return _wants(message, ("ai studio", "customer", "skill", "token", "mcp", "llm trace", "llm observability"))
+
+
+def wants_voicemg(message: str) -> bool:
+    return _wants(message, ("voicemg", "voice mg", "active call", "rtp", "mos"))
+
+
+def wants_ai_insights(message: str) -> bool:
+    return _wants(message, ("ai insight", "ai insights", "health score"))
+
+
+def wants_backupvault(message: str) -> bool:
+    return _wants(message, ("backupvault", "backup vault"))
+
+
+def voicemg_answer() -> str:
+    """Latest VoiceMG rows from MariaDB 10.180.1.222, the same read the VoiceMG page uses."""
+    try:
+        from app.services.voicemg_portal import fetch_voicemg_extras
+
+        raw = fetch_voicemg_extras()
+    except Exception as exc:
+        return f"VoiceMG on MariaDB 10.180.1.222 is unavailable: {exc}."
+    if not raw.get("ok"):
+        reason = raw.get("reason") or "the portal database is not connected"
+        return f"VoiceMG on MariaDB 10.180.1.222 is unavailable: {reason}."
+    servers = list(raw.get("servers") or [])
+    calls = sum(int(row.get("active_calls") or 0) for row in servers)
+    lines = []
+    for row in servers[:8]:
+        lines.append(
+            f"{row.get('hostname') or row.get('ip')}: {int(row.get('active_calls') or 0)} active calls, "
+            f"loss {row.get('packet_loss_pct') if row.get('packet_loss_pct') is not None else '—'}%, "
+            f"MOS {row.get('mos') if row.get('mos') is not None else '—'}"
+        )
+    detail = "; ".join(lines) if lines else "no servers in the portal."
+    return (
+        f"VoiceMG from MariaDB 10.180.1.222: {len(servers)} servers, {calls} active calls. {detail}."
+    )
+
+
+def ai_insights_answer() -> str:
+    """Latest AI Insights rows from MariaDB 10.180.1.222."""
+    try:
+        from app.services.ai_insights_portal import fetch_ai_insights_extras
+
+        raw = fetch_ai_insights_extras()
+    except Exception as exc:
+        return f"AI Insights on MariaDB 10.180.1.222 is unavailable: {exc}."
+    if not raw.get("ok"):
+        reason = raw.get("reason") or "the portal database is not connected"
+        return f"AI Insights on MariaDB 10.180.1.222 is unavailable: {reason}."
+    servers = list(raw.get("servers") or [])
+    alerts = sum(int(row.get("open_alerts") or 0) for row in servers)
+    lines = []
+    for row in servers[:8]:
+        lines.append(
+            f"{row.get('server_name')}: health {row.get('health_score') if row.get('health_score') is not None else '—'} "
+            f"({row.get('health_status') or 'unknown'}), gpu {row.get('gpu_utilization') if row.get('gpu_utilization') is not None else '—'}%"
+        )
+    detail = "; ".join(lines) if lines else "no servers in the portal."
+    return (
+        f"AI Insights from MariaDB 10.180.1.222: {len(servers)} servers, {alerts} open alerts. {detail}."
+    )
+
+
+def backupvault_answer() -> str:
+    """Latest BackupVault monitoring rows from MariaDB 10.180.1.222."""
+    try:
+        from app.services.legacy_metrics_sync import fetch_backupvault_monitoring
+
+        raw = fetch_backupvault_monitoring()
+    except Exception as exc:
+        return f"BackupVault on MariaDB 10.180.1.222 is unavailable: {exc}."
+    if not raw.get("ok"):
+        reason = raw.get("reason") or "the portal database is not connected"
+        return f"BackupVault on MariaDB 10.180.1.222 is unavailable: {reason}."
+    return (
+        "BackupVault from MariaDB 10.180.1.222: "
+        f"{raw.get('db_count') or 0} database servers, {raw.get('nfs_count') or 0} NFS servers, "
+        f"{raw.get('db_with_snapshot') or 0} with a snapshot."
+    )
+
+
+def studio_answer(db: Session) -> str:
+    """Customer, agent, skill, and token totals from AI Studio traces stored here."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy.exc import OperationalError
+
+    from app.models.llm_obs import LlmObsRun, LlmObsTrace
+
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    try:
+        traces = (
+            db.query(LlmObsTrace)
+            .filter(LlmObsTrace.started_at >= since)
+            .order_by(LlmObsTrace.started_at.desc())
+            .limit(200)
+            .all()
+        )
+    except OperationalError as exc:
+        return f"AI Studio traces are unavailable: {exc}."
+    if not traces:
+        return "AI Studio has no requests in the last 24 hours. A request appears after AI Studio sends a customer chat."
+    trace_ids = [row.id for row in traces]
+    runs = db.query(LlmObsRun).filter(LlmObsRun.trace_id.in_(trace_ids)).all()
+    skills: list[str] = []
+    tokens = 0
+    by_trace: dict[int, list] = {}
+    for run in runs:
+        by_trace.setdefault(run.trace_id, []).append(run)
+        if run.run_type == "skill" and run.name not in skills:
+            skills.append(run.name)
+        if run.run_type == "llm" and run.total_tokens:
+            tokens += run.total_tokens
+    customers = []
+    agents = []
+    for row in traces:
+        if row.customer and row.customer not in customers:
+            customers.append(row.customer)
+        if row.agent_name and row.agent_name not in agents:
+            agents.append(row.agent_name)
+    recent = []
+    for row in traces[:5]:
+        skill_names = [run.name for run in by_trace.get(row.id, []) if run.run_type == "skill"]
+        recent.append(
+            f"{row.customer or 'unknown customer'} · {row.agent_name or 'agent'} · "
+            f"{', '.join(skill_names) or 'no skill'} · {row.status}"
+        )
+    return (
+        f"AI Studio in the last 24 hours: {len(traces)} requests, {tokens} tokens. "
+        f"Customers: {', '.join(customers) or 'none'}. "
+        f"Agents: {', '.join(agents) or 'none'}. "
+        f"Skills: {', '.join(skills) or 'none'}. "
+        f"Latest: {'; '.join(recent)}."
+    )
