@@ -30,6 +30,7 @@ from app.db.ensure_infrastructure_ssh import ensure_infrastructure_ssh_schema
 from app.db.ensure_voicemg_ssh import ensure_voicemg_ssh_schema
 from app.db.ensure_gpu_ai_insights import ensure_gpu_ai_insights_schema
 from app.db.ensure_legacy_metrics import ensure_legacy_metrics_schema
+from app.db.ensure_llm_obs import ensure_llm_obs_schema
 from app.db.ensure_process_watch import ensure_process_watch_schema
 from app.db.session import Base, SessionLocal, engine
 from app.models import agent_action as _agent_action_model  # noqa: F401
@@ -87,6 +88,7 @@ async def lifespan(_app: FastAPI):
     ensure_gpu_ai_insights_schema()
     ensure_legacy_metrics_schema()
     ensure_process_watch_schema()
+    ensure_llm_obs_schema()
     db = SessionLocal()
     try:
         ensure_bootstrap_admin(db)

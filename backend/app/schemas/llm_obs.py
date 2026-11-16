@@ -4,7 +4,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-RunType = Literal["agent", "llm", "tool", "chain"]
+RunType = Literal["agent", "llm", "tool", "skill", "chain"]
+ToolSource = Literal["builtin", "mcp"]
+AgentMode = Literal["agent", "team", "orchestrator", "workflow"]
 RunStatus = Literal["success", "error"]
 
 
@@ -57,12 +59,19 @@ class IngestRun(BaseModel):
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
+    instructions: str | None = None
+    tool_source: ToolSource | None = None
+    connector: str | None = Field(default=None, max_length=128)
 
 
 class IngestTrace(BaseModel):
     id: str | None = Field(default=None, max_length=64)
     name: str = Field(min_length=1, max_length=160)
     session_id: str | None = Field(default=None, max_length=200)
+    customer: str | None = Field(default=None, max_length=128)
+    customer_role: str | None = Field(default=None, max_length=32)
+    agent: str | None = Field(default=None, max_length=128)
+    agent_mode: AgentMode | None = None
     status: RunStatus | None = None
     error: str | None = None
     started_at: datetime | None = None
@@ -101,6 +110,8 @@ class RunPublic(BaseModel):
     output_tokens: int | None
     total_tokens: int | None
     total_cost: float | None = None
+    tool_source: str = ""
+    connector: str = ""
 
 
 class TraceListItem(BaseModel):
@@ -121,6 +132,11 @@ class TraceListItem(BaseModel):
     run_count: int
     session_id: str | None = None
     total_cost: float | None = None
+    customer: str = ""
+    customer_role: str = ""
+    agent_name: str = ""
+    agent_mode: str = ""
+    skills: list[str] = Field(default_factory=list)
 
 
 class TraceDetail(TraceListItem):
@@ -135,3 +151,7 @@ class SummaryPublic(BaseModel):
     total_tokens: int
     total_cost: float | None = None
     models: list[str]
+    customers: list[str] = Field(default_factory=list)
+    agents: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)

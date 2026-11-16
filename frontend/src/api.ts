@@ -1600,6 +1600,10 @@ export type LlmObsSummary = {
   total_tokens: number
   total_cost?: number | null
   models: string[]
+  customers?: string[]
+  agents?: string[]
+  skills?: string[]
+  tools?: string[]
 }
 
 export type LlmObsTrace = {
@@ -1620,6 +1624,11 @@ export type LlmObsTrace = {
   run_count: number
   session_id?: string | null
   total_cost?: number | null
+  customer?: string
+  customer_role?: string
+  agent_name?: string
+  agent_mode?: string
+  skills?: string[]
 }
 
 export type LlmObsRun = {
@@ -1641,6 +1650,8 @@ export type LlmObsRun = {
   output_tokens: number | null
   total_tokens: number | null
   total_cost?: number | null
+  tool_source?: string
+  connector?: string
 }
 
 export type LlmObsTraceDetail = LlmObsTrace & { runs: LlmObsRun[] }
@@ -1651,6 +1662,10 @@ export type LlmObsFilters = {
   status?: string
   from?: string
   to?: string
+  customer?: string
+  agent?: string
+  skill?: string
+  tool?: string
 }
 
 function llmObsQuery(filters: LlmObsFilters): string {
@@ -1660,6 +1675,10 @@ function llmObsQuery(filters: LlmObsFilters): string {
   if (filters.status) params.set('status', filters.status)
   if (filters.from) params.set('from', filters.from)
   if (filters.to) params.set('to', filters.to)
+  if (filters.customer) params.set('customer', filters.customer)
+  if (filters.agent) params.set('agent', filters.agent)
+  if (filters.skill) params.set('skill', filters.skill)
+  if (filters.tool) params.set('tool', filters.tool)
   const text = params.toString()
   return text ? `?${text}` : ''
 }

@@ -17,7 +17,7 @@ from typing import Any
 
 from app.config import settings
 
-_TYPE_TO_LANGFUSE = {"agent": "agent", "llm": "generation", "tool": "tool", "chain": "chain"}
+_TYPE_TO_LANGFUSE = {"agent": "agent", "llm": "generation", "tool": "tool", "skill": "span", "chain": "chain"}
 _TYPE_FROM_LANGFUSE = {
     "AGENT": "agent",
     "GENERATION": "llm",
@@ -46,6 +46,10 @@ def export_trace(
     trace_name: str,
     session_id: str | None,
     runs: list[Any],
+    customer: str = "",
+    customer_role: str = "",
+    agent_name: str = "",
+    agent_mode: str = "",
 ) -> None:
     from app.services.llm_obs import _as_text, _aware, _system_from_input, redact_text
 
@@ -79,6 +83,13 @@ def export_trace(
         _add(attributes, "langfuse.observation.metadata.worktual_parent_id", run.parent_id)
         _add(attributes, "langfuse.trace.metadata.worktual_trace_id", external_id)
         _add(attributes, "langfuse.trace.metadata.worktual_project", project_name)
+        _add(attributes, "langfuse.trace.metadata.worktual_customer", customer or None)
+        _add(attributes, "langfuse.trace.metadata.worktual_customer_role", customer_role or None)
+        _add(attributes, "langfuse.trace.metadata.worktual_agent", agent_name or None)
+        _add(attributes, "langfuse.trace.metadata.worktual_agent_mode", agent_mode or None)
+        _add(attributes, "langfuse.observation.metadata.worktual_run_type", run.type)
+        _add(attributes, "langfuse.observation.metadata.worktual_tool_source", getattr(run, "tool_source", None) or None)
+        _add(attributes, "langfuse.observation.metadata.worktual_connector", getattr(run, "connector", None) or None)
         if has_usage:
             _add(attributes, "langfuse.observation.usage_details", json.dumps(usage))
         span: dict[str, Any] = {

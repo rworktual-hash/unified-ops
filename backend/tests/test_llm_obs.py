@@ -13,7 +13,17 @@ from app.api.llm_obs import dashboard_router, ingest_router
 from app.db.session import Base, get_db
 from app.models.llm_obs import LlmObsApiKey, LlmObsProject, LlmObsRun, LlmObsTrace
 from app.schemas.llm_obs import IngestBody
-from app.services.llm_obs import LlmObsConflict, create_api_key, create_project, ingest, match_api_key
+from app.services.llm_obs import (
+    LlmObsConflict,
+    LlmObsRejected,
+    create_api_key,
+    create_project,
+    get_trace,
+    ingest,
+    list_traces,
+    match_api_key,
+    summarize,
+)
 from app.services.llm_obs_demo import DEMO_TRACE
 
 ADMIN = CurrentUser(id=1, email="admin@worktual.tech", role="admin", is_active=True)
@@ -129,6 +139,100 @@ def test_duplicate_trace_id_conflicts(session):
     ingest(session, key, body)
     with pytest.raises(LlmObsConflict):
         ingest(session, key, body)
+
+
+def test_customer_request_keeps_agent_skill_mcp_tool_and_tokens(session):
+    project = create_project(session, ADMIN, "ccaas", "CCaaS")
+    _row, raw = create_api_key(session, project, "ccaas")
+    key = match_api_key(session, raw)
+    body = IngestBody.model_validate(
+        {
+            "trace": {
+                "id": "ada-1",
+                "name": "what time is it",
+                "customer": "Ada",
+                "customer_role": "type 2",
+                "agent": "assistant",
+                "agent_mode": "agent",
+                "session_id": "chat-9",
+            },
+            "runs": [
+                {
+                    "id": "agent",
+                    "type": "agent",
+                    "name": "assistant",
+                    "model": "gpt-oss-120b",
+                    "system_prompt": "Use echo when the user wants text repeated.",
+                },
+                {
+                    "id": "skill",
+                    "parent_id": "agent",
+                    "type": "skill",
+                    "name": "timekeeping",
+                    "instructions": "Use clock when the user asks what time it is.",
+                },
+                {
+                    "id": "tool",
+                    "parent_id": "skill",
+                    "type": "tool",
+                    "name": "clock",
+                    "tool_source": "mcp",
+                    "connector": "mcp_1",
+                    "output": "2026-11-16T04:30:00Z",
+                },
+                {
+                    "id": "llm",
+                    "parent_id": "agent",
+                    "type": "llm",
+                    "name": "reply",
+                    "model": "gpt-oss-120b",
+                    "input_tokens": 20,
+                    "output_tokens": 8,
+                    "total_tokens": 28,
+                    "output": "The time is 10:00 IST.",
+                },
+            ],
+        }
+    )
+    result = ingest(session, key, body)
+    detail = get_trace(session, ADMIN, result.trace_id)
+    assert detail is not None
+    assert detail.customer == "Ada"
+    assert detail.customer_role == "Type 2"
+    assert detail.agent_name == "assistant"
+    assert detail.agent_mode == "agent"
+    assert detail.skills == ["timekeeping"]
+    assert detail.tools == ["clock"]
+    assert detail.total_tokens == 28
+    by_name = {run.name: run for run in detail.runs}
+    assert by_name["assistant"].system_prompt.startswith("Use echo")
+    assert by_name["timekeeping"].system_prompt.startswith("Use clock")
+    assert by_name["clock"].tool_source == "mcp"
+    assert by_name["clock"].connector == "mcp_1"
+
+    listed = list_traces(session, ADMIN, project_id=project.id, model=None, status=None, started_from=None, started_to=None, customer="ada")
+    assert [item.id for item in listed] == [result.trace_id]
+    other = list_traces(session, ADMIN, project_id=project.id, model=None, status=None, started_from=None, started_to=None, customer="ABC")
+    assert other == []
+    by_skill = list_traces(session, ADMIN, project_id=None, model=None, status=None, started_from=None, started_to=None, skill="timekeeping")
+    assert len(by_skill) == 1
+    options = summarize(session, ADMIN, project_id=project.id, model=None, status=None, started_from=None, started_to=None)
+    assert options.customers == ["Ada"]
+    assert options.agents == ["assistant"]
+    assert options.skills == ["timekeeping"]
+    assert options.tools == ["clock"]
+
+    with pytest.raises(LlmObsRejected, match="Customer role"):
+        ingest(
+            session,
+            key,
+            IngestBody.model_validate(
+                {
+                    "trace": {"name": "bad role", "customer": "Ada", "customer_role": "guest"},
+                    "runs": [{"id": "a1", "type": "agent", "name": "assistant"}],
+                }
+            ),
+        )
 
 
 def test_http_ingest_uses_api_key_not_user_login(client, session):

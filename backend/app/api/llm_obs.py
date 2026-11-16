@@ -127,6 +127,10 @@ def summary(
     status_filter: str | None = Query(default=None, alias="status"),
     started_from: datetime | None = Query(default=None, alias="from"),
     started_to: datetime | None = Query(default=None, alias="to"),
+    customer: str | None = None,
+    agent: str | None = None,
+    skill: str | None = None,
+    tool: str | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SummaryPublic:
@@ -140,6 +144,10 @@ def summary(
         status=status_filter,
         started_from=started_from,
         started_to=started_to,
+        customer=customer,
+        agent=agent,
+        skill=skill,
+        tool=tool,
     )
 
 
@@ -150,6 +158,10 @@ def traces(
     status_filter: str | None = Query(default=None, alias="status"),
     started_from: datetime | None = Query(default=None, alias="from"),
     started_to: datetime | None = Query(default=None, alias="to"),
+    customer: str | None = None,
+    agent: str | None = None,
+    skill: str | None = None,
+    tool: str | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[TraceListItem]:
@@ -163,6 +175,10 @@ def traces(
         status=status_filter,
         started_from=started_from,
         started_to=started_to,
+        customer=customer,
+        agent=agent,
+        skill=skill,
+        tool=tool,
     )
 
 

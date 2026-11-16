@@ -47,6 +47,11 @@ class LlmObsTrace(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    customer: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    customer_role: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    agent_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    agent_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     project: Mapped[LlmObsProject] = relationship(back_populates="traces")
@@ -75,6 +80,8 @@ class LlmObsRun(Base):
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tool_source: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    connector: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     trace: Mapped[LlmObsTrace] = relationship(back_populates="runs")

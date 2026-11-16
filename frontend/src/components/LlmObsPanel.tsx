@@ -25,6 +25,10 @@ const EMPTY_SUMMARY: LlmObsSummary = {
   total_tokens: 0,
   total_cost: null,
   models: [],
+  customers: [],
+  agents: [],
+  skills: [],
+  tools: [],
 }
 
 type View = 'traces' | 'trace' | 'projects'
@@ -121,19 +125,23 @@ function buildTimeline(runs: LlmObsRun[]): TimelineStep[] {
   const visit = (run: LlmObsRun) => {
     const children = childrenOf.get(run.external_id) ?? []
     const blocks: { label: string; text: string }[] = []
-    if (run.type === 'llm' && run.system_prompt) blocks.push({ label: 'System prompt', text: run.system_prompt })
+    if (run.system_prompt && (run.type === 'llm' || run.type === 'agent')) {
+      blocks.push({ label: 'System prompt', text: run.system_prompt })
+    }
+    if (run.type === 'skill' && run.system_prompt) blocks.push({ label: 'Instructions', text: run.system_prompt })
     const input = userText(run)
     if (input) {
-      const label = run.type === 'tool' ? 'Tool input' : run.type === 'llm' ? 'User' : 'Request'
+      const label = run.type === 'tool' ? 'Tool input' : run.type === 'skill' ? 'Skill input' : run.type === 'llm' ? 'User' : 'Request'
       blocks.push({ label, text: input })
     }
     if (!children.length && run.output) {
       blocks.push({ label: run.type === 'tool' ? 'Tool output' : 'Response', text: run.output })
     }
+    const source = run.type === 'tool' && run.tool_source === 'mcp' ? 'mcp' : run.type
     add({
       key: `run-${run.id}`,
-      typeLabel: run.type,
-      title: run.name,
+      typeLabel: source,
+      title: run.connector ? `${run.name} · ${run.connector}` : run.name,
       model: run.model,
       status: children.length ? null : run.status,
       latency: children.length ? null : run.latency_ms,
@@ -201,6 +209,10 @@ export function LlmObsPanel() {
   const [selectedProject, setSelectedProject] = useState<number | ''>('')
   const [keys, setKeys] = useState<LlmObsApiKey[]>([])
   const [freshKey, setFreshKey] = useState<string | null>(null)
+  const [customer, setCustomer] = useState('')
+  const [agent, setAgent] = useState('')
+  const [skill, setSkill] = useState('')
+  const [tool, setTool] = useState('')
   const [model, setModel] = useState('')
   const [status, setStatus] = useState('')
   const [fromDay, setFromDay] = useState('')
@@ -213,6 +225,10 @@ export function LlmObsPanel() {
 
   const filters = {
     projectId: selectedProject === '' ? undefined : selectedProject,
+    customer: customer || undefined,
+    agent: agent || undefined,
+    skill: skill || undefined,
+    tool: tool || undefined,
     model: model || undefined,
     status: status || undefined,
     from: fromDay ? dayStart(fromDay) : undefined,
@@ -226,7 +242,7 @@ export function LlmObsPanel() {
     ])
     setSummary(nextSummary)
     setTraces(nextTraces)
-  }, [selectedProject, model, status, fromDay, toDay])
+  }, [selectedProject, customer, agent, skill, tool, model, status, fromDay, toDay])
 
   const loadProjects = useCallback(async () => {
     setProjects(await listLlmObsProjects())
@@ -289,6 +305,50 @@ export function LlmObsPanel() {
       {view === 'traces' ? (
         <section className="panel">
           <div className="llm-filters">
+            <label className="field-label">
+              Customer
+              <select value={customer} onChange={(event) => setCustomer(event.target.value)}>
+                <option value="">All customers</option>
+                {(summary.customers ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Agent
+              <select value={agent} onChange={(event) => setAgent(event.target.value)}>
+                <option value="">All agents</option>
+                {(summary.agents ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Skill
+              <select value={skill} onChange={(event) => setSkill(event.target.value)}>
+                <option value="">All skills</option>
+                {(summary.skills ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-label">
+              Tool
+              <select value={tool} onChange={(event) => setTool(event.target.value)}>
+                <option value="">All tools</option>
+                {(summary.tools ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="field-label">
               Project
               <select
@@ -358,42 +418,40 @@ export function LlmObsPanel() {
             </div>
           </div>
           {traces.length === 0 ? (
-            <p className="muted">No traces for this filter. Open Projects to create a key, then send a chat turn.</p>
+            <p className="muted">No requests for this filter. A request appears after AI Studio sends that customer chat.</p>
           ) : (
             <div className="table-wrap">
               <table className="users-table">
                 <thead>
                   <tr>
                     <th>When</th>
-                    <th>Project</th>
-                    <th>Chat turn</th>
+                    <th>Customer</th>
                     <th>Agent</th>
-                    <th>Model</th>
+                    <th>Skills</th>
                     <th>Tools</th>
+                    <th>Model</th>
                     <th>Status</th>
                     <th>Latency</th>
                     <th>Tokens</th>
-                    <th>Session</th>
                   </tr>
                 </thead>
                 <tbody>
                   {traces.map((trace) => (
                     <tr key={trace.id} onClick={() => openTrace(trace.id)}>
                       <td>{formatWhen(trace.started_at)}</td>
-                      <td>{trace.project}</td>
-                      <td>{trace.name}</td>
-                      <td>{trace.agents.join(', ') || '—'}</td>
-                      <td>{trace.models.join(', ') || '—'}</td>
+                      <td>{trace.customer || '—'}</td>
                       <td>
-                        {trace.tools.length}
-                        {trace.failed_tools.length ? ` · ${trace.failed_tools.length} failed` : ''}
+                        {trace.agent_name || trace.agents.join(', ') || '—'}
+                        {trace.agent_mode ? ` · ${trace.agent_mode}` : ''}
                       </td>
+                      <td>{(trace.skills ?? []).join(', ') || '—'}</td>
+                      <td>{trace.tools.join(', ') || '—'}</td>
+                      <td>{trace.models.join(', ') || '—'}</td>
                       <td className={trace.status === 'error' ? 'llm-status llm-status--error' : 'llm-status'}>
                         {trace.status}
                       </td>
                       <td>{trace.latency_ms != null ? `${trace.latency_ms} ms` : '—'}</td>
                       <td>{trace.total_tokens}</td>
-                      <td>{trace.session_id || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -419,7 +477,10 @@ export function LlmObsPanel() {
               </button>
               <h2>{detail.name}</h2>
               <p className="muted-block">
-                {detail.project} · {formatWhen(detail.started_at)}
+                {detail.customer || 'Unknown customer'}
+                {detail.customer_role ? ` (${detail.customer_role})` : ''} ·{' '}
+                {detail.agent_name || detail.agents.join(', ') || 'agent'}
+                {detail.agent_mode ? ` · ${detail.agent_mode}` : ''} · {detail.project} · {formatWhen(detail.started_at)}
                 {detail.session_id ? ` · session ${detail.session_id}` : ''}
                 {detail.latency_ms != null ? ` · ${detail.latency_ms} ms` : ''}
                 {detail.total_cost != null ? ` · ${formatCost(detail.total_cost)}` : ''}
@@ -441,8 +502,8 @@ export function LlmObsPanel() {
             <div>
               <h2>Projects</h2>
               <p className="muted-block">
-                One project per app, such as crm, ccaas, or ticketing. The app sends traces to the
-                Worktual endpoint with its Worktual key.
+                One project per app, such as ccaas. Each customer chat should send the customer, agent,
+                skills, MCP or built-in tools, system prompt, and token counts.
               </p>
             </div>
           </div>

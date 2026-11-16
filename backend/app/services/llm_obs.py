@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -107,6 +107,43 @@ def _latency(started: datetime | None, finished: datetime | None, given: int | N
     if started is None or finished is None:
         return None
     return max(int((finished - started).total_seconds() * 1000), 0)
+
+
+_ROLES = {"type 1": "Type 1", "type1": "Type 1", "type 2": "Type 2", "type2": "Type 2", "internal": "internal"}
+_MODES = {"agent", "team", "orchestrator", "workflow"}
+
+
+def _plain(value: str | None, limit: int, label: str) -> str:
+    text = (value or "").strip()
+    if len(text) > limit or any(ord(ch) < 32 for ch in text):
+        raise LlmObsRejected(f"{label} is invalid.")
+    return text
+
+
+def _customer_role(value: str | None) -> str:
+    text = _plain(value, 32, "Customer role")
+    if not text:
+        return ""
+    role = _ROLES.get(text.lower().replace("_", " "))
+    if role is None:
+        raise LlmObsRejected("Customer role must be Type 1, Type 2, or internal.")
+    return role
+
+
+def _agent_mode(value: str | None) -> str:
+    text = (value or "").strip().lower()
+    if not text:
+        return ""
+    if text not in _MODES:
+        raise LlmObsRejected("Agent mode must be agent, team, orchestrator, or workflow.")
+    return text
+
+
+def _filter_text(value: str | None, limit: int) -> str | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    return text[:limit].lower()
 
 
 def _tokens(input_tokens: int | None, output_tokens: int | None, total_tokens: int | None) -> int | None:
@@ -245,6 +282,13 @@ def ingest(db: Session, key: LlmObsApiKey, body: IngestBody) -> IngestResult:
         error = redact_text(run_errors[0].error or f"{run_errors[0].name} failed")
 
     external_id = (body.trace.id or uuid.uuid4().hex)[:64]
+    customer = _plain(body.trace.customer, 128, "Customer")
+    customer_role = _customer_role(body.trace.customer_role)
+    agent_mode = _agent_mode(body.trace.agent_mode)
+    agent_name = _plain(body.trace.agent, 128, "Agent name")
+    if not agent_name:
+        agent_name = next((run.name.strip()[:128] for run in body.runs if run.type == "agent" and run.name.strip()), "")
+    session_id = (body.trace.session_id or "").strip()[:200] or None
     if langfuse_enabled():
         try:
             langfuse_export(
@@ -252,8 +296,12 @@ def ingest(db: Session, key: LlmObsApiKey, body: IngestBody) -> IngestResult:
                 project_id=key.project_id,
                 external_id=external_id,
                 trace_name=body.trace.name.strip()[:160],
-                session_id=(body.trace.session_id or "").strip() or None,
+                session_id=session_id,
                 runs=body.runs,
+                customer=customer,
+                customer_role=customer_role,
+                agent_name=agent_name,
+                agent_mode=agent_mode,
             )
         except LangfuseError as exc:
             raise LlmObsUpstream(exc.message) from exc
@@ -266,6 +314,11 @@ def ingest(db: Session, key: LlmObsApiKey, body: IngestBody) -> IngestResult:
         started_at=started,
         finished_at=finished,
         latency_ms=_latency(started, finished, None),
+        session_id=session_id,
+        customer=customer,
+        customer_role=customer_role,
+        agent_name=agent_name,
+        agent_mode=agent_mode,
         created_at=_now(),
     )
     project_name = key.project.name
@@ -276,7 +329,15 @@ def ingest(db: Session, key: LlmObsApiKey, body: IngestBody) -> IngestResult:
         for run in body.runs:
             run_started = _aware(run.started_at)
             run_finished = _aware(run.finished_at)
-            system_prompt = run.system_prompt if (run.system_prompt or "").strip() else _system_from_input(run.input)
+            system_prompt = run.system_prompt if (run.system_prompt or "").strip() else None
+            if system_prompt is None and (run.instructions or "").strip():
+                system_prompt = run.instructions
+            if system_prompt is None:
+                system_prompt = _system_from_input(run.input)
+            source = (run.tool_source or "").strip()
+            if run.type != "tool":
+                source = ""
+            connector = (run.connector or "").strip()[:128] if run.type == "tool" else ""
             db.add(
                 LlmObsRun(
                     trace_id=trace.id,
@@ -296,6 +357,8 @@ def ingest(db: Session, key: LlmObsApiKey, body: IngestBody) -> IngestResult:
                     input_tokens=run.input_tokens,
                     output_tokens=run.output_tokens,
                     total_tokens=_tokens(run.input_tokens, run.output_tokens, run.total_tokens),
+                    tool_source=source,
+                    connector=connector,
                     created_at=now,
                 )
             )
@@ -327,6 +390,10 @@ def _filtered_traces(
     status: str | None,
     started_from: datetime | None,
     started_to: datetime | None,
+    customer: str | None = None,
+    agent: str | None = None,
+    skill: str | None = None,
+    tool: str | None = None,
 ):
     query = db.query(LlmObsTrace).filter(LlmObsTrace.project_id.in_(_owned_trace_ids(db, user)))
     if project_id is not None:
@@ -340,7 +407,39 @@ def _filtered_traces(
     if model:
         matching = db.query(LlmObsRun.trace_id).filter(LlmObsRun.model_name == model)
         query = query.filter(LlmObsTrace.id.in_(matching))
+    customer_name = _filter_text(customer, 128)
+    if customer_name:
+        query = query.filter(func.lower(LlmObsTrace.customer) == customer_name)
+    agent_name = _filter_text(agent, 128)
+    if agent_name:
+        agent_runs = db.query(LlmObsRun.trace_id).filter(
+            LlmObsRun.run_type == "agent",
+            func.lower(LlmObsRun.name) == agent_name,
+        )
+        query = query.filter(or_(func.lower(LlmObsTrace.agent_name) == agent_name, LlmObsTrace.id.in_(agent_runs)))
+    skill_name = _filter_text(skill, 128)
+    if skill_name:
+        skill_runs = db.query(LlmObsRun.trace_id).filter(
+            LlmObsRun.run_type == "skill",
+            func.lower(LlmObsRun.name) == skill_name,
+        )
+        query = query.filter(LlmObsTrace.id.in_(skill_runs))
+    tool_name = _filter_text(tool, 128)
+    if tool_name:
+        tool_runs = db.query(LlmObsRun.trace_id).filter(
+            LlmObsRun.run_type == "tool",
+            func.lower(LlmObsRun.name) == tool_name,
+        )
+        query = query.filter(LlmObsTrace.id.in_(tool_runs))
     return query
+
+
+def _unique(names) -> list[str]:
+    found: list[str] = []
+    for name in names:
+        if name and name not in found:
+            found.append(name)
+    return found
 
 
 def model_options(db: Session, user: CurrentUser, project_id: int | None) -> list[str]:
@@ -353,6 +452,50 @@ def model_options(db: Session, user: CurrentUser, project_id: int | None) -> lis
     if project_id is not None:
         query = query.filter(LlmObsTrace.project_id == project_id)
     return sorted({name for (name,) in query.distinct().all() if name})
+
+
+def _scoped_traces(db: Session, user: CurrentUser, project_id: int | None):
+    query = db.query(LlmObsTrace).filter(LlmObsTrace.project_id.in_(_owned_trace_ids(db, user)))
+    if project_id is not None:
+        query = query.filter(LlmObsTrace.project_id == project_id)
+    return query
+
+
+def request_options(db: Session, user: CurrentUser, project_id: int | None) -> dict[str, list[str]]:
+    scoped = _scoped_traces(db, user, project_id)
+    customers = sorted(
+        {
+            name
+            for (name,) in scoped.with_entities(LlmObsTrace.customer).distinct().all()
+            if name
+        }
+    )
+    agents = sorted(
+        {
+            name
+            for (name,) in scoped.with_entities(LlmObsTrace.agent_name).distinct().all()
+            if name
+        }
+    )
+    joined = db.query(LlmObsRun.name, LlmObsRun.run_type).join(LlmObsTrace, LlmObsTrace.id == LlmObsRun.trace_id)
+    joined = joined.filter(LlmObsTrace.id.in_(scoped.with_entities(LlmObsTrace.id)))
+    skills: set[str] = set()
+    tools: set[str] = set()
+    for name, run_type in joined.distinct().all():
+        if not name:
+            continue
+        if run_type == "skill":
+            skills.add(name)
+        elif run_type == "tool":
+            tools.add(name)
+        elif run_type == "agent":
+            agents.append(name) if name not in agents else None
+    return {
+        "customers": customers,
+        "agents": sorted(set(agents)),
+        "skills": sorted(skills),
+        "tools": sorted(tools),
+    }
 
 
 def _trace_items(db: Session, traces: list[LlmObsTrace]) -> list[TraceListItem]:
@@ -372,9 +515,10 @@ def _trace_items(db: Session, traces: list[LlmObsTrace]) -> list[TraceListItem]:
     items: list[TraceListItem] = []
     for trace in traces:
         group = by_trace.get(trace.id, [])
-        agents = [run.name for run in group if run.run_type == "agent"]
-        tools = [run.name for run in group if run.run_type == "tool"]
-        failed = [run.name for run in group if run.run_type == "tool" and run.status == "error"]
+        agents = _unique(run.name for run in group if run.run_type == "agent")
+        skills = _unique(run.name for run in group if run.run_type == "skill")
+        tools = _unique(run.name for run in group if run.run_type == "tool")
+        failed = _unique(run.name for run in group if run.run_type == "tool" and run.status == "error")
         models = []
         tokens = 0
         for run in group:
@@ -399,6 +543,12 @@ def _trace_items(db: Session, traces: list[LlmObsTrace]) -> list[TraceListItem]:
                 models=models,
                 total_tokens=tokens,
                 run_count=len(group),
+                session_id=trace.session_id,
+                customer=trace.customer or "",
+                customer_role=trace.customer_role or "",
+                agent_name=trace.agent_name or (agents[0] if agents else ""),
+                agent_mode=trace.agent_mode or "",
+                skills=skills,
             )
         )
     return items
@@ -462,7 +612,10 @@ def _observation_runs(rows: list[dict[str, Any]]) -> list[RunPublic]:
         level = str(row.get("level") or "").upper()
         message = row.get("statusMessage")
         error = message.strip() if isinstance(message, str) and message.strip() else None
-        kind = _TYPE_FROM_LANGFUSE.get(str(row.get("type") or "").upper(), "chain")
+        recorded_type = str(meta.get("worktual_run_type") or "")
+        kind = recorded_type if recorded_type in {"agent", "llm", "tool", "skill", "chain"} else _TYPE_FROM_LANGFUSE.get(str(row.get("type") or "").upper(), "chain")
+        tool_source = str(meta.get("worktual_tool_source") or "") if kind == "tool" else ""
+        connector = str(meta.get("worktual_connector") or "") if kind == "tool" else ""
         input_tokens = _usage_count(usage, "input", "input_tokens")
         if input_tokens is None:
             counted = _number(row.get("inputUsage"))
@@ -502,6 +655,8 @@ def _observation_runs(rows: list[dict[str, Any]]) -> list[RunPublic]:
                     output_tokens=output_tokens,
                     total_tokens=total_tokens,
                     total_cost=_number(row.get("totalCost")),
+                    tool_source=tool_source if tool_source in {"builtin", "mcp"} else "",
+                    connector=connector[:128],
                 ),
             )
         )
@@ -583,9 +738,10 @@ def _langfuse_details(
                 started_at=started,
                 finished_at=finished,
                 latency_ms=_latency(started, finished, None),
-                agents=[run.name for run in runs if run.type == "agent"],
-                tools=[run.name for run in runs if run.type == "tool"],
-                failed_tools=[run.name for run in runs if run.type == "tool" and run.status == "error"],
+                agents=_unique(run.name for run in runs if run.type == "agent"),
+                tools=_unique(run.name for run in runs if run.type == "tool"),
+                failed_tools=_unique(run.name for run in runs if run.type == "tool" and run.status == "error"),
+                skills=_unique(run.name for run in runs if run.type == "skill"),
                 models=names,
                 total_tokens=tokens,
                 run_count=len(runs),
@@ -598,7 +754,38 @@ def _langfuse_details(
     return details[:200]
 
 
-def _summary_from_details(details: list[TraceDetail], models: list[str]) -> SummaryPublic:
+def _matches_request(
+    item: TraceDetail,
+    *,
+    customer: str | None,
+    agent: str | None,
+    skill: str | None,
+    tool: str | None,
+) -> bool:
+    customer_name = _filter_text(customer, 128)
+    if customer_name and item.customer.lower() != customer_name:
+        return False
+    agent_name = _filter_text(agent, 128)
+    if agent_name and agent_name not in {item.agent_name.lower(), *(name.lower() for name in item.agents)}:
+        return False
+    skill_name = _filter_text(skill, 128)
+    if skill_name and skill_name not in {name.lower() for name in item.skills}:
+        return False
+    tool_name = _filter_text(tool, 128)
+    if tool_name and tool_name not in {name.lower() for name in item.tools}:
+        return False
+    return True
+
+
+def _summary_from_details(
+    details: list[TraceDetail],
+    *,
+    models: list[str],
+    customers: list[str],
+    agents: list[str],
+    skills: list[str],
+    tools: list[str],
+) -> SummaryPublic:
     success = sum(1 for item in details if item.status == "success")
     latencies = [item.latency_ms for item in details if item.latency_ms is not None]
     costs = [item.total_cost for item in details if item.total_cost is not None]
@@ -610,7 +797,75 @@ def _summary_from_details(details: list[TraceDetail], models: list[str]) -> Summ
         total_tokens=sum(item.total_tokens for item in details),
         total_cost=sum(costs) if costs else None,
         models=models,
+        customers=customers,
+        agents=agents,
+        skills=skills,
+        tools=tools,
     )
+
+
+def _overlay_local(db: Session, details: list[TraceDetail]) -> list[TraceDetail]:
+    external_ids = [str(item.id) for item in details]
+    if not external_ids:
+        return details
+    rows = db.query(LlmObsTrace).filter(LlmObsTrace.external_id.in_(external_ids)).all()
+    if not rows:
+        return details
+    by_external: dict[str, list[LlmObsTrace]] = {}
+    for row in rows:
+        by_external.setdefault(row.external_id, []).append(row)
+    grouped: dict[int, list[LlmObsRun]] = {}
+    for run in db.query(LlmObsRun).filter(LlmObsRun.trace_id.in_([row.id for row in rows])).all():
+        grouped.setdefault(run.trace_id, []).append(run)
+    overlaid: list[TraceDetail] = []
+    for item in details:
+        matches = by_external.get(str(item.id), [])
+        row = next((candidate for candidate in matches if candidate.project_id == item.project_id), None)
+        if row is None:
+            overlaid.append(item)
+            continue
+        group = grouped.get(row.id, [])
+        costs = {run.external_id: run.total_cost for run in item.runs}
+        local_runs = [
+            RunPublic(
+                id=run.id,
+                external_id=run.external_id,
+                parent_id=run.parent_external_id,
+                type=run.run_type,
+                name=run.name,
+                model=run.model_name,
+                system_prompt=run.system_prompt,
+                input=run.input_text,
+                output=run.output_text,
+                status=run.status,
+                error=run.error_message,
+                started_at=run.started_at,
+                finished_at=run.finished_at,
+                latency_ms=run.latency_ms,
+                input_tokens=run.input_tokens,
+                output_tokens=run.output_tokens,
+                total_tokens=run.total_tokens,
+                total_cost=costs.get(run.external_id),
+                tool_source=run.tool_source or "",
+                connector=run.connector or "",
+            )
+            for run in sorted(group, key=lambda run: (run.started_at or datetime.min.replace(tzinfo=timezone.utc), run.id))
+        ]
+        overlaid.append(
+            item.model_copy(
+                update={
+                    "customer": row.customer or item.customer,
+                    "customer_role": row.customer_role or item.customer_role,
+                    "agent_name": row.agent_name or item.agent_name,
+                    "agent_mode": row.agent_mode or item.agent_mode,
+                    "skills": _unique(run.name for run in group if run.run_type == "skill") or item.skills,
+                    "tools": _unique(run.name for run in group if run.run_type == "tool") or item.tools,
+                    "session_id": row.session_id or item.session_id,
+                    "runs": local_runs or item.runs,
+                }
+            )
+        )
+    return overlaid
 
 
 def list_traces(
@@ -622,6 +877,10 @@ def list_traces(
     status: str | None,
     started_from: datetime | None,
     started_to: datetime | None,
+    customer: str | None = None,
+    agent: str | None = None,
+    skill: str | None = None,
+    tool: str | None = None,
 ) -> list[TraceListItem]:
     if langfuse_enabled():
         try:
@@ -637,6 +896,12 @@ def list_traces(
         except LangfuseError:
             details = []
         else:
+            details = _overlay_local(db, details)
+            details = [
+                item
+                for item in details
+                if _matches_request(item, customer=customer, agent=agent, skill=skill, tool=tool)
+            ]
             return [TraceListItem(**detail.model_dump(exclude={"runs"})) for detail in details]
     traces = (
         _filtered_traces(
@@ -647,6 +912,10 @@ def list_traces(
             status=status,
             started_from=started_from,
             started_to=started_to,
+            customer=customer,
+            agent=agent,
+            skill=skill,
+            tool=tool,
         )
         .order_by(LlmObsTrace.started_at.desc(), LlmObsTrace.id.desc())
         .limit(200)
@@ -664,6 +933,10 @@ def summarize(
     status: str | None,
     started_from: datetime | None,
     started_to: datetime | None,
+    customer: str | None = None,
+    agent: str | None = None,
+    skill: str | None = None,
+    tool: str | None = None,
 ) -> SummaryPublic:
     if langfuse_enabled():
         try:
@@ -679,13 +952,30 @@ def summarize(
         except LangfuseError:
             scoped = None
         if scoped is not None:
+            scoped = _overlay_local(db, scoped)
             models = sorted({name for item in scoped for name in item.models})
+            customers = sorted({item.customer for item in scoped if item.customer})
+            agents = sorted({item.agent_name or name for item in scoped for name in [*item.agents, item.agent_name] if name})
+            skills = sorted({name for item in scoped for name in item.skills})
+            tools = sorted({name for item in scoped for name in item.tools})
             details = scoped
             if model:
                 details = [item for item in details if model in item.models]
             if status in {"success", "error"}:
                 details = [item for item in details if item.status == status]
-            return _summary_from_details(details, models)
+            details = [
+                item
+                for item in details
+                if _matches_request(item, customer=customer, agent=agent, skill=skill, tool=tool)
+            ]
+            return _summary_from_details(
+                details,
+                models=models,
+                customers=customers,
+                agents=agents,
+                skills=skills,
+                tools=tools,
+            )
     filtered = _filtered_traces(
         db,
         user,
@@ -694,6 +984,10 @@ def summarize(
         status=status,
         started_from=started_from,
         started_to=started_to,
+        customer=customer,
+        agent=agent,
+        skill=skill,
+        tool=tool,
     )
     success_case = case((LlmObsTrace.status == "success", 1), else_=0)
     total, success, avg_latency = filtered.with_entities(
@@ -713,6 +1007,7 @@ def summarize(
         avg_latency_ms=int(avg_latency) if avg_latency is not None else None,
         total_tokens=int(total_tokens or 0),
         models=model_options(db, user, project_id),
+        **request_options(db, user, project_id),
     )
 
 
@@ -733,7 +1028,7 @@ def get_trace(db: Session, user: CurrentUser, trace_id: int | str) -> TraceDetai
             found = []
         else:
             if found:
-                return found[0]
+                return _overlay_local(db, found)[0]
             if not str(trace_id).isdigit():
                 return None
     if not str(trace_id).isdigit():
@@ -776,6 +1071,8 @@ def get_trace(db: Session, user: CurrentUser, trace_id: int | str) -> TraceDetai
                 input_tokens=run.input_tokens,
                 output_tokens=run.output_tokens,
                 total_tokens=run.total_tokens,
+                tool_source=run.tool_source or "",
+                connector=run.connector or "",
             )
             for run in runs
         ],
